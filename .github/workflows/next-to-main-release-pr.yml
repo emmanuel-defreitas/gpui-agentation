@@ -22,11 +22,11 @@ jobs:
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-existing=$(gh pr list --repo "$REPOSITORY" --base main --head next --state open --json number --jq '.[0].number // empty')
-if [ -n "${existing:-}" ]; then
-  echo "Release PR #$existing already exists."
-  exit 0
-fi
+          existing=$(gh pr list --repo "$REPOSITORY" --base main --head next --state open --json number --jq '.[0].number // empty')
+          if [ -n "${existing:-}" ]; then
+            echo "Release PR #$existing already exists."
+            exit 0
+          fi
           gh pr create \
             --repo "$REPOSITORY" \
             --base main \

@@ -78,7 +78,7 @@ jobs:
 
           # The tag points at the reviewed merge commit so the release is anchored to the PR.
           git tag -a "$new_tag" -m "Release $new_tag (PR #$PR_NUMBER)" "$MERGE_SHA"
-git push origin "$new_tag"
+          git push origin "$new_tag"
 
           # GitHub Release with auto-generated notes.
           notes=$(printf '%s\n' \
