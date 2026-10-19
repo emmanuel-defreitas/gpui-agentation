@@ -1,0 +1,39 @@
+# Issue triage — status safety net. The lifecycle already covers most branch/PR -> status
+# transitions: stage 3 (pr-feature-draft.yml) drafts the PR, stage 6 (pr-feature-review.md) sets
+# status:in-review on ready_for_review, stage 7 (pr-merged-qa-scenarios.md) sets status:qa on
+# merge. The one uncovered branch state is "a draft PR was opened" -> ensure the linked issue is
+# status:in-progress (normally already true from Issue -> Feature Branch). Deterministic.
+#
+# In-review and merged transitions are intentionally NOT handled here to avoid two automations
+# fighting over the same labels — stages 6 and 7 stay authoritative.
+name: Issue Status Sync
+
+on:
+  pull_request:
+    types: [opened, reopened]
+    branches: [dev]
+
+permissions:
+  issues: write
+  pull-requests: read
+
+jobs:
+  ensure-in-progress:
+    # Only draft PRs from a lifecycle prefix (feature/bug/doc/chore).
+    if: github.event.pull_request.draft == true && (startsWith(github.head_ref, 'feature/') || startsWith(github.head_ref, 'bug/') || startsWith(github.head_ref, 'doc/') || startsWith(github.head_ref, 'chore/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move linked issue to in-progress
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          # Parse issue number: digits right after the lifecycle prefix (feature/bug/doc/chore).
+          issue=$(printf '%s' "$HEAD_REF" | sed -nE 's#^(feature|bug|doc|chore)/([0-9]+).*#\2#p')
+          if [ -z "$issue" ]; then
+            echo "No issue number in branch '$HEAD_REF' — nothing to sync."
+            exit 0
+          fi
+          echo "Ensuring issue #$issue is status:in-progress"
+          gh issue edit "$issue" --add-label "status:in-progress" --remove-label "status:todo" || true

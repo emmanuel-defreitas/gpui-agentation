@@ -1,0 +1,25 @@
+# Stage 3 — When a PR is opened from a lifecycle branch (feature/bug/doc/chore) into dev, convert
+# it to draft. Deterministic, no reasoning required, so this is a plain workflow rather than an
+# agentic one. (gh-aw exposes no "convert incoming PR to draft" safe-output, and its agent job is
+# read-only.)
+name: PR Feature → Draft
+
+on:
+  pull_request:
+    types: [opened, reopened]
+    branches: [dev]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  to-draft:
+    # Only lifecycle heads (feature/bug/doc/chore); skip if already a draft.
+    if: (startsWith(github.head_ref, 'feature/') || startsWith(github.head_ref, 'bug/') || startsWith(github.head_ref, 'doc/') || startsWith(github.head_ref, 'chore/')) && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Convert PR to draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr ready --undo "$PR_URL"

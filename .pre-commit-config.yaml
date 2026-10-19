@@ -1,0 +1,8 @@
+# Local secret scanning. Advisory only: `git commit --no-verify` skips this,
+# which is why .github/workflows/secret-scan.yml runs the same scan in CI as the
+# actual gate. Install once per clone with:  pre-commit install
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks

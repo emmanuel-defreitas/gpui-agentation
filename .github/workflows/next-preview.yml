@@ -1,0 +1,51 @@
+name: Preview CI
+
+on:
+  push:
+    branches: [next]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: preview-next
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    environment: preview
+    env:
+      INSTALL_COMMAND: ${{ vars.INSTALL_COMMAND }}
+      TEST_COMMAND: ${{ vars.TEST_COMMAND }}
+      BUILD_COMMAND: ${{ vars.BUILD_COMMAND }}
+      CONTAINER_IMAGE: ${{ vars.CONTAINER_IMAGE }}
+      CONTAINER_REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
+      CONTAINER_REGISTRY_USERNAME: ${{ vars.CONTAINER_REGISTRY_USERNAME }}
+      PREVIEW_DEPLOY_COMMAND: ${{ vars.PREVIEW_DEPLOY_COMMAND }}
+      CONTAINER_REGISTRY_PASSWORD: ${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run configured install, test, and build commands
+        run: |
+          set -euo pipefail
+          for command in "$INSTALL_COMMAND" "$TEST_COMMAND" "$BUILD_COMMAND"; do
+            if [ -n "$command" ]; then
+              bash -o pipefail -c "$command"
+            fi
+          done
+      - name: Build and push configured container image
+        if: env.CONTAINER_IMAGE != '' && env.CONTAINER_REGISTRY != '' && env.CONTAINER_REGISTRY_USERNAME != ''
+        run: |
+          set -euo pipefail
+          test -n "$CONTAINER_REGISTRY_PASSWORD"
+          image="${CONTAINER_REGISTRY}/${CONTAINER_IMAGE}:${GITHUB_SHA}"
+          printf '%s' "$CONTAINER_REGISTRY_PASSWORD" | docker login "$CONTAINER_REGISTRY" --username "$CONTAINER_REGISTRY_USERNAME" --password-stdin
+          docker build --tag "$image" .
+          docker push "$image"
+      - name: Deploy preview
+        if: env.PREVIEW_DEPLOY_COMMAND != ''
+        run: bash -o pipefail -c "$PREVIEW_DEPLOY_COMMAND"

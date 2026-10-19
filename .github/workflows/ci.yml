@@ -1,0 +1,53 @@
+# Stage 5a — template CI for PRs into dev.
+# Validates that workflow sources still compile and that the core template files are present.
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [dev, next, main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate-template:
+    if: |
+      startsWith(github.head_ref, 'feature/') ||
+      startsWith(github.head_ref, 'bug/') ||
+      startsWith(github.head_ref, 'doc/') ||
+      startsWith(github.head_ref, 'chore/') ||
+      github.head_ref == 'dev' ||
+      github.head_ref == 'next'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/gh-aw-actions/setup-cli@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
+        with:
+          version: v0.79.8
+      - name: Verify required template files
+        run: |
+          test -f README.md
+          test -f AGENTS.md
+          test -f CLAUDE.md
+          test -f .github/copilot-instructions.md
+          test -d .github/workflows
+      - name: Compile and lint agentic workflows
+        run: gh aw compile --actionlint
+      - name: Run configured dev validation
+        if: github.base_ref == 'dev' && (vars.INSTALL_COMMAND != '' || vars.TEST_COMMAND != '')
+        env:
+          INSTALL_COMMAND: ${{ vars.INSTALL_COMMAND }}
+          TEST_COMMAND: ${{ vars.TEST_COMMAND }}
+        run: |
+          set -euo pipefail
+          for command in "$INSTALL_COMMAND" "$TEST_COMMAND"; do
+            if [ -n "$command" ]; then
+              bash -o pipefail -c "$command"
+            fi
+          done

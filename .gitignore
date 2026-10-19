@@ -1,0 +1,12 @@
+.agents/
+.claude/
+.github/aw/logs/
+.DS_Store
+
+# Secrets — never commit. See .pre-commit-config.yaml and
+# .github/workflows/secret-scan.yml for the scanning that backs this up.
+.env
+.env.*
+!.env.example
+*.local.json
+*.local.toml

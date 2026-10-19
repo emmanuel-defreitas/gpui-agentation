@@ -1,0 +1,74 @@
+# Issue triage — create + link a lifecycle branch when an issue enters "in progress".
+# Deterministic (no reasoning): fires when the `status:in-progress` label is added, derives the
+# branch prefix from the issue's `type:*` label (feature/bug/doc/chore), slugifies the issue
+# title, and uses `gh issue develop` to create the branch AND register the native GitHub
+# issue<->branch development link in one step. Plain .yml, not agentic, by the same rule as
+# pr-feature-draft.yml ("gh-aw's agent job is read-only").
+name: Issue → Feature Branch
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write     # create the branch
+  issues: write       # remove status:todo
+
+jobs:
+  start-branch:
+    # Fires every time `status:in-progress` is ADDED — this is the todo->in-progress transition.
+    # (The label event can't observe the prior label; "in-progress was applied" is the correct,
+    # cheap reading of the requirement.)
+    if: github.event.label.name == 'status:in-progress'
+    runs-on: ubuntu-latest
+    steps:
+      # gh issue develop shells out to git to create/push the branch ref, so the job needs a
+      # checkout. fetch-depth: 0 makes the base branch (dev) resolvable locally.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create and link feature branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ github.event.issue.number }}
+          TITLE: ${{ github.event.issue.title }}
+          BASE: dev
+        run: |
+          set -euo pipefail
+
+          # Idempotency: the labeled event can re-fire; skip if a branch is already linked.
+          existing=$(gh issue develop "$ISSUE" --list 2>/dev/null || true)
+          if [ -n "$existing" ]; then
+            echo "Issue #$ISSUE already has linked branch(es):"
+            echo "$existing"
+            exit 0
+          fi
+
+          # Derive the branch prefix from the issue's type:* label so the branch matches the
+          # lifecycle prefix set (feature/bug/doc/chore). Falls back to `feature` if unlabelled.
+          type_label=$(gh issue view "$ISSUE" --json labels --jq '[.labels[].name] | map(select(startswith("type:"))) | .[0]' 2>/dev/null || true)
+          case "$type_label" in
+            type:bug)     PREFIX=bug ;;
+            type:docs)    PREFIX=doc ;;
+            type:chore)   PREFIX=chore ;;
+            *)            PREFIX=feature ;;
+          esac
+          echo "Issue #$ISSUE type label: '${type_label:-none}' → prefix '$PREFIX'"
+
+          # Slugify title: lowercase, non-alphanumerics -> '-', trim/collapse '-', cap at 50 chars.
+          slug=$(printf '%s' "$TITLE" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
+            | cut -c1-50 \
+            | sed -E 's/-+$//')
+          [ -n "$slug" ] || slug="issue"
+
+          branch="${PREFIX}/${ISSUE}-${slug}"
+          echo "Creating linked branch: $branch (base $BASE)"
+
+          # Creates the branch AND registers the issue<->branch development link in one step.
+          gh issue develop "$ISSUE" --base "$BASE" --name "$branch"
+
+          # Reflect the transition: drop status:todo now that work has started.
+          gh issue edit "$ISSUE" --remove-label "status:todo" || true

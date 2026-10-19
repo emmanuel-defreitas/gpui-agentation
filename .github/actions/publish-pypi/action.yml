@@ -1,0 +1,23 @@
+name: "Publish to PyPI"
+description: "Download the PACKAGE_NAME wheel artifact and publish it to PyPI"
+runs:
+  using: "composite"
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5 # v5
+      with:
+        enable-cache: true
+
+    - name: Download artifact
+      uses: actions/download-artifact@v8 # v4
+      with:
+        name: dist
+        path: dist/
+
+    - name: List wheels to publish
+      shell: bash
+      run: ls -lh dist/*.whl dist/*.tar.gz 2>/dev/null || true
+
+    - name: Publish all distributions to PyPI
+      shell: bash
+      run: uv publish

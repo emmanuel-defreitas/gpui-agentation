@@ -1,0 +1,112 @@
+# Branch-tag enforcement + auto-issue.
+#
+# When a PR is opened from a branch that is NOT one of the four lifecycle prefixes
+# (feature/, bug/, doc/, chore/) and not an exempt long-lived/automation branch, infer the work type
+# from the PR title's conventional-commit prefix and open a tracking issue under the
+# "⚙️ EPIC: Workflow" milestone with the correct [TYPE] title prefix and type:* label.
+#
+# Deterministic by design: the prefix check, type inference, and issue creation need no reasoning,
+# so this is a plain workflow (per LIFECYCLE.md "deterministic → plain .yml"). Type inference uses
+# the same conventional-commit vocabulary that release-tag.yml uses for semver bumping, so
+# [FEATURE]/[BUG]/[DOC]/[CHORE] mapping is consistent repo-wide.
+name: PR Branch-Tag Enforcement
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  issues: write        # create the tracking issue + set milestone/labels
+  pull-requests: write # comment on the PR linking the issue
+  contents: read
+
+jobs:
+  enforce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce branch tag and open tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          MILESTONE: "⚙️ EPIC: Workflow"
+        run: |
+          set -euo pipefail
+
+          # Conforming lifecycle prefixes + exempt long-lived / automation prefixes.
+          # feature/bug/doc/chore are the lifecycle branches; the rest are allowed through
+          # without a tracking issue (promotion flows, bot flows, hotfixes).
+          case "$HEAD_REF" in
+            feature/*|bug/*|doc/*|chore/*) \
+              echo "Conforming lifecycle prefix on '$HEAD_REF' — no enforcement needed."; exit 0 ;;
+            dev|next|main|hotfix/*|dependabot/*|copilot/*|claude/*) \
+              echo "Exempt prefix on '$HEAD_REF' — no enforcement needed."; exit 0 ;;
+          esac
+
+          # Infer work type from the conventional-commit prefix in the PR title.
+          # Defaults to CHORE per project policy ("Chore: {PR subject}").
+          subject="$PR_TITLE"
+          TYPE="CHORE"; TYPE_LABEL="type:chore"
+          case "$(printf '%s' "$subject" | tr '[:upper:]' '[:lower:]')" in
+            feat*|feature*|enhancement*)  TYPE="FEATURE"; TYPE_LABEL="type:feature" ;;
+            fix*|bug*|hotfix*)            TYPE="BUG";     TYPE_LABEL="type:bug" ;;
+            docs*|doc*)                   TYPE="DOC";     TYPE_LABEL="type:docs" ;;
+            chore*|refactor*|build*|ci*|test*|style*|perf*|revert*) \
+                                          TYPE="CHORE";   TYPE_LABEL="type:chore" ;;
+            *)                            TYPE="CHORE";   TYPE_LABEL="type:chore" ;;
+          esac
+
+          issue_title="[$TYPE] $subject"
+
+          body=$(printf '%s\n' \
+            "Auto-created by the **PR Branch-Tag Enforcement** workflow because PR #$PR_NUMBER was opened" \
+            "from a branch (\`$HEAD_REF\`) that does not use one of the lifecycle prefixes" \
+            "(\`feature/\`, \`bug/\`, \`doc/\`, \`chore/\`)." \
+            "" \
+            "- **PR:** $PR_URL" \
+            "- **PR title:** $subject" \
+            "- **Author:** @$PR_AUTHOR" \
+            "- **Inferred type:** \`$TYPE_LABEL\` (from the conventional-commit prefix)" \
+            "- **Base branch:** \`$BASE_REF\`" \
+            "" \
+            "## Why this issue exists" \
+            "" \
+            "Every PR should originate from a lifecycle branch created via the issue → branch flow" \
+            "(\`.github/workflows/issue-start-branch.yml\`), which picks the prefix from the issue's" \
+            "\`type:\` label. Branches outside that set get a tracking issue here so the work is still" \
+            "accounted for under the EPIC: Workflow milestone." \
+            "" \
+            "## Next steps" \
+            "" \
+            "- If this is real work, rename/recreate the branch with the correct prefix and link it to an" \
+            "  issue, or keep this issue as the tracker and move it through the status labels." \
+            "- If the PR is exploratory, close this issue and the PR.")
+
+          # Resolve the milestone by title (gh issue create --milestone accepts the title).
+          milestone_number=$(gh api "repos/${GITHUB_REPOSITORY}/milestones" \
+            --jq ".[] | select(.title==\"$MILESTONE\") | .number" | head -n1 || true)
+
+          issue_url=$(gh issue create \
+            --title "$issue_title" \
+            --body "$body" \
+            --label "$TYPE_LABEL,status:todo" \
+            ${milestone_number:+--milestone "$milestone_number"} )
+
+          echo "Created tracking issue: $issue_url"
+
+          # Link the issue on the PR so the author sees it.
+          pr_comment=$(printf '%s\n' \
+            "⚠️ **Branch-tag enforcement**" \
+            "" \
+            "This PR was opened from \`$HEAD_REF\`, which is not one of the lifecycle prefixes" \
+            "(\`feature/\`, \`bug/\`, \`doc/\`, \`chore/\`). A tracking issue has been opened under the" \
+            "**EPIC: Workflow** milestone: $issue_url" \
+            "" \
+            "Next time, start work from an issue so the branch is created automatically with the correct" \
+            "prefix (see \`.github/workflows/issue-start-branch.yml\`).")
+          gh pr comment "$PR_NUMBER" --body "$pr_comment"

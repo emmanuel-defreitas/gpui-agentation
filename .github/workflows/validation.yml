@@ -1,0 +1,33 @@
+# Promotion gate for the template repo. This intentionally validates the workflow/template surface
+# rather than assuming an application stack already exists. On success against `dev` it triggers
+# stage 8 via `workflow_run`.
+#
+# IMPORTANT: the `name:` below must stay "Validation" unless `dev-to-next.md` is updated too.
+name: Validation
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validation-dev
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/gh-aw-actions/setup-cli@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
+        with:
+          version: v0.79.8
+      - name: Compile and lint agentic workflows
+        run: gh aw compile --actionlint
+      - name: Verify release policy assets
+        run: |
+          test -f .github/BRANCH-AND-RELEASE-POLICY.md
+          test -f .github/LIFECYCLE.md

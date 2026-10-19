@@ -1,0 +1,35 @@
+name: Next to Main Release PR
+
+on:
+  workflow_run:
+    workflows: [Preview CI]
+    types: [completed]
+    branches: [next]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-release-pr:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open the approved preview for production review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+existing=$(gh pr list --repo "$REPOSITORY" --base main --head next --state open --json number --jq '.[0].number // empty')
+if [ -n "${existing:-}" ]; then
+  echo "Release PR #$existing already exists."
+  exit 0
+fi
+          gh pr create \
+            --repo "$REPOSITORY" \
+            --base main \
+            --head next \
+            --title "release: promote preview ${SHA:0:7} to production" \
+            --body "Preview CI passed for commit \`${SHA}\`. This PR promotes the reviewed preview to production."

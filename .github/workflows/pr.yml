@@ -1,0 +1,86 @@
+name: PR
+
+on:
+  pull_request:
+    types: [ opened, reopened, ready_for_review, synchronize ]
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check base, branch name and title
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD: ${{ github.head_ref }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: make pr-guard
+
+  check:
+    name: check
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: make ci
+
+  package:
+    name: package
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.base.ref == 'main' }}
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: make pack
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: PACKAGE_NAME-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+
+  review:
+    name: review
+    needs: guard
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      actions: write
+      id-token: write
+    env:
+      CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Note that review is unconfigured
+        if: ${{ env.CLAUDE_TOKEN == '' }}
+        run: |
+          {
+            echo "### Review skipped"
+            echo
+            echo "\`CLAUDE_CODE_OAUTH_TOKEN\` is not set on this repository."
+            echo "Add it under **Settings → Secrets and variables → Actions**."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Light AI review
+        if: ${{ env.CLAUDE_TOKEN != '' }}
+        uses: anthropics/claude-code-action@bd4488507006939d8b3b7f098a2231b36e22f8c1 # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
+          prompt: "/code-review:code-review --comment https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+          allowed_bots: "*"

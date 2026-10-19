@@ -1,0 +1,101 @@
+# Base-branch policy enforcement for the template's long-lived branches.
+#
+# - lifecycle branches target `dev`
+# - only `dev` may target `next`
+# - only `next` may target `main`
+#
+# Deterministic branch math, so this remains a plain workflow.
+name: PR Base-Branch Policy
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  pull-requests: write   # comment, reassign base, close
+  contents: read
+
+jobs:
+  enforce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce base-branch policy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+
+          is_lifecycle_head() {
+            case "$1" in
+              feature/*|bug/*|doc/*|chore/*|hotfix/*|dependabot/*|copilot/*|claude/*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          # Only next may release into main.
+          if [ "$BASE_REF" = "main" ]; then
+            if [ "$HEAD_REF" = "next" ]; then
+              echo "next → main PR — allowed."
+              exit 0
+            fi
+            close_comment=$(printf '%s\n' \
+              "🚫 **Closed by base-branch policy**" \
+              "" \
+              "PRs into \`main\` may only come from \`next\`. This PR targets \`main\` from" \
+              "\`$HEAD_REF\`, which is not allowed." \
+              "" \
+              "To ship this change:" \
+              "1. Merge your work into \`dev\` (every PR targets \`dev\`)." \
+              "2. Let the \`dev-to-next\` workflow open a \`dev → next\` PR." \
+              "3. Open a \`next → main\` PR to promote to production — on merge, \`release-tag.yml\`" \
+              "   creates the semver tag." \
+              "" \
+              "See \`.github/BRANCH-AND-RELEASE-POLICY.md\`.")
+            gh pr comment "$PR_NUMBER" --body "$close_comment"
+            gh pr close "$PR_NUMBER" --comment "Closed by base-branch policy (main only from next)."
+            exit 0
+          fi
+
+          # Only dev may promote into next. Everything else belongs on dev.
+          if [ "$BASE_REF" = "next" ]; then
+            if [ "$HEAD_REF" = "dev" ]; then
+              echo "dev → next PR — allowed."
+              exit 0
+            fi
+            reassign_comment=$(printf '%s\n' \
+              "↪️ **Base reassigned by base-branch policy**" \
+              "" \
+              "Only \`dev\` may target \`next\`. This PR was opened against \`next\` from \`$HEAD_REF\`," \
+              "so its base has been switched to \`dev\`." \
+              "" \
+              "See \`.github/BRANCH-AND-RELEASE-POLICY.md\`.")
+            gh pr comment "$PR_NUMBER" --body "$reassign_comment"
+            gh pr edit "$PR_NUMBER" --base dev
+            echo "Reassigned base next → dev on PR #$PR_NUMBER."
+            exit 0
+          fi
+
+          if [ "$BASE_REF" != "dev" ]; then
+            reassign_comment=$(printf '%s\n' \
+              "↪️ **Base reassigned by base-branch policy**" \
+              "" \
+              "Lifecycle work targets \`dev\`. This PR was opened against \`$BASE_REF\`; its base has" \
+              "been switched to \`dev\`." \
+              "" \
+              "See \`.github/BRANCH-AND-RELEASE-POLICY.md\`.")
+            gh pr comment "$PR_NUMBER" --body "$reassign_comment"
+            gh pr edit "$PR_NUMBER" --base dev
+            echo "Reassigned base $BASE_REF → dev on PR #$PR_NUMBER."
+            exit 0
+          fi
+
+          if is_lifecycle_head "$HEAD_REF" || [ "$HEAD_REF" = "dev" ]; then
+            echo "PR #$PR_NUMBER targets dev — allowed."
+            exit 0
+          fi
+
+          echo "PR #$PR_NUMBER targets dev from a non-lifecycle branch; base is still allowed."

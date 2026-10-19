@@ -1,0 +1,27 @@
+# gitleaks configuration for repo-template and every repository generated from it.
+#
+# Downstream repos may extend this, but should not remove the default ruleset.
+# Keep the allowlist narrow: it exists so the template's own placeholder values
+# do not trip the scanner, NOT to silence real findings.
+
+title = "exegia secret scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Template placeholders and example values"
+
+# Only the example env file is path-allowlisted. Documentation files are
+# deliberately NOT allowlisted by path — a real credential pasted into a README
+# is still a leak and must still fail.
+paths = [
+  '''(^|/)\.env\.example$''',
+]
+
+# Obvious non-secrets. These patterns match the template's own stand-in values.
+regexes = [
+  '''(?i)^your[_-]?.*(key|token|secret|password)[_-]?here$''',
+  '''(?i)(EXAMPLE|PLACEHOLDER|CHANGEME|REPLACE_ME|DUMMY|NOT_A_REAL)''',
+  '''x{8,}''',
+]

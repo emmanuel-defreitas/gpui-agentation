@@ -1,0 +1,45 @@
+name: Dev Release Candidate
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [dev]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  tag:
+    if: |
+      github.event.pull_request.merged == true &&
+      (startsWith(github.head_ref, 'feature/') ||
+       startsWith(github.head_ref, 'bug/') ||
+       startsWith(github.head_ref, 'doc/') ||
+       startsWith(github.head_ref, 'chore/'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: dev
+      - name: Tag the squash merge as a release candidate
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          latest=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)
+          latest="${latest:-v0.0.0}"
+          IFS=. read -r major minor patch <<< "${latest#v}"
+          if printf '%s\n' "$TITLE" | grep -qE '^[a-z]+(\([^)]+\))?!:'; then
+            major=$((major + 1)); minor=0; patch=0
+          elif printf '%s\n' "$TITLE" | grep -qiE '^(feat|feature)(\(|:|!)'; then
+            minor=$((minor + 1)); patch=0
+          else
+            patch=$((patch + 1))
+          fi
+          tag="v${major}.${minor}.${patch}-dev.${PR_NUMBER}"
+          git tag -a "$tag" -m "Release candidate $tag (PR #$PR_NUMBER)" "$MERGE_SHA"
+          git push origin "$tag"

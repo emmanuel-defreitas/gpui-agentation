@@ -1,0 +1,95 @@
+# Release tagging — conventional-commit semver bump on next → main merge.
+#
+# When the next PR is merged into main (production), compute the next semantic version from
+# the conventional-commit subjects since the last tag:
+#   - BREAKING CHANGE (or `type!:`) → major
+#   - feat:                          → minor
+#   - fix:                           → patch
+#   - anything else                  → patch
+# Then create the vX.Y.Z tag on the merge commit and create a GitHub Release. Release documentation
+# and version manifests are finalized in the reviewed promotion PR so protected main is never mutated.
+#
+# Plain .yml: deterministic version math, no reasoning.
+name: Release Tag
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write   # push tag and create release
+  pull-requests: read
+
+jobs:
+  tag:
+    # Only merged next → main PRs.
+    if: github.event.pull_request.merged == true && github.head_ref == 'next'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Compute next version, tag, and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          # Latest stable tag (vX.Y.Z), or v0.0.0 if none. Dev candidate tags do not establish
+          # the production release baseline.
+          latest=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)
+          latest=${latest:-v0.0.0}
+          base=${latest#v}
+          IFS=. read -r major minor patch <<< "$base"
+          major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
+
+          # Commit subjects + bodies since the last tag up to the merge commit.
+          range="${latest}..${MERGE_SHA}"
+          subjects=$(git log --pretty=%s "${range}" 2>/dev/null || true)
+          bodies=$(git log --pretty=%b "${range}" 2>/dev/null || true)
+
+          # Determine bump level from conventional commits.
+          bump="patch"
+          if printf '%s\n%s\n' "$subjects" "$bodies" | grep -qiE 'BREAKING[[:space:]]+CHANGE'; then
+            bump="major"
+          elif printf '%s\n' "$subjects" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
+            bump="major"
+          elif printf '%s\n' "$subjects" | grep -qiE '^(feat|feature)(\(|:|!)'; then
+            bump="minor"
+          elif printf '%s\n' "$subjects" | grep -qiE '^fix(\(|:|!)'; then
+            bump="patch"
+          fi
+
+          case "$bump" in
+            major) major=$((major+1)); minor=0; patch=0 ;;
+            minor) minor=$((minor+1)); patch=0 ;;
+            patch) patch=$((patch+1)) ;;
+          esac
+
+          new_tag="v${major}.${minor}.${patch}"
+          echo "Bump: $bump  →  $latest → $new_tag  (merge $MERGE_SHA)"
+
+          # The tag points at the reviewed merge commit so the release is anchored to the PR.
+          git tag -a "$new_tag" -m "Release $new_tag (PR #$PR_NUMBER)" "$MERGE_SHA"
+git push origin "$new_tag"
+
+          # GitHub Release with auto-generated notes.
+          notes=$(printf '%s\n' \
+            "Release ${new_tag} — promoted from ${MERGE_SHA:0:7} via PR #${PR_NUMBER}." \
+            "" \
+            "Conventional-commit bump: **${bump}** (${latest} → ${new_tag})." \
+            "" \
+            "PR: ${PR_URL}")
+          gh release create "$new_tag" \
+            --target main \
+            --title "$new_tag" \
+            --notes "$notes" --generate-notes
+
+          echo "✓ Tagged $new_tag and created release."
