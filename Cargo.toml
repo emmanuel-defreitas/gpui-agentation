@@ -1,13 +1,24 @@
 [package]
-name = "gpui_agentation"
-version = "0.1.0"
+name = "gpui-agentation"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.95"
-publish = false
 license = "MIT"
-description = "Development-only native GPUI feedback with a local agent API"
+description = "Native GPUI development annotations with an optional stdio MCP bridge"
 repository = "https://github.com/emmanuel-defreitas/gpui-agentation"
 readme = "README.md"
+include = ["src/**", "tests/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "server.json", "docs/**", "ORIGIN.md"]
+
+[features]
+default = ["mcp"]
+native = ["dep:atomic-write-file", "dep:axum", "dep:ely-gpui-component", "dep:futures-util", "dep:gpui", "dep:serde", "dep:serde_json", "dep:thiserror", "dep:tokio", "dep:uuid"]
+mcp = ["dep:reqwest", "dep:serde_json"]
+test-support = ["native", "gpui/test-support"]
+
+[[bin]]
+name = "gpui-agentation"
+path = "src/bin/gpui-agentation.rs"
+required-features = ["mcp"]
 
 [lints.clippy]
 collapsible_if = "allow"
@@ -30,21 +41,22 @@ unnecessary_sort_by = "allow"
 unneeded_wildcard_pattern = "allow"
 
 [dependencies]
-atomic-write-file = { version = "0.3.0" }
-axum = "0.7.9"
-ely-gpui-component = { git = "https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components", rev = "da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721" }
-futures-util = { version = "0.3" }
-gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1" }
-thiserror = { version = "2.0.18" }
-tokio = { version = "1", features = ["io-util", "net", "rt", "rt-multi-thread", "sync", "time", "macros"] }
-uuid = { version = "1.23.1", features = ["serde", "v4"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "json"], optional = true }
+atomic-write-file = { version = "0.3.0", optional = true }
+axum = { version = "0.7.9", optional = true }
+ely-gpui-component = { package = "gpui-agentation-ely", version = "=0.1.1", path = "vendor/ely", optional = true }
+futures-util = { version = "0.3", optional = true }
+gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+thiserror = { version = "2.0.18", optional = true }
+tokio = { version = "1", features = ["io-util", "net", "rt", "rt-multi-thread", "sync", "time", "macros"], optional = true }
+uuid = { version = "1.23.1", features = ["serde", "v4"], optional = true }
 
 [dev-dependencies]
-gpui = { package = "gpui-pre", version = "=0.3.8", features = ["test-support"] }
-reqwest = { version = "0.12.24", default-features = false, features = ["cookies", "json", "multipart", "rustls-tls", "stream"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["cookies", "json", "multipart", "rustls", "stream"] }
 tempfile = { version = "3.27.0" }
 
 [workspace]
-exclude = ["crates/gpui-agentation-mcp"]
+exclude = ["vendor/ely"]
+resolver = "2"

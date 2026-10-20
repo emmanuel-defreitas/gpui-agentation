@@ -13,4 +13,10 @@
 
 /target
 
+/.worktrees/
 /crates/gpui-agentation-mcp/target/
+
+# Pinned dependency packaging outputs
+/vendor/ely/target/
+/vendor/ely/Cargo.lock
+/target-mcp/

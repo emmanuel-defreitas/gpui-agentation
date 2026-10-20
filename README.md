@@ -1,4 +1,4 @@
-# gpui_agentation
+# gpui-agentation
 
 Native feedback for GPUI development builds: select a registered element, write
 a note, copy Markdown, and exchange status updates and replies with an agent.
@@ -8,20 +8,23 @@ Agentation protocol implementation.
 
 ## Install
 
-This library is a native GPUI/Ely integration. It is not a Codex plugin bundle
-or an MCP server. Its loopback API can be used by an external MCP adapter.
+One Cargo package contains the native GPUI/Ely library and an optional stdio
+MCP bridge. The default `mcp` feature makes `cargo install gpui-agentation --locked`
+produce the portable executable. Native apps opt into `native` and disable
+default features to avoid bridge dependencies. Rust imports remain
+`gpui_agentation`. See [package setup](docs/package-layout.md) for both modes.
 
 ```toml
 [dependencies]
-gpui_agentation = { git = "https://github.com/emmanuel-defreitas/gpui-agentation", branch = "dev" }
+gpui-agentation = { version = "0.2.0", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
-The repository is private, so Git must authenticate with GitHub. Pin a commit
-with `rev` for repeatable builds. Use the same Ely revision as this crate:
+The Ely snapshot retains upstream revision
 `da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721`. A different GPUI package or source
 has incompatible types. The minimum Rust version is 1.95; development and CI
-use Rust 1.98.1. Ely is a Git dependency, so crates.io publishing remains disabled.
+use Rust 1.98.1. Ely is distributed as the attributed `gpui-agentation-ely =0.1.1` snapshot.
+Existing Ely apps must use the same distribution; see [Ely setup](docs/package-layout.md).
 
 ## Toolbar and editor
 
@@ -185,18 +188,43 @@ default integration branch; promote through `next` into `main`. The template's
 branch policy, secret scanning, and agentic workflow sources are retained.
 Python packaging and the older Make-based release pipeline were removed;
 Rust CI checks formatting, Clippy, tests, and release compilation on macOS.
-The standalone bridge has a dedicated publishing workflow. Agent workflows require
+The combined package has a guarded publishing workflow. Agent workflows require
 their own GitHub/Copilot/Claude configuration before use.
 
 See [ORIGIN.md](ORIGIN.md) for the source snapshot and license attribution.
 
-## Standalone bridge publishing
+## Optional MCP bridge
 
-The stdio bridge lives in `crates/gpui-agentation-mcp` and is independent of
-the native library. See [publishing instructions](docs/publishing-bridge.md)
-for the dedicated CI matrix, dry-run workflow, and crates.io trusted publishing.
-The native library remains unpublished.
+Build or install the binary from this checkout without compiling the native UI:
 
-The native debug library serves `/mcp` on its existing loopback HTTP listener.
-The bridge forwards its tool calls to that endpoint, sharing the same store as
-REST/SSE. Origin/Host checks and the 32 KiB request limit apply to both.
+```sh
+cargo build --release --bin gpui-agentation --locked
+cargo install --path . --locked
+```
+
+The executable connects to a running debug app; it does not launch a native UI.
+Cargo still resolves optional native dependencies; the pinned Ely snapshot
+now has a registry-compatible package version. The native listener defaults to port 4748:
+
+```json
+{
+  "mcpServers": {
+    "gpui_agentation": {
+      "command": "gpui-agentation",
+      "args": ["--url", "http://127.0.0.1:4748/mcp"]
+    }
+  }
+}
+```
+
+It preserves the bridge's loopback-only URLs, bounded requests/responses,
+protocol-only stdout, timeout, and no-retry behavior. The native debug library
+serves `/mcp` on its existing REST/SSE listener with shared storage and
+Origin/Host/body-limit protections.
+
+The previously published `gpui-agentation-mcp` 0.1.0 and its Registry entry
+remain usable. For release, publish the verified `gpui-agentation-ely` snapshot first, then
+the combined package, then the matching `server.json` Registry metadata.
+See [publishing instructions](docs/publishing-bridge.md).
+
+- MCP Registry name: `mcp-name: io.github.emmanuel-defreitas/gpui-agentation`
