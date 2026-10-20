@@ -945,6 +945,6 @@ impl AnnotationOverlay {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-support"))]
 #[path = "surface.test.rs"]
 mod tests;

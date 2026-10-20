@@ -1,4 +1,4 @@
-#![cfg(debug_assertions)]
+#![cfg(all(debug_assertions, feature = "native", feature = "mcp"))]
 
 use gpui_agentation::{Server, Store};
 use serde_json::{Value, json};
@@ -14,20 +14,8 @@ fn published_bridge_discovers_and_reads_the_native_server() {
         .ensure_session("Bridge smoke test", "gpui://bridge-test")
         .unwrap();
     let server = Server::start(store, 0).unwrap();
-    let mut child = Command::new(env!("CARGO"))
-        .env(
-            "CARGO_TARGET_DIR",
-            concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/crates/gpui-agentation-mcp/target"
-            ),
-        )
-        .args(["run", "--quiet", "--locked", "--manifest-path"])
-        .arg(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/crates/gpui-agentation-mcp/Cargo.toml"
-        ))
-        .args(["--", "--url", &format!("http://{}/mcp", server.address())])
+    let mut child = Command::new(env!("CARGO_BIN_EXE_gpui-agentation"))
+        .args(["--url", &format!("http://{}/mcp", server.address())])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

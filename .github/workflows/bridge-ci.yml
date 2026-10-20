@@ -3,14 +3,26 @@ name: MCP Bridge CI
 on:
   pull_request:
     paths:
-      - 'crates/gpui-agentation-mcp/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'src/**'
+      - 'vendor/ely/**'
+      - '.github/scripts/check-ely-snapshot.py'
+      - 'tests/**'
+      - 'server.json'
       - '.github/workflows/bridge-ci.yml'
       - '.github/workflows/publish-bridge.yml'
       - '.github/scripts/check-bridge-release.py'
   push:
     branches: [dev, next, main]
     paths:
-      - 'crates/gpui-agentation-mcp/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'src/**'
+      - 'vendor/ely/**'
+      - '.github/scripts/check-ely-snapshot.py'
+      - 'tests/**'
+      - 'server.json'
       - '.github/workflows/bridge-ci.yml'
       - '.github/workflows/publish-bridge.yml'
       - '.github/scripts/check-bridge-release.py'
@@ -27,7 +39,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     defaults:
       run:
-        working-directory: crates/gpui-agentation-mcp
+        working-directory: .
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,8 +50,15 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/gpui-agentation-mcp
+          workspaces: .
+      - run: python3 .github/scripts/check-ely-snapshot.py
+      - run: python3 .github/scripts/check-bridge-release.py --require-publishable
       - run: cargo fmt -- --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
-      - run: cargo package --locked
+      - run: cargo build --release --bin gpui-agentation --locked
+      - name: Verify default Cargo install produces the Registry executable
+        shell: bash
+        run: |
+          cargo install --path . --locked --debug --root "$RUNNER_TEMP/agentation-install"
+          "$RUNNER_TEMP/agentation-install/bin/gpui-agentation" --version

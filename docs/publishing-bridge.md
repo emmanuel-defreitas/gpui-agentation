@@ -1,90 +1,66 @@
-# Publish the standalone MCP bridge
+# Publish the combined gpui-agentation package
 
-This guide covers CI/CD for `crates/gpui-agentation-mcp` only. The native
-`gpui_agentation` library stays `publish = false` while it depends on pinned Git
-Ely. The bridge has its own workspace/lockfile and only registry dependencies,
-so publishing it does not resolve or compile GPUI/Ely.
+The candidate is one package, version 0.2.0: the debug-only native library and
+a default-enabled `gpui-agentation` binary behind the optional `mcp` feature.
+Native consumers explicitly enable `native` and disable default features. It replaces the
+previous source layout containing an independent bridge crate; it does not remove or yank the
+already published `gpui-agentation-mcp` 0.1.0.
 
-## Review and promotion
+## Pinned Ely distribution
 
-The bridge and its publishing workflows are reviewed together in a scoped PR
-against `dev`. Follow `dev → next → main`; do not bypass required reviews or
-publish an unpromoted candidate. Native UI changes are independent of this release.
+The unpublished Git-only dependency is replaced by the attributable
+`gpui-agentation-ely =0.1.1` distribution in `vendor/ely`. Its source, assets,
+licenses, normal dependencies and GPUI pins match upstream revision
+`da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721`. See its README for Cargo identity
+and existing-host migration requirements. This is a support dependency; the
+native library and optional bridge remain one `gpui-agentation` package.
 
-`MCP Bridge CI` formats, lints, tests, and verifies the packaged crate on Linux,
-macOS, and Windows. `Publish MCP Bridge` verifies the candidate commit belongs
-to main history, requires matching release/Cargo/Registry versions, and dry-runs
-the package before the publishing job gets credentials. Other crate paths are
-never published. Existing agentic workflow sources and locks are unchanged.
+Run `python3 .github/scripts/check-ely-snapshot.py --upstream /path/to/pinned/ely`
+before releasing. The checker rejects source/asset drift and dependency or pin
+changes. Root Cargo packaging replaces the local path with the exact registry
+version, so the snapshot **must be published first**.
 
-## Configure trusted publishing
+## Release sequence
 
-Configure crates.io trusted publishing for the `gpui-agentation-mcp` package:
+1. Review changes against `dev`; promote `dev → next → main`.
+2. Update Cargo.toml, Cargo.lock and server.json together. The candidate Registry
+   version must be new: 0.1.0 already identifies the old package in the live entry.
+3. Check identity with `python3 .github/scripts/check-bridge-release.py`.
+   Use `--require-publishable` for the additional publication guard.
+4. Bootstrap the support dependency first from clean promoted main:
 
-- GitHub owner: `emmanuel-defreitas`
-- Repository: `gpui-agentation`
-- Workflow filename: `publish-bridge.yml`
-- GitHub environment: `crates-io`
+   ```sh
+   cargo publish --manifest-path vendor/ely/Cargo.toml --dry-run
+   cargo publish --manifest-path vendor/ely/Cargo.toml
+   ```
 
-Crates.io currently requires the crate to exist before adding a trusted
-publisher. For the first release, after promotion and successful checks, run:
+   Wait for registry indexing, then verify and bootstrap the combined package:
 
-```sh
-cargo login # enter a fresh short-lived token interactively; never in chat
-cargo publish --manifest-path crates/gpui-agentation-mcp/Cargo.toml --locked
-cargo logout
-```
+   ```sh
+   cargo publish --dry-run --all-features --locked
+   cargo publish --all-features --locked
+   ```
 
-Verify the new crate version, then revoke the bootstrap token on crates.io.
-Create/configure the matching GitHub environment and its intended reviewers
-and restrict deployments to `main`. On crates.io, open the crate's Settings →
-Trusted Publishing → Add GitHub and use the exact four values above.
-Do not reuse any token shared in chat or store a credential in source. The workflow has no static
-token fallback: it uses `rust-lang/crates-io-auth-action` to obtain and revoke
-a short-lived publishing token via GitHub OIDC.
-
-The repository uses an explicit four-action allowlist. The `crates-io`
-environment is restricted to `main`; required environment reviewers are
-unavailable on the repository's current private-repository billing plan.
-Branch review requirements still apply before promotion.
-
-## Run publishing
-
-Update the bridge's Cargo.toml, server.json and lockfile in the release PR.
-Use a version not already published. From promoted `main`, dispatch
-`Publish MCP Bridge` with the matching `version`; leave `publish=false` for
-the initial dry run. Set `publish=true` only when ready to publish. Publishing is dispatched from
-`main` explicitly: release-tag events do not publish because the environment
-accepts the `main` branch only. GitHub release automation remains independent.
-
-After crates.io publication succeeds, authenticate and publish the package's
-`server.json` using the official `mcp-publisher`:
+   Use a fresh secure Cargo credential for first uploads. The old package's
+   trusted publisher does not automatically apply to the new package.
+5. Configure the new crate's trusted publisher with owner `emmanuel-defreitas`,
+   repository `gpui-agentation`, workflow `publish-bridge.yml`, and environment
+   `crates-io`. That environment is restricted to `main`; its private-repository
+   billing plan does not support additional required environment reviewers.
+   For future Ely snapshot updates, repeat provenance verification and publish
+   the support dependency first. Its version is immutable for this revision;
+   the combined-package workflow never silently publishes a changed snapshot.
+6. Subsequent releases dispatch `Publish MCP Bridge` from `main` with matching
+   version and `publish=true`. It publishes this package with the MCP feature;
+   there is no static-token fallback. Release-tag events do not publish.
+7. Publish the new matching Registry version only after the crate exists:
 
 ```sh
 mcp-publisher login github
-mcp-publisher publish crates/gpui-agentation-mcp/server.json
+mcp-publisher publish server.json
 ```
 
-Authorize the `emmanuel-defreitas` account, which owns the
-`io.github.emmanuel-defreitas` namespace. If that namespace becomes an
-organization, the authorizing user must be an organization owner.
-Keep publisher authentication state outside the repository. Registry publishing
-is separate from crates.io publishing and is not automated here. Verify the
-entry through the Registry API after publishing; do not treat schema validation
-as proof that package ownership passed. The ownership marker is visible in the package
-README because crates.io removes HTML comments during rendering.
-
-## Local checks
-
-```sh
-python3 .github/scripts/check-bridge-release.py
-actionlint .github/workflows/bridge-ci.yml .github/workflows/publish-bridge.yml
-cargo test --manifest-path crates/gpui-agentation-mcp/Cargo.toml --locked
-cargo publish --manifest-path crates/gpui-agentation-mcp/Cargo.toml --dry-run --locked
-```
-
-References:
-
-- https://github.com/rust-lang/crates-io-auth-action
-- https://crates.io/docs/trusted-publishing
-- https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/package-types.mdx
+The Registry identity stays `io.github.emmanuel-defreitas/gpui-agentation`, while
+its Cargo identifier becomes `gpui-agentation`. Native clients retain the same
+loopback endpoint. Keep authentication state outside the repository and keep
+the visible `mcp-name` marker in the root README.
