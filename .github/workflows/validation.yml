@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: github/gh-aw-actions/setup-cli@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
+      - uses: github/gh-aw-actions/setup-cli@ebb97091a4afcc9bf2d594071dbabe861e9a34fc # v0.92.5
         with:
           version: v0.79.8
       - name: Compile and lint agentic workflows
