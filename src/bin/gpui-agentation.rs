@@ -1,3 +1,4 @@
+#[path = "../bridge/mod.rs"]
 mod bridge;
 
 use std::{io, process::ExitCode, time::Duration};
@@ -25,12 +26,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--help" | "-h" => {
                 println!(
-                    "gpui-agentation-mcp [--url http://127.0.0.1:PORT/mcp] [--timeout-ms 10000]\n\nRelays newline-delimited stdio MCP to a running local Agentation app.\nDefault URL: http://127.0.0.1:4748/mcp (or GPUI_AGENTATION_URL).\nOnly literal loopback HTTP endpoints are accepted. No API key is needed."
+                    "gpui-agentation [--url http://127.0.0.1:PORT/mcp] [--timeout-ms 10000]\n\nRelays newline-delimited stdio MCP to a running local Agentation app.\nDefault URL: http://127.0.0.1:4748/mcp (or GPUI_AGENTATION_URL).\nOnly literal loopback HTTP endpoints are accepted. No API key is needed."
                 );
                 return Ok(());
             }
             "--version" | "-V" => {
-                println!("gpui-agentation-mcp {}", env!("CARGO_PKG_VERSION"));
+                println!("gpui-agentation {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
             _ => return Err("unknown option; use --help".into()),
@@ -45,7 +46,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("gpui-agentation-mcp: {error}");
+            eprintln!("gpui-agentation: {error}");
             ExitCode::FAILURE
         }
     }

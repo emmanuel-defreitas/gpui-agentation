@@ -1,3 +1,5 @@
+#![cfg(feature = "mcp")]
+
 use serde_json::{Value, json};
 use std::{
     io::Write,
@@ -6,7 +8,7 @@ use std::{
 
 #[test]
 fn executable_exits_on_eof_and_stdout_contains_only_protocol_frames() {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_gpui-agentation-mcp"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_gpui-agentation"))
         .args(["--url", "http://127.0.0.1:1/mcp"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -39,7 +41,7 @@ fn executable_exits_on_eof_and_stdout_contains_only_protocol_frames() {
 
 #[test]
 fn executable_rejects_remote_endpoints_without_protocol_output() {
-    let output = Command::new(env!("CARGO_BIN_EXE_gpui-agentation-mcp"))
+    let output = Command::new(env!("CARGO_BIN_EXE_gpui-agentation"))
         .args(["--url", "http://example.com:4748/mcp"])
         .output()
         .unwrap();

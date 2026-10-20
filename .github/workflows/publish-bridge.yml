@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: crates-io-gpui-agentation-mcp
+  group: crates-io-gpui-agentation
   cancel-in-progress: false
 
 jobs:
@@ -50,16 +50,16 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/gpui-agentation-mcp
+          workspaces: .
       - name: Check version and Registry ownership metadata
-        run: python3 .github/scripts/check-bridge-release.py
+        run: python3 .github/scripts/check-bridge-release.py --require-publishable
       - name: Format, lint, test and dry-run the exact package
-        working-directory: crates/gpui-agentation-mcp
+        working-directory: .
         run: |
           cargo fmt -- --check
           cargo clippy --all-targets --locked -- -D warnings
           cargo test --locked
-          cargo publish --dry-run --locked
+          cargo publish --dry-run --features mcp --locked
 
   publish:
     needs: verify
@@ -80,8 +80,8 @@ jobs:
       - name: Get short-lived crates.io publishing credentials
         id: auth
         uses: rust-lang/crates-io-auth-action@v1
-      - name: Publish only the standalone bridge
-        working-directory: crates/gpui-agentation-mcp
+      - name: Publish the combined package with the MCP binary
+        working-directory: .
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-        run: cargo publish --locked
+        run: cargo publish --features mcp --locked

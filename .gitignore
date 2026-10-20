@@ -13,4 +13,5 @@
 
 /target
 
+/.worktrees/
 /crates/gpui-agentation-mcp/target/

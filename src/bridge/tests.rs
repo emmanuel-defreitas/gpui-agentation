@@ -143,10 +143,7 @@ fn local_handshake_and_ping_work_without_a_running_app_and_notifications_are_sil
         ],
     );
     assert_eq!(output.len(), 2);
-    assert_eq!(
-        output[0]["result"]["serverInfo"]["name"],
-        "gpui-agentation-mcp"
-    );
+    assert_eq!(output[0]["result"]["serverInfo"]["name"], "gpui-agentation");
     assert_eq!(output[1]["id"], "ping-id");
     assert_eq!(output[1]["result"], json!({}));
 }

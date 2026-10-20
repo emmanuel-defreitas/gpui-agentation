@@ -1,4 +1,4 @@
-# gpui_agentation
+# gpui-agentation
 
 Native feedback for GPUI development builds: select a registered element, write
 a note, copy Markdown, and exchange status updates and replies with an agent.
@@ -8,12 +8,14 @@ Agentation protocol implementation.
 
 ## Install
 
-This library is a native GPUI/Ely integration. It is not a Codex plugin bundle
-or an MCP server. Its loopback API can be used by an external MCP adapter.
+One Cargo package contains the native GPUI/Ely library and an optional stdio
+MCP bridge. The default `native` feature exposes the debug-only library;
+`mcp` enables the `gpui-agentation` executable. Rust imports remain
+`gpui_agentation`. See [package setup](docs/package-layout.md) for both modes.
 
 ```toml
 [dependencies]
-gpui_agentation = { git = "https://github.com/emmanuel-defreitas/gpui-agentation", branch = "dev" }
+gpui-agentation = { git = "https://github.com/emmanuel-defreitas/gpui-agentation", branch = "dev" }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
@@ -185,18 +187,44 @@ default integration branch; promote through `next` into `main`. The template's
 branch policy, secret scanning, and agentic workflow sources are retained.
 Python packaging and the older Make-based release pipeline were removed;
 Rust CI checks formatting, Clippy, tests, and release compilation on macOS.
-The standalone bridge has a dedicated publishing workflow. Agent workflows require
+The combined package has a guarded publishing workflow. Agent workflows require
 their own GitHub/Copilot/Claude configuration before use.
 
 See [ORIGIN.md](ORIGIN.md) for the source snapshot and license attribution.
 
-## Standalone bridge publishing
+## Optional MCP bridge
 
-The stdio bridge lives in `crates/gpui-agentation-mcp` and is independent of
-the native library. See [publishing instructions](docs/publishing-bridge.md)
-for the dedicated CI matrix, dry-run workflow, and crates.io trusted publishing.
-The native library remains unpublished.
+Build or install the binary from this checkout without compiling the native UI:
 
-The native debug library serves `/mcp` on its existing loopback HTTP listener.
-The bridge forwards its tool calls to that endpoint, sharing the same store as
-REST/SSE. Origin/Host checks and the 32 KiB request limit apply to both.
+```sh
+cargo build --release --no-default-features --features mcp --bin gpui-agentation --locked
+cargo install --path . --no-default-features --features mcp --bin gpui-agentation --locked
+```
+
+The executable connects to a running debug app; it does not launch a native UI.
+Cargo may still fetch/resolve the optional Ely Git dependency when resolving the
+combined package. The native listener defaults to port 4748:
+
+```json
+{
+  "mcpServers": {
+    "gpui_agentation": {
+      "command": "gpui-agentation",
+      "args": ["--url", "http://127.0.0.1:4748/mcp"]
+    }
+  }
+}
+```
+
+It preserves the bridge's loopback-only URLs, bounded requests/responses,
+protocol-only stdout, timeout, and no-retry behavior. The native debug library
+serves `/mcp` on its existing REST/SSE listener with shared storage and
+Origin/Host/body-limit protections.
+
+The previously published `gpui-agentation-mcp` 0.1.0 and its Registry entry
+remain usable. The combined 0.2.0 candidate is **not published**: the pinned
+Ely Git dependency must have a compatible registry distribution first.
+`server.json` is candidate metadata; it has not replaced the live Registry entry.
+See [publishing instructions](docs/publishing-bridge.md).
+
+- MCP Registry name: `mcp-name: io.github.emmanuel-defreitas/gpui-agentation`

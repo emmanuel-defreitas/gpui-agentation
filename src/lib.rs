@@ -1,5 +1,6 @@
 //! Native element feedback and a loopback API, compiled only with debug assertions.
 #![cfg(debug_assertions)]
+#![cfg(feature = "native")]
 #![deny(missing_docs)]
 
 mod drawing;
