@@ -10,3 +10,7 @@
 !.env.example
 *.local.json
 *.local.toml
+
+/target
+
+/crates/gpui-agentation-mcp/target/
