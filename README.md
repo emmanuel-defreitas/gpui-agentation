@@ -189,3 +189,10 @@ No deployment or package publication is configured. Agent workflows require
 their own GitHub/Copilot/Claude configuration before use.
 
 See [ORIGIN.md](ORIGIN.md) for the source snapshot and license attribution.
+
+## Standalone bridge publishing
+
+The stdio bridge lives in `crates/gpui-agentation-mcp` and is independent of
+the native library. See [publishing instructions](docs/publishing-bridge.md)
+for the dedicated CI matrix, dry-run workflow, and crates.io trusted publishing.
+The native library remains unpublished.

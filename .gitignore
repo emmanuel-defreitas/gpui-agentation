@@ -12,3 +12,5 @@
 *.local.toml
 
 /target
+
+/crates/gpui-agentation-mcp/target/

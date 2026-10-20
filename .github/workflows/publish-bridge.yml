@@ -1,0 +1,90 @@
+name: Publish MCP Bridge
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Bridge version (for example 0.1.0); must match Cargo.toml and server.json'
+        required: true
+        type: string
+      publish:
+        description: 'Publish after validation (false performs a dry run only)'
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crates-io-gpui-agentation-mcp
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.commit.outputs.sha }}
+    env:
+      BRIDGE_RELEASE_VERSION: ${{ inputs.version || github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require promoted main history
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && "$GITHUB_REF" != refs/heads/main ]]; then
+            echo 'Run publishing from main after dev → next → main promotion.' >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor HEAD origin/main
+      - id: commit
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.98.1'
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/gpui-agentation-mcp
+      - name: Check version and Registry ownership metadata
+        run: python3 .github/scripts/check-bridge-release.py
+      - name: Format, lint, test and dry-run the exact package
+        working-directory: crates/gpui-agentation-mcp
+        run: |
+          cargo fmt -- --check
+          cargo clippy --all-targets --locked -- -D warnings
+          cargo test --locked
+          cargo publish --dry-run --locked
+
+  publish:
+    needs: verify
+    if: github.event_name == 'release' || inputs.publish == true
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.commit }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.98.1'
+      - name: Get short-lived crates.io publishing credentials
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+      - name: Publish only the standalone bridge
+        working-directory: crates/gpui-agentation-mcp
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --locked
