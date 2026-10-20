@@ -1,7 +1,8 @@
 # Publish the combined gpui-agentation package
 
 The candidate is one package, version 0.2.0: the debug-only native library and
-an optional `gpui-agentation` binary behind the `mcp` feature. It replaces the
+a default-enabled `gpui-agentation` binary behind the optional `mcp` feature.
+Native consumers explicitly enable `native` and disable default features. It replaces the
 previous source layout containing an independent bridge crate; it does not remove or yank the
 already published `gpui-agentation-mcp` 0.1.0.
 
@@ -36,8 +37,8 @@ version, so the snapshot **must be published first**.
    Wait for registry indexing, then verify and bootstrap the combined package:
 
    ```sh
-   cargo publish --dry-run --features mcp --locked
-   cargo publish --features mcp --locked
+   cargo publish --dry-run --all-features --locked
+   cargo publish --all-features --locked
    ```
 
    Use a fresh secure Cargo credential for first uploads. The old package's

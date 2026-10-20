@@ -2,13 +2,14 @@
 
 The package name is `gpui-agentation`; the native Rust library remains
 `gpui_agentation`. Version 0.2.0 uses the registry-compatible `gpui-agentation-ely =0.1.1`
-snapshot of the unchanged pinned Ely source. See [provenance](../vendor/ely/README.md).
+snapshot of the unchanged pinned Ely source. See [provenance](ely-distribution.md).
 Both packages must be published before installing this candidate from crates.io.
 
 | Features | Result |
 | --- | --- |
-| default (`native`) | Native debug annotation library; no binary |
-| `--no-default-features --features mcp` | Optional stdio binary; no native UI compilation |
+| default (`mcp`) | Portable stdio binary; no native UI compilation |
+| `--no-default-features --features native` | Native debug annotation library; no bridge dependencies |
+| `--no-default-features --features mcp` | Same portable binary as the default install |
 | `--all-features` | Native library, bridge, and native test support |
 | `--no-default-features` | Empty library; no binary |
 
@@ -19,11 +20,11 @@ the debug-gated library.
 
 ## Native app
 
-Until this release is published, use Git:
+Use the native feature explicitly:
 
 ```toml
 [dependencies]
-gpui-agentation = { git = "https://github.com/emmanuel-defreitas/gpui-agentation", branch = "dev" }
+gpui-agentation = { version = "0.2.0", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
@@ -49,13 +50,13 @@ Cargo types or theme/focus globals. New debug-only integrations can use
 For now, install from a checkout containing this candidate:
 
 ```sh
-cargo install --path . --no-default-features --features mcp --bin gpui-agentation --locked
+cargo install --path . --locked
 ```
 
 Once the combined package is actually published, the registry command will be:
 
 ```sh
-cargo install gpui-agentation --no-default-features --features mcp --bin gpui-agentation --locked
+cargo install gpui-agentation --locked
 ```
 
 Do not use that registry command yet. The existing public
@@ -67,7 +68,7 @@ and `--timeout-ms` arguments. The host app must be running in debug mode.
 The MCP feature avoids compiling GPUI/Ely. Cargo still resolves optional
 dependencies; every native dependency now has a registry version.
 
-Registry Cargo metadata describes the installed executable. Its schema has no
-Cargo install-feature field, so clients must follow the explicit install command
-above; do not pass Cargo feature flags as executable arguments. The registry
-entry does not make `cargo install gpui-agentation` enable the optional binary.
+Registry Cargo metadata describes the installed executable. The binary is enabled by default, so a standard
+Cargo installation works without install-feature metadata. Do not pass Cargo
+feature flags as executable arguments. The bridge can still be excluded by
+consumers using `default-features = false`.

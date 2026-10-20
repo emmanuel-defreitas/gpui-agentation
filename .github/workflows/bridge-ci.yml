@@ -54,6 +54,11 @@ jobs:
       - run: python3 .github/scripts/check-ely-snapshot.py
       - run: python3 .github/scripts/check-bridge-release.py --require-publishable
       - run: cargo fmt -- --check
-      - run: cargo clippy --no-default-features --features mcp --all-targets --locked -- -D warnings
-      - run: cargo test --no-default-features --features mcp --locked
-      - run: cargo build --release --no-default-features --features mcp --bin gpui-agentation --locked
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --release --bin gpui-agentation --locked
+      - name: Verify default Cargo install produces the Registry executable
+        shell: bash
+        run: |
+          cargo install --path . --locked --debug --root "$RUNNER_TEMP/agentation-install"
+          "$RUNNER_TEMP/agentation-install/bin/gpui-agentation" --version

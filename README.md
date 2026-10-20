@@ -9,18 +9,18 @@ Agentation protocol implementation.
 ## Install
 
 One Cargo package contains the native GPUI/Ely library and an optional stdio
-MCP bridge. The default `native` feature exposes the debug-only library;
-`mcp` enables the `gpui-agentation` executable. Rust imports remain
+MCP bridge. The default `mcp` feature makes `cargo install gpui-agentation --locked`
+produce the portable executable. Native apps opt into `native` and disable
+default features to avoid bridge dependencies. Rust imports remain
 `gpui_agentation`. See [package setup](docs/package-layout.md) for both modes.
 
 ```toml
 [dependencies]
-gpui-agentation = { git = "https://github.com/emmanuel-defreitas/gpui-agentation", branch = "dev" }
+gpui-agentation = { version = "0.2.0", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
-The repository is private, so Git must authenticate with GitHub. Pin a commit
-with `rev` for repeatable builds. The Ely snapshot retains upstream revision
+The Ely snapshot retains upstream revision
 `da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721`. A different GPUI package or source
 has incompatible types. The minimum Rust version is 1.95; development and CI
 use Rust 1.98.1. Ely is distributed as the attributed `gpui-agentation-ely =0.1.1` snapshot.
@@ -198,8 +198,8 @@ See [ORIGIN.md](ORIGIN.md) for the source snapshot and license attribution.
 Build or install the binary from this checkout without compiling the native UI:
 
 ```sh
-cargo build --release --no-default-features --features mcp --bin gpui-agentation --locked
-cargo install --path . --no-default-features --features mcp --bin gpui-agentation --locked
+cargo build --release --bin gpui-agentation --locked
+cargo install --path . --locked
 ```
 
 The executable connects to a running debug app; it does not launch a native UI.
@@ -223,9 +223,8 @@ serves `/mcp` on its existing REST/SSE listener with shared storage and
 Origin/Host/body-limit protections.
 
 The previously published `gpui-agentation-mcp` 0.1.0 and its Registry entry
-remain usable. The combined 0.2.0 candidate is **not published**. Release the
-verified `gpui-agentation-ely` snapshot first, then the combined package.
-`server.json` is candidate metadata; it has not replaced the live Registry entry.
+remain usable. For release, publish the verified `gpui-agentation-ely` snapshot first, then
+the combined package, then the matching `server.json` Registry metadata.
 See [publishing instructions](docs/publishing-bridge.md).
 
 - MCP Registry name: `mcp-name: io.github.emmanuel-defreitas/gpui-agentation`

@@ -21,11 +21,11 @@ if not version == package["version"] == registry["version"] == registry["package
     raise SystemExit("Release version, package version, and Registry versions must match")
 if package["name"] != "gpui-agentation":
     raise SystemExit("Expected the combined gpui-agentation package")
-if manifest["features"]["default"] != ["native"] or not any(
+if manifest["features"]["default"] != ["mcp"] or not any(
     target["name"] == "gpui-agentation" and target.get("required-features") == ["mcp"]
     for target in manifest["bin"]
 ):
-    raise SystemExit("Expected a native library default and an opt-in MCP binary")
+    raise SystemExit("Expected a portable default MCP binary and opt-in native library")
 entry = registry["packages"][0]
 if entry["registryType"] != "cargo" or entry["identifier"] != package["name"] or entry["transport"]["type"] != "stdio":
     raise SystemExit("Registry package must identify the Cargo/stdio bridge")
