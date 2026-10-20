@@ -185,7 +185,18 @@ default integration branch; promote through `next` into `main`. The template's
 branch policy, secret scanning, and agentic workflow sources are retained.
 Python packaging and the older Make-based release pipeline were removed;
 Rust CI checks formatting, Clippy, tests, and release compilation on macOS.
-No deployment or package publication is configured. Agent workflows require
+The standalone bridge has a dedicated publishing workflow. Agent workflows require
 their own GitHub/Copilot/Claude configuration before use.
 
 See [ORIGIN.md](ORIGIN.md) for the source snapshot and license attribution.
+
+## Standalone bridge publishing
+
+The stdio bridge lives in `crates/gpui-agentation-mcp` and is independent of
+the native library. See [publishing instructions](docs/publishing-bridge.md)
+for the dedicated CI matrix, dry-run workflow, and crates.io trusted publishing.
+The native library remains unpublished.
+
+The native debug library serves `/mcp` on its existing loopback HTTP listener.
+The bridge forwards its tool calls to that endpoint, sharing the same store as
+REST/SSE. Origin/Host checks and the 32 KiB request limit apply to both.

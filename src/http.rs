@@ -2,6 +2,10 @@ use std::{
     convert::Infallible,
     future::IntoFuture,
     net::{Ipv4Addr, SocketAddr, TcpListener},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     thread::JoinHandle,
     time::Duration,
 };
@@ -27,6 +31,7 @@ use crate::{AnnotationInput, AnnotationPatch, Error, Store};
 /// Owns a loopback-only HTTP server. Dropping it closes connections and joins its thread.
 pub struct Server {
     address: SocketAddr,
+    mcp_enabled: Arc<AtomicBool>,
     stop: Option<oneshot::Sender<()>>,
     thread: Option<JoinHandle<()>>,
 }
@@ -37,6 +42,8 @@ impl Server {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port))?;
         listener.set_nonblocking(true)?;
         let address = listener.local_addr()?;
+        let mcp_enabled = Arc::new(AtomicBool::new(true));
+        let route_enabled = mcp_enabled.clone();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
@@ -49,7 +56,7 @@ impl Server {
                         return;
                     };
                     tokio::select! {
-                        _ = axum::serve(listener, router(store)).into_future() => {},
+                        _ = axum::serve(listener, router(store, route_enabled)).into_future() => {},
                         _ = stopped => {},
                     }
                 });
@@ -57,6 +64,7 @@ impl Server {
             })?;
         Ok(Self {
             address,
+            mcp_enabled,
             stop: Some(stop),
             thread: Some(thread),
         })
@@ -65,6 +73,17 @@ impl Server {
     /// Actual listener address, including the assigned port.
     pub fn address(&self) -> SocketAddr {
         self.address
+    }
+
+    /// Whether new MCP requests are accepted. REST/SSE remain available when off.
+    pub fn is_mcp_enabled(&self) -> bool {
+        self.mcp_enabled.load(Ordering::Acquire)
+    }
+
+    /// Enable or pause MCP without dropping the listener or annotation store.
+    /// Requests already executing may finish; subsequent requests return 503 while off.
+    pub fn set_mcp_enabled(&self, enabled: bool) {
+        self.mcp_enabled.store(enabled, Ordering::Release);
     }
 }
 
@@ -79,8 +98,13 @@ impl Drop for Server {
     }
 }
 
-fn router(store: Store) -> Router {
+fn router(store: Store, mcp_enabled: Arc<AtomicBool>) -> Router {
     Router::new()
+        .route(
+            "/mcp",
+            post(crate::mcp::handle)
+                .layer(middleware::from_fn_with_state(mcp_enabled, mcp_available)),
+        )
         .route(
             "/health",
             get(|| async { Json(json!({"ok": true, "name": "gpui-agentation"})) }),
@@ -102,6 +126,21 @@ fn router(store: Store) -> Router {
         .layer(DefaultBodyLimit::max(32 * 1024))
         .layer(middleware::from_fn(local_clients))
         .with_state(store)
+}
+
+async fn mcp_available(
+    State(enabled): State<Arc<AtomicBool>>,
+    request: axum::extract::Request,
+    next: Next,
+) -> Response {
+    if !enabled.load(Ordering::Acquire) {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"error":"MCP server is off"})),
+        )
+            .into_response();
+    }
+    next.run(request).await
 }
 
 async fn local_clients(request: axum::extract::Request, next: Next) -> Response {
