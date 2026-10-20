@@ -45,3 +45,6 @@ uuid = { version = "1.23.1", features = ["serde", "v4"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", features = ["test-support"] }
 reqwest = { version = "0.12.24", default-features = false, features = ["cookies", "json", "multipart", "rustls-tls", "stream"] }
 tempfile = { version = "3.27.0" }
+
+[workspace]
+exclude = ["crates/gpui-agentation-mcp"]

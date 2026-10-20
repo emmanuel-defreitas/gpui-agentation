@@ -4,6 +4,7 @@
 
 mod drawing;
 mod http;
+mod mcp;
 mod model;
 mod overlay;
 mod store;

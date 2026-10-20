@@ -43,19 +43,19 @@ Do not reuse any token shared in chat or store a credential in source. The workf
 token fallback: it uses `rust-lang/crates-io-auth-action` to obtain and revoke
 a short-lived publishing token via GitHub OIDC.
 
-No secrets or external environment/publisher settings have been configured by
-this branch. These account-side prerequisites must be completed before an
-actual publish can succeed.
+The repository uses an explicit four-action allowlist. The `crates-io`
+environment is restricted to `main`; required environment reviewers are
+unavailable on the repository's current private-repository billing plan.
+Branch review requirements still apply before promotion.
 
 ## Run publishing
 
 Update the bridge's Cargo.toml, server.json and lockfile in the release PR.
 Use a version not already published. From promoted `main`, dispatch
 `Publish MCP Bridge` with the matching `version`; leave `publish=false` for
-the initial dry run. Set `publish=true` only when ready to publish. Published
-stable GitHub releases also run the workflow; their `vX.Y.Z` tag must match
-the bridge's version exactly. Releasing another component with a different
-version fails validation rather than publishing the wrong bridge version.
+the initial dry run. Set `publish=true` only when ready to publish. Publishing is dispatched from
+`main` explicitly: release-tag events do not publish because the environment
+accepts the `main` branch only. GitHub release automation remains independent.
 
 After crates.io publication succeeds, authenticate and publish the package's
 `server.json` using the official `mcp-publisher`:

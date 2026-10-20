@@ -10,9 +10,10 @@ and works in release builds. The app still needs the native Agentation library.
 cargo run --manifest-path crates/gpui-agentation-mcp/Cargo.toml --locked -- --url http://127.0.0.1:4750/mcp
 ```
 
-The host must be running in debug mode with MCP enabled. The consumer example
-uses port 4750, the playground uses 4749, and the default host setup uses 4748.
-Copy the actual URL from the app's Settings. `--url` overrides
+The host must be running in debug mode with its MCP listener enabled.
+Use the port passed to `gpui_agentation::Server::start` (or the actual
+`Server::address()` when requesting an OS-assigned port). The default is 4748;
+the examples above use 4750. For hosts with Settings, copy its actual URL. `--url` overrides
 `GPUI_AGENTATION_URL`; the default is `http://127.0.0.1:4748/mcp`.
 
 After this package is published, install it with:

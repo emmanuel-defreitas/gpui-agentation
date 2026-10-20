@@ -1,8 +1,6 @@
 name: Publish MCP Bridge
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -23,23 +21,22 @@ concurrency:
 
 jobs:
   verify:
-    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
     runs-on: ubuntu-latest
     outputs:
       commit: ${{ steps.commit.outputs.sha }}
     env:
-      BRIDGE_RELEASE_VERSION: ${{ inputs.version || github.event.release.tag_name }}
+      BRIDGE_RELEASE_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Require promoted main history
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && "$GITHUB_REF" != refs/heads/main ]]; then
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
             echo 'Run publishing from main after dev → next → main promotion.' >&2
             exit 1
           fi
@@ -66,7 +63,7 @@ jobs:
 
   publish:
     needs: verify
-    if: github.event_name == 'release' || inputs.publish == true
+    if: inputs.publish == true
     runs-on: ubuntu-latest
     environment: crates-io
     permissions:
