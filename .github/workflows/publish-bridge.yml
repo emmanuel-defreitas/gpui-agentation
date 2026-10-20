@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     outputs:
       commit: ${{ steps.commit.outputs.sha }}
     env:
@@ -51,20 +51,22 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
+      - name: Verify pinned Ely snapshot
+        run: python3 .github/scripts/check-ely-snapshot.py
       - name: Check version and Registry ownership metadata
         run: python3 .github/scripts/check-bridge-release.py --require-publishable
       - name: Format, lint, test and dry-run the exact package
         working-directory: .
         run: |
           cargo fmt -- --check
-          cargo clippy --all-targets --locked -- -D warnings
-          cargo test --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          cargo test --workspace --all-features --locked
           cargo publish --dry-run --features mcp --locked
 
   publish:
     needs: verify
     if: inputs.publish == true
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     environment: crates-io
     permissions:
       contents: read

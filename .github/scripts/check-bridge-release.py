@@ -33,7 +33,7 @@ marker = f'mcp-name: {registry["name"]}'
 if not any(line.startswith("- MCP Registry name:") and marker in line for line in (root / "README.md").read_text().splitlines()):
     raise SystemExit("Cargo README must contain the visible MCP ownership marker")
 if args.require_publishable and package.get("publish") is False:
-    raise SystemExit("Publication blocked: resolve the pinned Ely Git dependency before enabling publication")
+    raise SystemExit("Publication blocked: package publishing is explicitly disabled")
 for specification in manifest.get("dependencies", {}).values():
     if args.require_publishable and isinstance(specification, dict) and ("git" in specification or "path" in specification) and not specification.get("version"):
         raise SystemExit("Publication requires registry-compatible dependencies, including optional native dependencies")

@@ -6,6 +6,8 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'src/**'
+      - 'vendor/ely/**'
+      - '.github/scripts/check-ely-snapshot.py'
       - 'tests/**'
       - 'server.json'
       - '.github/workflows/bridge-ci.yml'
@@ -17,6 +19,8 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'src/**'
+      - 'vendor/ely/**'
+      - '.github/scripts/check-ely-snapshot.py'
       - 'tests/**'
       - 'server.json'
       - '.github/workflows/bridge-ci.yml'
@@ -47,7 +51,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
-      - run: python3 .github/scripts/check-bridge-release.py
+      - run: python3 .github/scripts/check-ely-snapshot.py
+      - run: python3 .github/scripts/check-bridge-release.py --require-publishable
       - run: cargo fmt -- --check
       - run: cargo clippy --no-default-features --features mcp --all-targets --locked -- -D warnings
       - run: cargo test --no-default-features --features mcp --locked

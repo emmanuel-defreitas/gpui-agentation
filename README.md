@@ -20,10 +20,11 @@ gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, fea
 ```
 
 The repository is private, so Git must authenticate with GitHub. Pin a commit
-with `rev` for repeatable builds. Use the same Ely revision as this crate:
+with `rev` for repeatable builds. The Ely snapshot retains upstream revision
 `da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721`. A different GPUI package or source
 has incompatible types. The minimum Rust version is 1.95; development and CI
-use Rust 1.98.1. Ely is a Git dependency, so crates.io publishing remains disabled.
+use Rust 1.98.1. Ely is distributed as the attributed `gpui-agentation-ely =0.1.1` snapshot.
+Existing Ely apps must use the same distribution; see [Ely setup](docs/package-layout.md).
 
 ## Toolbar and editor
 
@@ -202,8 +203,8 @@ cargo install --path . --no-default-features --features mcp --bin gpui-agentatio
 ```
 
 The executable connects to a running debug app; it does not launch a native UI.
-Cargo may still fetch/resolve the optional Ely Git dependency when resolving the
-combined package. The native listener defaults to port 4748:
+Cargo still resolves optional native dependencies; the pinned Ely snapshot
+now has a registry-compatible package version. The native listener defaults to port 4748:
 
 ```json
 {
@@ -222,8 +223,8 @@ serves `/mcp` on its existing REST/SSE listener with shared storage and
 Origin/Host/body-limit protections.
 
 The previously published `gpui-agentation-mcp` 0.1.0 and its Registry entry
-remain usable. The combined 0.2.0 candidate is **not published**: the pinned
-Ely Git dependency must have a compatible registry distribution first.
+remain usable. The combined 0.2.0 candidate is **not published**. Release the
+verified `gpui-agentation-ely` snapshot first, then the combined package.
 `server.json` is candidate metadata; it has not replaced the live Registry entry.
 See [publishing instructions](docs/publishing-bridge.md).
 

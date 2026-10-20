@@ -1,9 +1,9 @@
 # One package, two uses
 
 The package name is `gpui-agentation`; the native Rust library remains
-`gpui_agentation`. Version 0.2.0 is a source-only candidate until the pinned Ely
-revision can be distributed through crates.io. Do not change the GPUI source or
-substitute a different Ely revision to get a successful upload.
+`gpui_agentation`. Version 0.2.0 uses the registry-compatible `gpui-agentation-ely =0.1.1`
+snapshot of the unchanged pinned Ely source. See [provenance](../vendor/ely/README.md).
+Both packages must be published before installing this candidate from crates.io.
 
 | Features | Result |
 | --- | --- |
@@ -19,7 +19,7 @@ the debug-gated library.
 
 ## Native app
 
-Until a registry-compatible Ely dependency exists, use Git:
+Until this release is published, use Git:
 
 ```toml
 [dependencies]
@@ -29,8 +29,20 @@ gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, fea
 
 Gate imports and annotation fields/mounting with `cfg(debug_assertions)`.
 Ordinary Rust imports are still `use gpui_agentation::...`; changing the
-package name does not require renaming Rust modules. Retain the pinned Ely
-revision `da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721` in existing Ely hosts.
+package name does not require renaming Rust modules. The Ely source remains at revision
+`da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721`. Existing Ely hosts must switch their
+Ely dependency to the **same distribution**, retaining their Rust imports:
+
+```toml
+ely-gpui-component = { package = "gpui-agentation-ely", version = "=0.1.1" }
+```
+
+Before the snapshot is published, point that dependency at `vendor/ely` in a
+local checkout. For a Git-based host during development, point both
+Agentation and Ely at that checkout to keep one Cargo identity. Do not mix
+upstream Git Ely with the registry snapshot: identical source does not unify
+Cargo types or theme/focus globals. New debug-only integrations can use
+`gpui_agentation::ely`; release Ely UI needs the direct dependency above.
 
 ## MCP client
 
@@ -52,9 +64,8 @@ through the old package. Existing clients using that executable keep working;
 new candidate configs use the command `gpui-agentation` with the same `--url`
 and `--timeout-ms` arguments. The host app must be running in debug mode.
 
-The MCP feature avoids compiling GPUI/Ely, but Cargo still resolves optional
-dependencies and may fetch their Git repositories. This feature does not make
-the combined package publishable while Ely is Git-only.
+The MCP feature avoids compiling GPUI/Ely. Cargo still resolves optional
+dependencies; every native dependency now has a registry version.
 
 Registry Cargo metadata describes the installed executable. Its schema has no
 Cargo install-feature field, so clients must follow the explicit install command

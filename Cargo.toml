@@ -3,8 +3,6 @@ name = "gpui-agentation"
 version = "0.2.0"
 edition = "2024"
 rust-version = "1.95"
-# Pinned Ely is not published on crates.io; optional Git dependencies also block publication.
-publish = false
 license = "MIT"
 description = "Native GPUI development annotations with an optional stdio MCP bridge"
 repository = "https://github.com/emmanuel-defreitas/gpui-agentation"
@@ -46,7 +44,7 @@ unneeded_wildcard_pattern = "allow"
 reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "json"], optional = true }
 atomic-write-file = { version = "0.3.0", optional = true }
 axum = { version = "0.7.9", optional = true }
-ely-gpui-component = { git = "https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components", rev = "da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721", optional = true }
+ely-gpui-component = { package = "gpui-agentation-ely", version = "=0.1.1", path = "vendor/ely", optional = true }
 futures-util = { version = "0.3", optional = true }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"], optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
@@ -60,4 +58,5 @@ reqwest = { version = "0.13.5", default-features = false, features = ["cookies",
 tempfile = { version = "3.27.0" }
 
 [workspace]
+exclude = ["vendor/ely"]
 resolver = "2"

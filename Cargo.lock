@@ -1766,53 +1766,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
-name = "ely-gpui-component"
-version = "0.1.1"
-source = "git+https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components?rev=da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721#da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721"
-dependencies = [
- "alacritty_terminal",
- "anyhow",
- "barcoders",
- "base64 0.22.1",
- "block",
- "cocoa 0.26.1",
- "emojis",
- "futures",
- "gpui-pre",
- "gpui-pre-platform",
- "image",
- "iso_currency",
- "isocountry",
- "isolang",
- "jiff",
- "log",
- "markdown",
- "mermaid-rs-renderer",
- "objc",
- "pulldown-cmark",
- "qrcode",
- "ratex-layout",
- "ratex-parser",
- "ratex-svg",
- "ratex-types",
- "raw-window-handle",
- "regex",
- "rqrr",
- "rust-embed",
- "rustix",
- "serde",
- "serde_json",
- "similar",
- "smallvec",
- "unicode-segmentation",
- "unicode-width",
- "usvg",
- "vte",
- "web-time",
- "wry",
-]
-
-[[package]]
 name = "embed-resource"
 version = "3.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2463,8 +2416,8 @@ version = "0.2.0"
 dependencies = [
  "atomic-write-file",
  "axum",
- "ely-gpui-component",
  "futures-util",
+ "gpui-agentation-ely",
  "gpui-pre",
  "reqwest",
  "serde",
@@ -2473,6 +2426,52 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "gpui-agentation-ely"
+version = "0.1.1"
+dependencies = [
+ "alacritty_terminal",
+ "anyhow",
+ "barcoders",
+ "base64 0.22.1",
+ "block",
+ "cocoa 0.26.1",
+ "emojis",
+ "futures",
+ "gpui-pre",
+ "gpui-pre-platform",
+ "image",
+ "iso_currency",
+ "isocountry",
+ "isolang",
+ "jiff",
+ "log",
+ "markdown",
+ "mermaid-rs-renderer",
+ "objc",
+ "pulldown-cmark",
+ "qrcode",
+ "ratex-layout",
+ "ratex-parser",
+ "ratex-svg",
+ "ratex-types",
+ "raw-window-handle",
+ "regex",
+ "rqrr",
+ "rust-embed",
+ "rustix",
+ "serde",
+ "serde_json",
+ "similar",
+ "smallvec",
+ "unicode-segmentation",
+ "unicode-width",
+ "usvg",
+ "vte",
+ "web-time",
+ "wry",
 ]
 
 [[package]]
