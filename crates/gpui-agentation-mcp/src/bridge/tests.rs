@@ -47,6 +47,9 @@ fn http(status: &str, body: &str, extra: &str) -> (String, thread::JoinHandle<Va
                 Err(error) => panic!("accept: {error}"),
             }
         };
+        // Accepted sockets inherit nonblocking mode on Windows. The fixture
+        // uses blocking reads with a timeout after the bounded accept loop.
+        stream.set_nonblocking(false).unwrap();
         stream
             .set_read_timeout(Some(Duration::from_secs(2)))
             .unwrap();
