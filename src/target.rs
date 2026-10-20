@@ -169,6 +169,6 @@ impl Element for Registered {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-support"))]
 #[path = "target.test.rs"]
 mod tests;
