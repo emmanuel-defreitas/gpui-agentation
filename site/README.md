@@ -15,14 +15,13 @@ npm run preview
 
 The configured project base is `/gpui-agentation/`; use that path in local
 preview URLs. `dist/` is generated and excluded from source control.
-The source in `example/` is checked against the published 0.3.0 crate. The
-prepare script copies only its manifest and Rust source to the public download
-folder; it never copies Cargo's target directory or local feedback stores.
+Kirari highlights Rust, TOML, shell, and JSON at build time, so code snippets
+ship as escaped token spans without a client highlighter. GSAP handles the three
+inline SVG feature sequences. The complete example-app page and downloads have
+been removed.
 
-```sh
-cargo check --manifest-path example/Cargo.toml --all-targets
-cargo check --manifest-path example/Cargo.toml --all-targets --release
-```
+See [motion asset provenance](docs/motion-assets.md) for the HeyGen-generated
+illustration, original SVG work, and optional GIF regeneration command.
 
 ## Deploy
 
@@ -34,11 +33,12 @@ your working tree untouched. In GitHub Settings → Pages, use **Deploy from a b
 root. Never publish the repository root, private application files, or native
 build artifacts. Site source changes target `dev` under the normal PR policy.
 
-The interactive preview is a browser simulation with fictional sample content,
-not a GPUI executable. All annotations remain in tab memory. It never calls the
-native loopback API, sends analytics, or loads third-party assets. Theme
-preference uses local storage when available. Clipboard writes happen only
-when a visitor clicks a Copy button.
+The preview is an illustrated GIF with original animated SVG feature panels,
+not an executable GPUI app. A pause control stops the GIF and SVG loops. Visitors
+who request reduced motion receive a still poster and static SVGs by default.
+The site never calls the native loopback API or sends analytics; assets are
+self-hosted. Theme preference uses optional local storage. Clipboard writes
+happen only when a visitor clicks a Copy button.
 
 Fonts are self-hosted from bundled Ely assets. See `public/assets/Inter-LICENSE.txt`
 and `public/assets/JetBrainsMono-LICENSE.txt` for their licenses.

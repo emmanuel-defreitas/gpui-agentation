@@ -1,0 +1,45 @@
+---
+interface Props { kind: 'inspect' | 'draw' | 'handoff'; }
+const {kind} = Astro.props;
+const details = {
+  inspect: {title:'Point to the exact place.', description:'Select a registered component. Keep its bounds and Rust source reference with the comment.'},
+  draw: {title:'Make the change visible.', description:'Box an area, draw an arrow, or sketch with the pen. Give a visual idea a precise anchor.'},
+  handoff: {title:'Carry the context forward.', description:'Copy structured Markdown or connect an MCP client to read, reply, and resolve feedback.'},
+}[kind];
+---
+<article class="feature" data-motion={kind}>
+  <div class="feature-art">
+    <svg viewBox="0 0 320 210" fill="none" aria-hidden="true" class="feature-svg">
+      {kind === 'inspect' && <>
+        <rect x="30" y="27" width="260" height="156" rx="12" class="art-surface"/>
+        <path d="M30 54H290" class="art-rule"/><circle cx="44" cy="41" r="2" class="art-dot"/><circle cx="53" cy="41" r="2" class="art-dot"/>
+        <rect x="49" y="71" width="222" height="43" rx="6" class="art-card"/>
+        <path d="M65 86H147M65 99H205" class="art-rule"/>
+        <rect x="46" y="68" width="228" height="49" rx="8" class="inspect-outline art-amber-stroke"/>
+        <g class="inspect-source"><rect x="56" y="133" width="208" height="30" rx="6" class="art-code"/><path d="m70 143-4 5 4 5m10-10 4 5-4 5" class="art-amber-stroke"/><text x="94" y="152" class="art-mono">project.rs:42:9</text></g>
+        <g class="inspect-cursor"><path d="m207 100 1 25 7-8 10-1-18-16Z" class="art-cursor"/></g>
+      </>}
+      {kind === 'draw' && <>
+        <rect x="30" y="27" width="260" height="156" rx="12" class="art-surface"/>
+        <path d="M30 54H290" class="art-rule"/><circle cx="44" cy="41" r="2" class="art-dot"/><circle cx="53" cy="41" r="2" class="art-dot"/>
+        <rect x="50" y="73" width="103" height="63" rx="6" class="art-card"/><path d="M64 89H116M64 101H137M64 113H122" class="art-rule"/>
+        <rect x="46" y="69" width="111" height="71" rx="8" class="draw-box art-amber-stroke" pathLength="1"/>
+        <path d="M251 134Q235 81 178 100m11-12-13 12 14 7" class="draw-arrow art-amber-stroke" pathLength="1"/>
+        <path d="M80 155q19 9 34 0t32 0 27 0" class="draw-pen art-amber-stroke" pathLength="1"/>
+        <circle cx="157" cy="69" r="11" class="art-amber-fill"/><text x="157" y="73" text-anchor="middle" class="art-pin-text">1</text>
+      </>}
+      {kind === 'handoff' && <>
+        <rect x="30" y="48" width="108" height="115" rx="10" class="art-surface"/>
+        <rect x="182" y="48" width="108" height="115" rx="10" class="art-surface"/>
+        <circle cx="52" cy="71" r="10" class="art-amber-fill"/><text x="52" y="75" text-anchor="middle" class="art-pin-text">1</text>
+        <path d="M72 69H120M72 77H106M46 99H120M46 111H112M46 123H102" class="art-rule"/>
+        <path d="m218 72-9 10 9 10m36-20 9 10-9 10m-12-23-11 27" class="art-ink-stroke"/>
+        <path d="M143 108H177m-5-5 5 5-5 5" class="handoff-line art-amber-stroke"/>
+        <circle cx="148" cy="108" r="3.5" class="handoff-dot art-amber-fill"/>
+        <g class="handoff-status"><rect x="195" y="119" width="82" height="24" rx="12" class="art-card"/><path d="m207 131 3 3 6-7" class="art-success"/><text x="223" y="135" class="art-label">Resolved</text></g>
+        <text x="84" y="185" text-anchor="middle" class="art-label">Your app</text><text x="236" y="185" text-anchor="middle" class="art-label">Your agent</text>
+      </>}
+    </svg>
+  </div>
+  <h3>{details.title}</h3><p>{details.description}</p>
+</article>

@@ -1,0 +1,21 @@
+---
+import { tokenize, render } from '@vortexlabs/kirari/core';
+import { rust } from '@vortexlabs/kirari/languages/rust';
+import { toml } from '@vortexlabs/kirari/languages/toml';
+import { shell } from '@vortexlabs/kirari/languages/shell';
+import { json } from '@vortexlabs/kirari/languages/json';
+interface Props {
+  code: string;
+  label: string;
+  language: 'rust' | 'toml' | 'shell' | 'json';
+  copyLabel: string;
+}
+const { code, label, language, copyLabel } = Astro.props;
+const languages = { rust, toml, shell, json };
+// Kirari escapes source text before producing its token spans.
+const html = render(tokenize(code, languages[language]));
+---
+<div class="code-block">
+  <div class="code-header"><span>{label}</span><button class="copy-code" aria-label={copyLabel}><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div>
+  <pre class="kirari" data-language={language}><code set:html={html}/></pre>
+</div>

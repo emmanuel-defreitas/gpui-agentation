@@ -8,84 +8,84 @@
         "role": "neutral",
         "displayName": "Bg",
         "tonalRamp": [
-          "oklch(15% 0.00106 197.14)",
-          "oklch(26% 0.00106 197.14)",
-          "oklch(38% 0.00106 197.14)",
-          "oklch(49% 0.00106 197.14)",
-          "oklch(61% 0.00106 197.14)",
-          "oklch(72% 0.00106 197.14)",
-          "oklch(84% 0.00106 197.14)",
-          "oklch(95% 0.00106 197.14)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "surface": {
         "role": "neutral",
         "displayName": "Surface",
         "tonalRamp": [
-          "oklch(15% 0.00000 89.88)",
-          "oklch(26% 0.00000 89.88)",
-          "oklch(38% 0.00000 89.88)",
-          "oklch(49% 0.00000 89.88)",
-          "oklch(61% 0.00000 89.88)",
-          "oklch(72% 0.00000 89.88)",
-          "oklch(84% 0.00000 89.88)",
-          "oklch(95% 0.00000 89.88)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "sunken": {
         "role": "neutral",
         "displayName": "Sunken",
         "tonalRamp": [
-          "oklch(15% 0.00214 197.12)",
-          "oklch(26% 0.00214 197.12)",
-          "oklch(38% 0.00214 197.12)",
-          "oklch(49% 0.00214 197.12)",
-          "oklch(61% 0.00214 197.12)",
-          "oklch(72% 0.00214 197.12)",
-          "oklch(84% 0.00214 197.12)",
-          "oklch(95% 0.00214 197.12)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "text": {
         "role": "neutral",
         "displayName": "Text",
         "tonalRamp": [
-          "oklch(15% 0.00861 196.64)",
-          "oklch(26% 0.00861 196.64)",
-          "oklch(38% 0.00861 196.64)",
-          "oklch(49% 0.00861 196.64)",
-          "oklch(61% 0.00861 196.64)",
-          "oklch(72% 0.00861 196.64)",
-          "oklch(84% 0.00861 196.64)",
-          "oklch(95% 0.00861 196.64)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "muted": {
         "role": "neutral",
         "displayName": "Muted",
         "tonalRamp": [
-          "oklch(15% 0.01340 196.75)",
-          "oklch(26% 0.01340 196.75)",
-          "oklch(38% 0.01340 196.75)",
-          "oklch(49% 0.01340 196.75)",
-          "oklch(61% 0.01340 196.75)",
-          "oklch(72% 0.01340 196.75)",
-          "oklch(84% 0.01340 196.75)",
-          "oklch(95% 0.01340 196.75)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "line": {
         "role": "neutral",
         "displayName": "Line",
         "tonalRamp": [
-          "oklch(15% 0.00647 197.04)",
-          "oklch(26% 0.00647 197.04)",
-          "oklch(38% 0.00647 197.04)",
-          "oklch(49% 0.00647 197.04)",
-          "oklch(61% 0.00647 197.04)",
-          "oklch(72% 0.00647 197.04)",
-          "oklch(84% 0.00647 197.04)",
-          "oklch(95% 0.00647 197.04)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "amber": {
@@ -120,28 +120,28 @@
         "role": "neutral",
         "displayName": "Toolbar",
         "tonalRamp": [
-          "oklch(15% 0.00861 196.64)",
-          "oklch(26% 0.00861 196.64)",
-          "oklch(38% 0.00861 196.64)",
-          "oklch(49% 0.00861 196.64)",
-          "oklch(61% 0.00861 196.64)",
-          "oklch(72% 0.00861 196.64)",
-          "oklch(84% 0.00861 196.64)",
-          "oklch(95% 0.00861 196.64)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "toolbar-ink": {
         "role": "neutral",
         "displayName": "Toolbar Ink",
         "tonalRamp": [
-          "oklch(15% 0.00213 197.12)",
-          "oklch(26% 0.00213 197.12)",
-          "oklch(38% 0.00213 197.12)",
-          "oklch(49% 0.00213 197.12)",
-          "oklch(61% 0.00213 197.12)",
-          "oklch(72% 0.00213 197.12)",
-          "oklch(84% 0.00213 197.12)",
-          "oklch(95% 0.00213 197.12)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "focus": {
@@ -162,112 +162,112 @@
         "role": "neutral",
         "displayName": "Dark Bg",
         "tonalRamp": [
-          "oklch(15% 0.00748 196.62)",
-          "oklch(26% 0.00748 196.62)",
-          "oklch(38% 0.00748 196.62)",
-          "oklch(49% 0.00748 196.62)",
-          "oklch(61% 0.00748 196.62)",
-          "oklch(72% 0.00748 196.62)",
-          "oklch(84% 0.00748 196.62)",
-          "oklch(95% 0.00748 196.62)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "dark-surface": {
         "role": "neutral",
         "displayName": "Dark Surface",
         "tonalRamp": [
-          "oklch(15% 0.00861 196.64)",
-          "oklch(26% 0.00861 196.64)",
-          "oklch(38% 0.00861 196.64)",
-          "oklch(49% 0.00861 196.64)",
-          "oklch(61% 0.00861 196.64)",
-          "oklch(72% 0.00861 196.64)",
-          "oklch(84% 0.00861 196.64)",
-          "oklch(95% 0.00861 196.64)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "dark-sunken": {
         "role": "neutral",
         "displayName": "Dark Sunken",
         "tonalRamp": [
-          "oklch(15% 0.00973 196.64)",
-          "oklch(26% 0.00973 196.64)",
-          "oklch(38% 0.00973 196.64)",
-          "oklch(49% 0.00973 196.64)",
-          "oklch(61% 0.00973 196.64)",
-          "oklch(72% 0.00973 196.64)",
-          "oklch(84% 0.00973 196.64)",
-          "oklch(95% 0.00973 196.64)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "dark-text": {
         "role": "neutral",
         "displayName": "Dark Text",
         "tonalRamp": [
-          "oklch(15% 0.00427 197.09)",
-          "oklch(26% 0.00427 197.09)",
-          "oklch(38% 0.00427 197.09)",
-          "oklch(49% 0.00427 197.09)",
-          "oklch(61% 0.00427 197.09)",
-          "oklch(72% 0.00427 197.09)",
-          "oklch(84% 0.00427 197.09)",
-          "oklch(95% 0.00427 197.09)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "dark-muted": {
         "role": "neutral",
         "displayName": "Dark Muted",
         "tonalRamp": [
-          "oklch(15% 0.01236 196.89)",
-          "oklch(26% 0.01236 196.89)",
-          "oklch(38% 0.01236 196.89)",
-          "oklch(49% 0.01236 196.89)",
-          "oklch(61% 0.01236 196.89)",
-          "oklch(72% 0.01236 196.89)",
-          "oklch(84% 0.01236 196.89)",
-          "oklch(95% 0.01236 196.89)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "dark-line": {
         "role": "neutral",
         "displayName": "Dark Line",
         "tonalRamp": [
-          "oklch(15% 0.01311 196.60)",
-          "oklch(26% 0.01311 196.60)",
-          "oklch(38% 0.01311 196.60)",
-          "oklch(49% 0.01311 196.60)",
-          "oklch(61% 0.01311 196.60)",
-          "oklch(72% 0.01311 196.60)",
-          "oklch(84% 0.01311 196.60)",
-          "oklch(95% 0.01311 196.60)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "dark-toolbar": {
         "role": "neutral",
         "displayName": "Dark Toolbar",
         "tonalRamp": [
-          "oklch(15% 0.00427 197.09)",
-          "oklch(26% 0.00427 197.09)",
-          "oklch(38% 0.00427 197.09)",
-          "oklch(49% 0.00427 197.09)",
-          "oklch(61% 0.00427 197.09)",
-          "oklch(72% 0.00427 197.09)",
-          "oklch(84% 0.00427 197.09)",
-          "oklch(95% 0.00427 197.09)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "dark-toolbar-ink": {
         "role": "neutral",
         "displayName": "Dark Toolbar Ink",
         "tonalRamp": [
-          "oklch(15% 0.00861 196.64)",
-          "oklch(26% 0.00861 196.64)",
-          "oklch(38% 0.00861 196.64)",
-          "oklch(49% 0.00861 196.64)",
-          "oklch(61% 0.00861 196.64)",
-          "oklch(72% 0.00861 196.64)",
-          "oklch(84% 0.00861 196.64)",
-          "oklch(95% 0.00861 196.64)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
       "dark-focus": {
@@ -282,90 +282,6 @@
           "oklch(72% 0.14657 81.17)",
           "oklch(84% 0.14657 81.17)",
           "oklch(95% 0.14657 81.17)"
-        ]
-      },
-      "note-bg": {
-        "role": "primary",
-        "displayName": "Note Bg",
-        "tonalRamp": [
-          "oklch(15% 0.08616 81.80)",
-          "oklch(26% 0.08616 81.80)",
-          "oklch(38% 0.08616 81.80)",
-          "oklch(49% 0.08616 81.80)",
-          "oklch(61% 0.08616 81.80)",
-          "oklch(72% 0.08616 81.80)",
-          "oklch(84% 0.08616 81.80)",
-          "oklch(95% 0.08616 81.80)"
-        ]
-      },
-      "note-text": {
-        "role": "primary",
-        "displayName": "Note Text",
-        "tonalRamp": [
-          "oklch(15% 0.05911 81.97)",
-          "oklch(26% 0.05911 81.97)",
-          "oklch(38% 0.05911 81.97)",
-          "oklch(49% 0.05911 81.97)",
-          "oklch(61% 0.05911 81.97)",
-          "oklch(72% 0.05911 81.97)",
-          "oklch(84% 0.05911 81.97)",
-          "oklch(95% 0.05911 81.97)"
-        ]
-      },
-      "note-line": {
-        "role": "primary",
-        "displayName": "Note Line",
-        "tonalRamp": [
-          "oklch(15% 0.13631 77.19)",
-          "oklch(26% 0.13631 77.19)",
-          "oklch(38% 0.13631 77.19)",
-          "oklch(49% 0.13631 77.19)",
-          "oklch(61% 0.13631 77.19)",
-          "oklch(72% 0.13631 77.19)",
-          "oklch(84% 0.13631 77.19)",
-          "oklch(95% 0.13631 77.19)"
-        ]
-      },
-      "note-field": {
-        "role": "primary",
-        "displayName": "Note Field",
-        "tonalRamp": [
-          "oklch(15% 0.03480 87.07)",
-          "oklch(26% 0.03480 87.07)",
-          "oklch(38% 0.03480 87.07)",
-          "oklch(49% 0.03480 87.07)",
-          "oklch(61% 0.03480 87.07)",
-          "oklch(72% 0.03480 87.07)",
-          "oklch(84% 0.03480 87.07)",
-          "oklch(95% 0.03480 87.07)"
-        ]
-      },
-      "note-placeholder": {
-        "role": "primary",
-        "displayName": "Note Placeholder",
-        "tonalRamp": [
-          "oklch(15% 0.06648 82.99)",
-          "oklch(26% 0.06648 82.99)",
-          "oklch(38% 0.06648 82.99)",
-          "oklch(49% 0.06648 82.99)",
-          "oklch(61% 0.06648 82.99)",
-          "oklch(72% 0.06648 82.99)",
-          "oklch(84% 0.06648 82.99)",
-          "oklch(95% 0.06648 82.99)"
-        ]
-      },
-      "drawing": {
-        "role": "primary",
-        "displayName": "Drawing",
-        "tonalRamp": [
-          "oklch(15% 0.13282 74.16)",
-          "oklch(26% 0.13282 74.16)",
-          "oklch(38% 0.13282 74.16)",
-          "oklch(49% 0.13282 74.16)",
-          "oklch(61% 0.13282 74.16)",
-          "oklch(72% 0.13282 74.16)",
-          "oklch(84% 0.13282 74.16)",
-          "oklch(95% 0.13282 74.16)"
         ]
       }
     },
@@ -397,46 +313,31 @@
     },
     "shadows": [
       {
-        "name": "workbench",
-        "value": "0 12px 32px #17212108",
-        "purpose": "Quiet ambient separation for the preview."
-      },
-      {
         "name": "pin",
         "value": "0 1px 5px #0002",
-        "purpose": "Locate floating annotation pins."
-      },
-      {
-        "name": "dialog",
-        "value": "0 20px 60px #0003",
-        "purpose": "Separate the modal editor from the dimmed page."
+        "purpose": "Static annotation identity."
       }
     ],
     "motion": [
       {
-        "name": "ease",
-        "value": "cubic-bezier(.16,1,.3,1)",
-        "purpose": "Pin arrival and toast movement."
+        "name": "feature-entrance",
+        "value": ".65s power3.out",
+        "purpose": "One-time GSAP feature entrance."
       },
       {
-        "name": "button-transition",
-        "value": "background .15s, color .15s",
-        "purpose": "Button state changes."
-      },
-      {
-        "name": "pin-arrival",
-        "value": ".3s",
-        "purpose": "Pin scale and fade animation."
-      },
-      {
-        "name": "toast-transition",
-        "value": "opacity .2s, transform .3s cubic-bezier(.16,1,.3,1)",
-        "purpose": "Toast entrance and exit."
+        "name": "feature-path",
+        "value": ".75s power2.inOut",
+        "purpose": "Draw SVG annotation strokes."
       },
       {
         "name": "reduced-motion",
-        "value": "animation: none; transition: none; scroll-behavior: auto",
-        "purpose": "Honor prefers-reduced-motion: reduce."
+        "value": "Static poster and SVGs",
+        "purpose": "Disable automatic motion when requested."
+      },
+      {
+        "name": "pause-control",
+        "value": "Shared GIF and SVG playback state",
+        "purpose": "Stop all looping illustration motion."
       }
     ],
     "breakpoints": [
@@ -461,36 +362,28 @@
       "refersTo": "button-primary",
       "description": "Installation action.",
       "html": "<button class=\"ds-button\">Install gpui-agentation</button>",
-      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line,#dde3e3);border-radius:7px;padding:10px 16px;font:600 13px Inter,Arial,sans-serif;cursor:pointer;transition:background .15s,color .15s}.ds-button:hover{filter:brightness(.96)}.ds-button:focus-visible{outline:2px solid var(--focus,#986300);outline-offset:4px}.ds-button{background:var(--text,#202626);color:var(--bg,#fafbfb);border-color:var(--text,#202626)}"
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line,#dfdfdf);border-radius:7px;padding:10px 16px;font:600 13px Inter,Arial,sans-serif;cursor:pointer;transition:background .15s,color .15s}.ds-button:hover{filter:brightness(.96)}.ds-button:focus-visible{outline:2px solid var(--focus,#986300);outline-offset:4px}.ds-button{background:var(--text,#242424);color:var(--bg,#fafafa);border-color:var(--text,#242424)}"
     },
     {
       "name": "Secondary Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Secondary preview or example action.",
-      "html": "<button class=\"ds-button\">Copy feedback</button>",
-      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line,#dde3e3);border-radius:7px;padding:10px 16px;font:600 13px Inter,Arial,sans-serif;cursor:pointer;transition:background .15s,color .15s}.ds-button:hover{filter:brightness(.96)}.ds-button:focus-visible{outline:2px solid var(--focus,#986300);outline-offset:4px}.ds-button{background:var(--surface,#fff);color:var(--text,#202626)}.ds-button:hover{background:var(--sunken,#f1f3f3)}"
-    },
-    {
-      "name": "Note Field",
-      "kind": "input",
-      "refersTo": "note-field",
-      "description": "Warm comment editor.",
-      "html": "<label class=\"ds-label\" for=\"ds-note\">Comment</label><textarea id=\"ds-note\" class=\"ds-note\" placeholder=\"Describe what should change\u2026\"></textarea>",
-      "css": ".ds-label{display:block;color:#392700;font:600 13px Inter,Arial,sans-serif;margin-bottom:8px}.ds-note{min-height:96px;width:100%;resize:vertical;border:1px solid #c58a15;border-radius:5px;background:#fff4db;color:#392700;padding:11px;font:13px/1.6 Inter,Arial,sans-serif}.ds-note::placeholder{color:#786237}.ds-note:focus-visible{outline:2px solid var(--focus,#986300);outline-offset:4px}"
+      "description": "Copy source action.",
+      "html": "<button class=\"ds-button\">Copy source</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line,#dfdfdf);border-radius:7px;padding:10px 16px;font:600 13px Inter,Arial,sans-serif;cursor:pointer;transition:background .15s,color .15s}.ds-button:hover{filter:brightness(.96)}.ds-button:focus-visible{outline:2px solid var(--focus,#986300);outline-offset:4px}.ds-button{background:var(--surface,#fff);color:var(--text,#242424)}.ds-button:hover{background:var(--sunken,#f2f2f2)}"
     },
     {
       "name": "Documentation Navigation",
       "kind": "nav",
       "description": "Reference section links with an active location.",
       "html": "<nav class=\"ds-nav\" aria-label=\"Documentation\"><a href=\"#installation\" aria-current=\"location\">Installation</a><a href=\"#setup\">Native setup</a><a href=\"#mcp\">MCP bridge</a></nav>",
-      "css": ".ds-nav{display:flex;flex-direction:column;align-items:flex-start;gap:12px;font:12px/1.65 Inter,Arial,sans-serif}.ds-nav a{color:var(--muted,#616c6c);text-decoration:none}.ds-nav a[aria-current]{color:var(--text,#202626);font-weight:600}.ds-nav a:hover{text-decoration:underline;text-underline-offset:4px}.ds-nav a:focus-visible{outline:2px solid var(--focus,#986300);outline-offset:4px}"
+      "css": ".ds-nav{display:flex;flex-direction:column;align-items:flex-start;gap:12px;font:12px/1.65 Inter,Arial,sans-serif}.ds-nav a{color:var(--muted,#666666);text-decoration:none}.ds-nav a[aria-current]{color:var(--text,#242424);font-weight:600}.ds-nav a:hover{text-decoration:underline;text-underline-offset:4px}.ds-nav a:focus-visible{outline:2px solid var(--focus,#986300);outline-offset:4px}"
     },
     {
       "name": "Annotation Pin",
       "kind": "custom",
       "refersTo": "annotation-pin",
-      "description": "Numbered location linked to a comment.",
+      "description": "Static amber annotation identity, also used in SVG feature art.",
       "html": "<button class=\"ds-pin\" aria-label=\"Edit comment 1\">1</button>",
       "css": ".ds-pin{display:flex;align-items:center;justify-content:center;width:27px;height:27px;background:var(--amber,#f4b942);color:var(--amber-ink,#523600);border:2px solid var(--surface,#fff);border-radius:50%;font:600 12px Inter,Arial,sans-serif;box-shadow:0 1px 5px #0002;cursor:pointer}.ds-pin:hover{filter:brightness(.96)}.ds-pin:focus-visible{outline:2px solid var(--focus,#986300);outline-offset:4px}"
     },
@@ -498,27 +391,20 @@
       "name": "Source Container",
       "kind": "card",
       "refersTo": "code-block",
-      "description": "Bordered source reference with a compact context header.",
+      "description": "Build-time Kirari tokens inside a neutral source container.",
       "html": "<section class=\"ds-code\"><div class=\"ds-code-header\">Terminal</div><pre>cargo add gpui-agentation</pre></section>",
-      "css": ".ds-code{background:var(--sunken,#f1f3f3);color:var(--text,#202626);border:1px solid var(--line,#dde3e3);border-radius:8px;overflow:hidden}.ds-code-header{padding:7px 14px;min-height:38px;border-bottom:1px solid var(--line,#dde3e3);color:var(--muted,#616c6c);font:10px/1.65 Inter,Arial,sans-serif}.ds-code pre{margin:0;padding:17px 18px 20px;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.85 JetBrains,monospace}"
-    },
-    {
-      "name": "Preview Toolbar",
-      "kind": "custom",
-      "refersTo": "toolbar",
-      "description": "High-contrast tools with an amber pressed state.",
-      "html": "<div class=\"ds-toolbar\" role=\"group\" aria-label=\"Annotation tools\"><button aria-pressed=\"true\">Inspect</button><button aria-pressed=\"false\">Box</button><button aria-pressed=\"false\">Arrow</button><button aria-pressed=\"false\">Pen</button></div>",
-      "css": ".ds-toolbar{display:flex;gap:3px;align-items:center;min-height:55px;padding:9px 13px;background:var(--toolbar,#202626);color:var(--toolbar-ink,#f5f7f7)}.ds-toolbar button{border:0;border-radius:5px;background:transparent;color:inherit;padding:7px 8px;font:600 10px Inter,Arial,sans-serif;cursor:pointer}.ds-toolbar button[aria-pressed=true]{background:var(--amber,#f4b942);color:var(--amber-ink,#523600)}.ds-toolbar button:hover{filter:brightness(.96)}.ds-toolbar button:focus-visible{outline:2px solid var(--amber,#f4b942);outline-offset:4px}"
+      "css": ".ds-code{background:var(--sunken,#f2f2f2);color:var(--text,#242424);border:1px solid var(--line,#dfdfdf);border-radius:8px;overflow:hidden}.ds-code-header{padding:7px 14px;min-height:38px;border-bottom:1px solid var(--line,#dfdfdf);color:var(--muted,#666666);font:10px/1.65 Inter,Arial,sans-serif}.ds-code pre{margin:0;padding:17px 18px 20px;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.85 JetBrains,monospace}"
     }
   ],
   "narrative": {
-    "northStar": "Native developer workbench",
-    "overview": "The native developer workbench carries the visual vocabulary of the annotation product into a reading-focused website. Cool neutral surfaces, graphite controls, and amber annotation marks make the interactive preview feel related to the native interface.\n\nInter provides practical reading and control text; JetBrains Mono identifies source, commands, and technical metadata. Spacious documentation sections surround a denser preview. This specification describes the Astro website only; it does not define the native crate\u2019s API or native UI tokens.",
+    "northStar": "Native feature motion",
+    "overview": "A reading-focused Astro site explains native GPUI feedback with an illustrated GIF and three original SVG feature sequences. All surface neutrals are achromatic; amber identifies annotations. The illustrations are explanatory, not a running native app.",
     "keyCharacteristics": [
-      "Neutral reading surfaces with amber annotation state.",
-      "Bundled Inter and JetBrains Mono for continuity with the native product.",
-      "Quiet borders and restrained shadows; compact working controls.",
-      "Responsive documentation with a functional, explicitly simulated preview."
+      "Achromatic light/dark reading surfaces with amber annotation state.",
+      "Bundled Inter and JetBrains Mono.",
+      "Illustrated GIF plus inspect, draw, and handoff SVG sequences.",
+      "Build-time Kirari highlighting and original source clipboard text.",
+      "Reduced-motion stills and a shared animation pause control."
     ],
     "rules": [
       {
@@ -533,7 +419,7 @@
       },
       {
         "name": "The Working Layer Rule",
-        "body": "Reserve floating depth for the interactive workbench, annotations, and dialog; documentation containers rely on borders and tone.",
+        "body": "Show feature behavior through selection, cursor, path drawing, and status changes; do not add decorative motion to reference prose.",
         "section": "elevation"
       }
     ],
@@ -542,10 +428,10 @@
       "Do reserve amber for annotation identity, selection, and related focus states.",
       "Do pair readable Inter prose with JetBrains Mono source and technical metadata.",
       "Do retain visible keyboard focus and honor reduced-motion preferences.",
-      "Do keep the browser preview visibly identified as a simulation."
+      "Do identify the GIF and SVGs as illustrations."
     ],
     "donts": [
-      "Don't use the browser preview as evidence of native runtime behavior.",
+      "Don't present generated illustrations as native runtime proof.",
       "Don't replace the bundled font pairing solely to create a separate marketing identity.",
       "Don't spread annotation amber across ordinary documentation containers.",
       "Don't introduce large decorative shadows into reference content."

@@ -1,7 +1,3 @@
 /node_modules/
 /dist/
 /.astro/
-/example/target/
-/example/Cargo.lock
-/public/example/Cargo.toml
-/public/example/src/
