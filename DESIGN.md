@@ -59,13 +59,13 @@ components:
 
 ## Overview
 
-A reading-focused Astro site explains native GPUI feedback with an illustrated
+A reading-focused Astro site explains native GPUI feedback with an vector dashboard
 GIF and three original SVG feature sequences. The illustrations are explanatory,
 not evidence of a running native app. The example-app page is intentionally absent.
 
 ## Colors
 
-All page and control neutrals are achromatic, including the dark palette. Amber
+All page and control neutrals are achromatic, including the dark palette. The main illustration follows the user-selected reference: a light dashboard, dark popovers, blue numbered pins, green Add buttons, and a floating charcoal toolbar. These illustration colors do not change the site theme. Amber
 connects selection outlines, numbered annotation pins, and handoff motion.
 
 **The Annotation Accent Rule.** Amber identifies annotation state; ordinary
@@ -110,9 +110,9 @@ SVG strokes are consistent, with amber reserved for meaningful annotations.
 
 ## Components
 
-- **Illustrated film:** self-hosted GIF, static poster, explicit illustration
-  label, and keyboard-accessible Play/Pause control. Source provenance and the
-  reproducible conversion command live in `site/docs/motion-assets.md`.
+- **Illustrated film:** self-hosted SVG-rendered GIF, static SVG poster, explicit illustration
+  label, and keyboard-accessible Play/Pause control. Artwork provenance and the
+  reproducible rendering command live in `site/docs/motion-assets.md`.
 - **Feature SVGs:** inspect/source reference, box/arrow/pen, and agent handoff.
   GSAP animates only the relevant shapes. Loops pause offscreen. The global
   pause control stops the film and feature loops together.

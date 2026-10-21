@@ -13,9 +13,9 @@ Grounded systems considered: (1) component documentation, (2) desktop help book,
 
 ## Current surface revision
 
-User requested neutral dark grays, a GIF illustration replacing the interactive
+User requested neutral dark grays, a vector dashboard GIF replacing the interactive
 playground, simple animated SVG feature bits, Kirari highlighting, and removal
 of the complete example app. Hero and reference structure remain intact.
-MotionDesign and HeyGen were explicitly selected. GSAP handles feature motion;
+The main banner now follows the supplied Agentation dashboard reference through original vector artwork. GSAP handles feature motion;
 reduced motion and Pause provide still alternatives. Illustration provenance
 is in site/docs/motion-assets.md. No native library API or pins change.

@@ -867,7 +867,7 @@ html {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 1104/624;
+  aspect-ratio: 1120/650;
   object-fit: cover
 }
 
@@ -1127,3 +1127,9 @@ html {
 }
 }
 .feature-svg text,.feature-svg .art-dot,.feature-svg .art-amber-fill,.feature-svg .art-code{stroke:none}
+
+/* The banner is an original vector recreation of the supplied dashboard reference. */
+.demo-film {border:0;background:transparent;overflow:visible}
+.demo-film>img {border-radius:16px;object-fit:contain}
+.demo-film figcaption {position:static;background:transparent;color:var(--muted);padding:12px 0}
+.film-control {background:var(--sunken);color:var(--text);border-color:var(--line)}

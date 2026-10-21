@@ -1,27 +1,38 @@
 # Motion assets
 
-The illustrated loop was generated specifically for this site with the user's
-explicitly selected HeyGen connector. It is a conceptual illustration, not a
-recording of the native application. No real user data or application capture
-was supplied.
+The main banner uses original vector artwork following the Agentation dashboard
+reference explicitly selected by the user. No upstream source, animation files,
+logos, or brand assets are copied. The existing Agentation inspiration credit
+remains on the site. This is an illustration, not a native runtime recording.
 
-- Tool: HeyGen `text_to_video`, model `heygen-video-1`
-- Video ID: `86e5269e8420436d9a73b45257835fcc`
-- Request: 5 seconds, 16:9, 768p, prompt enhancement disabled
-- Original: `media-source/annotation-demo.mp4` (kept outside public assets)
-- Published: `public/assets/motion/annotation-demo.gif` and poster PNG
-- Processing: centered crop, neutral-pixel color correction retaining amber,
-  12 fps, 128-color palette, no audio; `scripts/render-demo.py` reproduces it
-- Reproduce: `python3 scripts/render-demo.py media-source/annotation-demo.mp4`
-- FFmpeg is needed only to regenerate assets, not to build the Astro site.
+## Main dashboard sequence
 
-## Exact generation prompt
+- Artwork and deterministic frame state: `src/illustrations/banner.mjs`
+- Exporter: `scripts/render-banner.mjs`
+- Published assets: `public/assets/motion/dashboard-demo.gif` and
+  `dashboard-demo-poster.svg`
+- Regenerate: `npm run render:banner`
+- Requires FFmpeg only for asset regeneration. Normal Astro builds use the
+  committed public assets and do not require FFmpeg.
 
-Create a silent 5-second seamless loop of a precise, minimal flat vector illustration for gpui-agentation, a native developer annotation tool. Pure neutral charcoal background #171717, gray app window with a tiny simplified code panel, thin off-white outlines, amber #f4b942 numbered annotation pin and cursor. Show a cursor pointing at a UI card; an amber rectangular selection traces around the card, a small amber note appears with two horizontal text-like strokes, then an amber dot travels to a small code bracket symbol to represent agent handoff. Return smoothly to the initial state. All shapes should be clean SVG-like geometry, no real faces, no avatars, no narration, no music, no gradients, no green tint, no photorealism, no marketing logos, no fabricated legible text. Locked orthographic composition, ample breathing room, deliberate gentle easing. This is an abstract illustrative motion study, not a recording of a real application.
+The sequence moves a crosshair among dashboard components, highlights a target,
+opens a dark rounded note popover, types a comment, clicks Add, and leaves a
+numbered pin. Four annotations demonstrate a card, activity row, export action,
+and sidebar icons. Blue pins, a green Add action, the skeleton dashboard, and
+floating charcoal toolbar follow the supplied visual reference. Titles and
+comments use fictional Fieldwork sample content.
 
-## SVG features
+Resvg renders the authored SVG frames using the bundled Inter fonts. FFmpeg
+encodes a 21-second, 12 fps loop with a 128-color palette. The static SVG poster
+shows the sidebar note with previously saved pins. All user-facing text is
+rendered from source rather than inferred by a generative video model.
 
-`src/components/FeatureMotion.astro` contains three original SVG illustrations:
+The former generated video, source clip, raster poster, and conversion script
+have been removed because they are no longer used.
+
+## Smaller SVG features
+
+`src/components/FeatureMotion.astro` retains three original SVG illustrations:
 component inspection/source reference, box/arrow/pen annotation, and MCP handoff.
 `src/scripts/motion.ts` animates their cursor, paths, and handoff state with GSAP.
 Offscreen loops pause. The visible pause button stops the GIF and feature loops;

@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-User-confirmed: Astro with a static build for GitHub Pages. Build directly in code. Kirari highlights source at build time. GSAP animates original feature SVGs; a HeyGen-generated illustrated GIF provides the preview. No client framework runtime.
+User-confirmed: Astro with a static build for GitHub Pages. Build directly in code. Kirari highlights source at build time. GSAP animates original feature SVGs; an authored vector dashboard GIF provides the preview. No client framework runtime.
 
 ## Users
 

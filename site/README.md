@@ -20,8 +20,8 @@ ship as escaped token spans without a client highlighter. GSAP handles the three
 inline SVG feature sequences. The complete example-app page and downloads have
 been removed.
 
-See [motion asset provenance](docs/motion-assets.md) for the HeyGen-generated
-illustration, original SVG work, and optional GIF regeneration command.
+See [motion asset provenance](docs/motion-assets.md) for the original vector dashboard
+illustration, SVG feature work, and optional GIF regeneration command.
 
 ## Deploy
 

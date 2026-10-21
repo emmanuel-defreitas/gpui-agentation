@@ -398,7 +398,7 @@
   ],
   "narrative": {
     "northStar": "Native feature motion",
-    "overview": "A reading-focused Astro site explains native GPUI feedback with an illustrated GIF and three original SVG feature sequences. All surface neutrals are achromatic; amber identifies annotations. The illustrations are explanatory, not a running native app.",
+    "overview": "A reading-focused Astro site explains native GPUI feedback with an SVG-rendered dashboard GIF and three original SVG feature sequences. All surface neutrals are achromatic; amber identifies annotations. The illustrations are explanatory, not a running native app.",
     "keyCharacteristics": [
       "Achromatic light/dark reading surfaces with amber annotation state.",
       "Bundled Inter and JetBrains Mono.",
