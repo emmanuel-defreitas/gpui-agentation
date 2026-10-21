@@ -34,31 +34,38 @@ production telemetry or session replay, use something else.
 cargo add gpui-agentation --no-default-features --features native
 ```
 
-Initialize once at launch, mount once per window, and wrap your screen once. Gate
-each call with `#[cfg(debug_assertions)]`; the [consumer example](examples/consumer/README.md)
-keeps all of them in one module.
+Initialize once at launch, mount once per window, and wrap your screen once. The
+crate does not exist in release builds, so every call sits behind
+`#[cfg(debug_assertions)]` and release returns your content unchanged:
 
 ```rust
 // Launch: serve Agentation's assets, then initialize.
-gpui_platform::application()
-    .with_assets(gpui_agentation::Assets)
-    .run(|cx| {
-        gpui_agentation::init(cx).expect("initialize Agentation");
-        // ...open your window
-    });
+let app = gpui_platform::application();
+#[cfg(debug_assertions)]
+let app = app.with_assets(gpui_agentation::Assets);
+app.run(|cx| {
+    #[cfg(debug_assertions)]
+    gpui_agentation::init(cx).expect("initialize Agentation");
+    // ...open your window
+});
 
-// Window setup: app name, route, notes file, local port.
+// Window setup: app name, route, notes file, local port. Keep `feedback`
+// in a field of your root view that carries the same cfg.
+#[cfg(debug_assertions)]
 let feedback = gpui_agentation::Agentation::mount(
     "My app", "gpui://my-app/home", "target/agentation/feedback.json", 4748, window, cx,
 )?;
 
-// Render: return this instead of `content`.
-feedback.root("home", "Home screen", content, window, cx)
+// Render: wrap the screen in debug builds; release keeps `content` as is.
+#[cfg(debug_assertions)]
+let content = self.feedback.root("home", "Home screen", content, window, cx);
+content
 ```
 
-Ordinary controls need no wrappers. Add `target(id, label, child)` only where you
-want finer inspection. Agentation handles its Ely setup, assets and focus
-internally. More: [setup guide](docs/consumer-setup.md),
+The [consumer example](examples/consumer/README.md) keeps all of this in one
+`devtools` module. Ordinary controls need no wrappers; add
+`target(id, label, child)` only where you want finer inspection. Agentation
+handles its Ely setup, assets and focus internally. More: [setup guide](docs/consumer-setup.md),
 [setup skill](skills/gpui-agentation-setup/SKILL.md) for agents,
 [customization](docs/reference.md#settings).
 
