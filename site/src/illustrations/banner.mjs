@@ -62,7 +62,7 @@ export function renderBanner(time=17) {
   const caret=s.progress<1?(Math.sin(time*9)>-.2?1:0):0;
   const fields=[142,452,762].map((x,i)=>`<g filter="url(#card-shadow)">${rect(x,194,286,112,'#f8fafc',18)}</g>${rect(x+24,218,110-i*18,10,'#dfe4e9',4)}${rect(x+24,244,132-i*15,36,'#d7dde3',6)}`).join('');
   const rows=[414,502,582].map(y=>`${rect(170,y,140-(y%3)*15,14,'#e0e5eb',4)}${rect(350,y,100,14,'#e0e5eb',4)}${rect(490,y-12,94,36,'#eaf0f5',18)}`).join('');
-  const pin=(i)=>`<g opacity="${s.pinAlpha[i]}"><circle cx="${notes[i].pin[0]}" cy="${notes[i].pin[1]}" r="22" fill="${i===3?'#19bf6a':'#3485f6'}" filter="url(#pin-shadow)"/><text x="${notes[i].pin[0]}" y="${notes[i].pin[1]+7}" text-anchor="middle" font-size="22" font-weight="600" fill="white">${i+1}</text></g>`;
+  const pin=(i)=>`<g opacity="${s.pinAlpha[i]}"><circle cx="${notes[i].pin[0]}" cy="${notes[i].pin[1]}" r="22" fill="#f4b942" filter="url(#pin-shadow)"/><text x="${notes[i].pin[0]}" y="${notes[i].pin[1]+7}" text-anchor="middle" font-size="22" font-weight="600" fill="#523600">${i+1}</text></g>`;
   const region=n.region;
   const active=stageColor(s.stage);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" fill="none">
@@ -85,11 +85,11 @@ export function renderBanner(time=17) {
   ${s.pinAlpha.map((_,i)=>pin(i)).join('')}
   <rect x="${region[0]}" y="${region[1]}" width="${region[2]}" height="${region[3]}" rx="12" fill="${active}" fill-opacity=".03" stroke="${active}" stroke-width="3" ${s.stage===3?'stroke-dasharray="6 5"':''} opacity="${s.selectAlpha}" style="stroke:${active}"/>
   <g transform="translate(${n.popup[0]} ${n.popup[1]+(1-s.popupAlpha)*6})" opacity="${s.popupAlpha}">
-    <g filter="url(#note-shadow)">${rect(0,0,400,228,'#1b2227',30)}</g>
-    <text x="24" y="39" fill="#969fa7" font-size="20">${n.title}</text>
-    ${rect(24,57,352,80,'#242c32',12,'style="stroke:#3a444c;stroke-width:2"')}
-    <text x="42" y="92" fill="#eef2f6" font-size="21">${typing}<tspan opacity="${caret}" fill="#c8d2db">|</tspan></text>
-    <text x="258" y="195" fill="#909aa3" font-size="20" font-weight="500" text-anchor="end">Cancel</text>
+    <g filter="url(#note-shadow)">${rect(0,0,400,228,'#ffdda0',30)}</g>
+    <text x="24" y="39" fill="#786237" font-size="20">${n.title}</text>
+    ${rect(24,57,352,80,'#fff4db',12,'style="stroke:#c58a15;stroke-width:2"')}
+    <text x="42" y="92" fill="#392700" font-size="21">${typing}<tspan opacity="${caret}" fill="#523600">|</tspan></text>
+    <text x="258" y="195" fill="#786237" font-size="20" font-weight="500" text-anchor="end">Cancel</text>
     ${rect(286,166,88,44,s.click>.25?'#10a95a':'#16c76d',22)}
     <text x="330" y="195" fill="white" font-size="21" font-weight="600" text-anchor="middle">Add</text>
   </g>

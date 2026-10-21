@@ -16,10 +16,11 @@ remains on the site. This is an illustration, not a native runtime recording.
   committed public assets and do not require FFmpeg.
 
 The sequence moves a crosshair among dashboard components, highlights a target,
-opens a dark rounded note popover, types a comment, clicks Add, and leaves a
+opens an amber rounded note popover, types a comment, clicks Add, and leaves a
 numbered pin. Four annotations demonstrate a card, activity row, export action,
-and sidebar icons. Blue pins, a green Add action, the skeleton dashboard, and
-floating charcoal toolbar follow the supplied visual reference. Titles and
+and sidebar icons. Amber pins and note surfaces match the native app. The green
+Add action, skeleton dashboard, and floating charcoal toolbar retain the supplied
+visual reference. Titles and
 comments use fictional Fieldwork sample content.
 
 Resvg renders the authored SVG frames using the bundled Inter fonts. FFmpeg
