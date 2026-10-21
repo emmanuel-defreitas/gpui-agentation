@@ -1,40 +1,50 @@
-# Pinned Ely distribution for gpui-agentation
+# Bundled pinned Ely source
 
-This is an independently packaged snapshot of **Ely GPUI Components**, not an
-upstream release. All runtime source, assets, and their license notices are
-byte-for-byte from upstream commit
-`da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721` (Ely 0.1.1):
+This directory preserves **Ely GPUI Components** runtime source, assets and
+license notices byte-for-byte from upstream Ely 0.1.1 at commit
+`da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721`:
 https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components
 
-Copyright (c) 2026 Ely GPUI Component contributors. Distributed under the
-original MIT license in LICENSE. Font and icon licenses remain in assets.
+Copyright (c) 2026 Ely GPUI Component contributors. The original MIT license
+is in LICENSE; font and icon licenses remain in assets. Cargo.upstream.toml
+preserves the upstream manifest. UPSTREAM.json records the revision and SHA-256
+hashes for every runtime file and the original manifest.
 
-Only Cargo packaging changes: the registry package name is
-`gpui-agentation-ely`, package links identify this independent distribution, the original library name is retained, publishing is
-enabled, and upstream gallery/dev-only dependencies and examples are omitted.
-`Cargo.upstream.toml` preserves the original manifest. `UPSTREAM.json` records
-SHA-256 hashes for every upstream runtime file and the original manifest.
-Normal dependencies and features are unchanged, including the exact
-`gpui-pre =0.3.8` and `gpui-pre-platform =0.3.8` pins.
+There is no Cargo package in this directory and no dependency on the separately
+published gpui-agentation-ely crate. gpui-agentation includes these files in its
+own crate archive. All Ely runtime dependencies are optional and activated only
+by the native feature, with GPUI and platform pinned to =0.3.8.
 
-This package is maintained for Agentation's pinned dependency distribution.
-Version `=0.1.1` always identifies this exact revision; any source update requires
-a new package version and explicit revision review.
+## Build adaptation
 
-## Shared Ely state
+For native builds, build/ely.rs copies Rust files into OUT_DIR and makes four
+limited adaptations without editing this snapshot:
 
-Cargo treats this registry package and the upstream Git package as different
-crates. Do not use both in one host: theme globals, focus state and Ely types
-would be distinct. Existing Ely apps should alias this package:
+- Internal crate:: paths become crate::ely:: paths, including paths in macros.
+- cfg(test) predicates become false, keeping upstream unit tests disabled as
+  they were when Ely was an external dependency. The test-support feature is
+  preserved for native test initialization.
+- RustEmbed's asset folder points to vendor/ely/assets inside the package.
+- The missing-assets diagnostic recommends gpui_agentation::ely::Assets and
+  Assets::before using the bundled public namespace.
 
-```toml
-ely-gpui-component = { package = "gpui-agentation-ely", version = "=0.1.1" }
-```
+The adapter uses Rust tokens and byte offsets; comments, all other string
+literals, formatting and line numbers are preserved. Adapted output is never committed.
+Dependency lint allowances are scoped to the bundled module. MCP-only builds
+skip source generation and do not activate Ely dependencies or its tokenizer.
 
-Rust imports stay `ely_gpui_component`. New debug-only integrations can instead
-use `gpui_agentation::ely`, which is the same crate. Apps using Ely in release
-builds need the direct dependency because Agentation's release library is empty.
+Run python3 .github/scripts/check-ely-snapshot.py from the repository root.
+Add --upstream /path/to/pinned/ely to compare against the actual Git commit.
 
-Verify the snapshot from the repository root with
-`python3 .github/scripts/check-ely-snapshot.py`. Pass `--upstream PATH` to also
-compare the recorded inventory and hashes against the pinned Git commit.
+## Consumer compatibility
+
+Bundled components are available as gpui_agentation::ely in debug native builds.
+They have their own Rust type identity and theme/focus state, independently of
+any Ely crate used by the host. A host's Ely initialization does not initialize
+these components. Do not pass external Ely types into APIs that expect bundled
+types. Initialize the bundled Assets/theme/key bindings for native annotations.
+Agentation's release library remains empty, so release UI must use the host's
+own component library.
+
+The previously published gpui-agentation 0.2.0 still uses gpui-agentation-ely
+0.1.1; those immutable releases remain available. Bundling starts in 0.3.0.

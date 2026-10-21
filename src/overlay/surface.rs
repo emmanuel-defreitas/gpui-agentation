@@ -1,9 +1,5 @@
 use super::*;
-use crate::{
-    AnnotationShape, Rect,
-    drawing::{centered_panel, note_panel_position},
-};
-use ely_gpui_component::{
+use crate::ely::{
     buttons::{ActionBar, Button, IconButton},
     data_display::CountBadge,
     forms::ColorSwatch,
@@ -13,6 +9,10 @@ use ely_gpui_component::{
     overlays::Popover,
     primitives::{FocusRing, FocusScope, Icon, IconName, Measure, raise},
     theme::{ActiveTheme, ControlSize, Elevation, Radius},
+};
+use crate::{
+    AnnotationShape, Rect,
+    drawing::{centered_panel, note_panel_position},
 };
 use gpui::{
     ClipboardItem, CursorStyle, DragMoveEvent, EmptyView, EntityId, MouseButton, RenderOnce, Role,

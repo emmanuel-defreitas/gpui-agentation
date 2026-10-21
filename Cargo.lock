@@ -2412,34 +2412,19 @@ dependencies = [
 
 [[package]]
 name = "gpui-agentation"
-version = "0.2.0"
-dependencies = [
- "atomic-write-file",
- "axum",
- "futures-util",
- "gpui-agentation-ely",
- "gpui-pre",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "gpui-agentation-ely"
-version = "0.1.1"
+version = "0.3.0"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
+ "atomic-write-file",
+ "axum",
  "barcoders",
  "base64 0.22.1",
  "block",
  "cocoa 0.26.1",
  "emojis",
  "futures",
+ "futures-util",
  "gpui-pre",
  "gpui-pre-platform",
  "image",
@@ -2451,6 +2436,7 @@ dependencies = [
  "markdown",
  "mermaid-rs-renderer",
  "objc",
+ "proc-macro2",
  "pulldown-cmark",
  "qrcode",
  "ratex-layout",
@@ -2459,6 +2445,7 @@ dependencies = [
  "ratex-types",
  "raw-window-handle",
  "regex",
+ "reqwest",
  "rqrr",
  "rust-embed",
  "rustix",
@@ -2466,9 +2453,13 @@ dependencies = [
  "serde_json",
  "similar",
  "smallvec",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
  "unicode-segmentation",
  "unicode-width",
  "usvg",
+ "uuid",
  "vte",
  "web-time",
  "wry",

@@ -16,15 +16,16 @@ default features to avoid bridge dependencies. Rust imports remain
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "0.2.0", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.3.0", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
 The Ely snapshot retains upstream revision
 `da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721`. A different GPUI package or source
 has incompatible types. The minimum Rust version is 1.95; development and CI
-use Rust 1.98.1. Ely is distributed as the attributed `gpui-agentation-ely =0.1.1` snapshot.
-Existing Ely apps must use the same distribution; see [Ely setup](docs/package-layout.md).
+use Rust 1.98.1. Ely source and assets are bundled inside this package; no separate Ely
+crate is required. See [bundled Ely provenance](docs/ely-distribution.md) and
+[host integration](docs/package-layout.md).
 
 ## Toolbar and editor
 
@@ -223,8 +224,8 @@ serves `/mcp` on its existing REST/SSE listener with shared storage and
 Origin/Host/body-limit protections.
 
 The previously published `gpui-agentation-mcp` 0.1.0 and its Registry entry
-remain usable. For release, publish the verified `gpui-agentation-ely` snapshot first, then
-the combined package, then the matching `server.json` Registry metadata.
+remain usable. Release this package, then publish the matching `server.json` Registry
+metadata. Ely source and assets travel in the same Cargo archive.
 See [publishing instructions](docs/publishing-bridge.md).
 
 - MCP Registry name: `mcp-name: io.github.emmanuel-defreitas/gpui-agentation`
