@@ -27,6 +27,9 @@ jobs:
       - name: Enforce branch tag and open tracking issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job has no checkout, so gh cannot infer the repository from a git remote
+          # ("failed to run git: fatal: not a git repository"). Name it explicitly.
+          GH_REPO: ${{ github.repository }}
           HEAD_REF: ${{ github.head_ref }}
           BASE_REF: ${{ github.base_ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
