@@ -1,0 +1,34 @@
+# Exact historical false positives from the unchanged pinned Ely snapshot.
+# UPSTREAM.json entries are verified SHA-256 integrity hashes; access.rs contains
+# upstream test fixtures. Match immutable commit/path/rule/line fingerprints only.
+# Do not ignore the vendor directory, generic token patterns, or future findings.
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:1195
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:1218
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:1247
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:1259
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:1267
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:180
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:328
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:332
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:339
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:561
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:571
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:675
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:676
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/UPSTREAM.json:generic-api-key:936
+0a042efcb5f031986e94ab3daac08e3e0b8649df:vendor/ely/src/account/tests/access.rs:stripe-access-token:95
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:1195
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:1218
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:1247
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:1259
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:1267
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:180
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:328
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:332
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:339
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:561
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:571
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:675
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:676
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/UPSTREAM.json:generic-api-key:936
+0abff6ea277dad3196a8715d8f0bdebd04aab403:vendor/ely/src/account/tests/access.rs:stripe-access-token:95
