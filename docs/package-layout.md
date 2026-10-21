@@ -1,9 +1,10 @@
 # One package, two uses
 
 The package name is `gpui-agentation`; the native Rust library remains
-`gpui_agentation`. Version 0.2.0 uses the registry-compatible `gpui-agentation-ely =0.1.1`
-snapshot of the unchanged pinned Ely source. See [provenance](ely-distribution.md).
-Both packages must be published before installing this candidate from crates.io.
+`gpui_agentation`. Version 0.3.0 bundles unchanged Ely source and assets in
+the same package. See [provenance and build adaptation](ely-distribution.md).
+There is no dependency on gpui-agentation-ely. The MCP-only default does not
+compile bundled Ely or enable its native dependencies.
 
 | Features | Result |
 | --- | --- |
@@ -24,26 +25,29 @@ Use the native feature explicitly:
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "0.2.0", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.3.0", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
 Gate imports and annotation fields/mounting with `cfg(debug_assertions)`.
 Ordinary Rust imports are still `use gpui_agentation::...`; changing the
 package name does not require renaming Rust modules. The Ely source remains at revision
-`da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721`. Existing Ely hosts must switch their
-Ely dependency to the **same distribution**, retaining their Rust imports:
+`da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721`. Bundled Ely is exposed as
+`gpui_agentation::ely`; its types and theme/focus globals differ from any host
+Ely crate, even if that crate uses the same upstream revision. A host's own
+Ely initialization does not initialize Agentation's bundled components.
 
-```toml
-ely-gpui-component = { package = "gpui-agentation-ely", version = "=0.1.1" }
-```
+For the current low-level overlay API, register `gpui_agentation::ely::Assets`
+(or combine it with host assets using `Assets::before`) on the GPUI Application,
+and call `gpui_agentation::ely::init(cx)` once before creating the overlay.
+Use bundled types for annotation APIs; retain host types for host UI. Keep these
+imports and initialization behind `cfg(debug_assertions)`. The release library
+still exposes no annotation or Ely API.
 
-Before the snapshot is published, point that dependency at `vendor/ely` in a
-local checkout. For a Git-based host during development, point both
-Agentation and Ely at that checkout to keep one Cargo identity. Do not mix
-upstream Git Ely with the registry snapshot: identical source does not unify
-Cargo types or theme/focus globals. New debug-only integrations can use
-`gpui_agentation::ely`; release Ely UI needs the direct dependency above.
+When migrating from 0.2.0, remove the direct gpui-agentation-ely dependency if it
+was used only for annotations. Code using `gpui_agentation::ely` retains that
+namespace; externally aliased Ely types must be updated to the bundled types.
+This type-identity change is why the bundled release starts at 0.3.0.
 
 ## MCP client
 
