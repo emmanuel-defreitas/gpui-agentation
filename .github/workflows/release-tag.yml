@@ -45,6 +45,7 @@ jobs:
           # Latest stable tag (vX.Y.Z), or v0.0.0 if none. Dev candidate tags do not establish
           # the production release baseline.
           latest=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)
+          stable_baseline=$latest
           latest=${latest:-v0.0.0}
           base=${latest#v}
           IFS=. read -r major minor patch <<< "$base"
@@ -74,6 +75,21 @@ jobs:
           esac
 
           new_tag="v${major}.${minor}.${patch}"
+          # Bootstrap missing GitHub tag history from the reviewed package version.
+          # Once stable tags exist, require conventional-commit math to agree.
+          reviewed_tag="v$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
+          if [[ ! "$reviewed_tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Expected a reviewed stable Cargo version, got $reviewed_tag" >&2
+            exit 1
+          fi
+          if [[ -z "$stable_baseline" ]]; then
+            new_tag=$reviewed_tag
+            bump=initial
+          elif [[ "$new_tag" != "$reviewed_tag" ]]; then
+            echo "Conventional bump $new_tag does not match reviewed $reviewed_tag" >&2
+            exit 1
+          fi
+          python3 .github/scripts/check-bridge-release.py --require-publishable
           echo "Bump: $bump  →  $latest → $new_tag  (merge $MERGE_SHA)"
 
           # The tag points at the reviewed merge commit so the release is anchored to the PR.

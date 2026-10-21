@@ -25,7 +25,7 @@ Use the native feature explicitly:
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "0.3.0", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.4.0", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
@@ -37,12 +37,11 @@ package name does not require renaming Rust modules. The Ely source remains at r
 Ely crate, even if that crate uses the same upstream revision. A host's own
 Ely initialization does not initialize Agentation's bundled components.
 
-For the current low-level overlay API, register `gpui_agentation::ely::Assets`
-(or combine it with host assets using `Assets::before`) on the GPUI Application,
-and call `gpui_agentation::ely::init(cx)` once before creating the overlay.
-Use bundled types for annotation APIs; retain host types for host UI. Keep these
-imports and initialization behind `cfg(debug_assertions)`. The release library
-still exposes no annotation or Ely API.
+Initialize `gpui_agentation::Assets` and call `gpui_agentation::init(cx)` before
+mounting `Agentation` once at the screen root. It owns bundled Ely initialization,
+assets, focus and frame registration. Ordinary controls need no wrappers.
+See the [consumer setup guide](consumer-setup.md) and complete example.
+The lower-level `AnnotationOverlay` remains available for existing integrations.
 
 When migrating from 0.2.0, remove the direct gpui-agentation-ely dependency if it
 was used only for annotations. Code using `gpui_agentation::ely` retains that
