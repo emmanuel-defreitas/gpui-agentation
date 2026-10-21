@@ -21,20 +21,28 @@ for (const value of attributes) {
     assert(existsSync(path), `Missing asset: ${value}`);
   }
 }
+const markdown = readFileSync(resolve(dist, 'index.md'), 'utf8');
+assert(markdown.startsWith('# gpui-agentation\n'), 'Markdown export needs its page title');
+assert(!markdown.includes('Copy as Markdown'), 'Page controls must not appear in Markdown');
 const decode = value => value.replace(/<[^>]*>/g, '')
   .replace(/&#(?:x([0-9a-f]+)|(\d+));/gi, (_, hex, decimal) => String.fromCodePoint(parseInt(hex || decimal, hex ? 16 : 10)))
   .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
   .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+const exportedSnippets = [...markdown.matchAll(/^([ \t]*)```(\w+)\n([\s\S]*?)^\1```/gm)].map(([, indent, language, source]) => ({ language, source: source.split('\n').map(line => line.startsWith(indent) ? line.slice(indent.length) : line).join('\n').trim() }));
 const snippets = [...html.matchAll(/<pre\b[^>]*data-language="([^"]+)"[^>]*>([\s\S]*?)<\/pre>/g)];
 assert.equal(snippets.length, 5, 'Expected five highlighted, copyable setup snippets');
 for (const [, language, markup] of snippets) {
   assert(markup.includes('<span'), `Missing syntax highlighting: ${language}`);
+  assert(exportedSnippets.some(snippet => snippet.language === language && snippet.source === decode(markup).trim()), `Markdown changed ${language} setup source`);
   if (language === 'json') {
     const config = JSON.parse(decode(markup));
     assert.equal(config.mcpServers.gpui_agentation.command, 'gpui-agentation');
     assert.deepEqual(config.mcpServers.gpui_agentation.args, ['--url', 'http://127.0.0.1:4748/mcp']);
   }
 }
+assert(html.includes('claude-cli://open?q='), 'Claude Code link missing');
+assert(html.includes('https://cursor.com/link/prompt?text='), 'Cursor prompt link missing');
+assert(html.includes('https://chatgpt.com/codex'), 'Codex destination missing');
 assert(existsSync(resolve(dist, '.nojekyll')), 'Pages must disable Jekyll');
 assert(!existsSync(resolve(dist, 'example')), 'Removed example page must not ship');
 assert(!html.includes('http://localhost:'), 'Local preview URL leaked into output');

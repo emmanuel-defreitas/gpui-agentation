@@ -4,7 +4,9 @@
 #![deny(missing_docs)]
 
 mod drawing;
+mod hot_reload;
 mod http;
+mod integration;
 mod mcp;
 mod model;
 mod overlay;
@@ -21,6 +23,9 @@ pub mod ely {
 
 pub use drawing::AnnotationShape;
 pub use http::Server;
+#[cfg(feature = "test-support")]
+pub use integration::init_for_tests;
+pub use integration::{Agentation, Assets, init};
 pub use model::{
     Annotation, AnnotationInput, AnnotationPatch, AnnotationStatus, Event, Rect, Session,
     ThreadMessage,
