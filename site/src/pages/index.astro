@@ -5,6 +5,9 @@ import '../styles/site.css';
 import CodeBlock from '../components/CodeBlock.astro';
 import FeatureMotion from '../components/FeatureMotion.astro';
 const base = import.meta.env.BASE_URL;
+const pagePrompt = 'Read https://emmanuel-defreitas.github.io/gpui-agentation/index.md and help me understand and integrate gpui-agentation in my GPUI app. Ask about my app before making changes.';
+const claudeLink = `claude-cli://open?q=${encodeURIComponent(pagePrompt)}`;
+const cursorLink = `https://cursor.com/link/prompt?text=${encodeURIComponent(pagePrompt)}`;
 const bannerVersion = createHash('sha256')
   .update(bannerSource)
   .digest('hex').slice(0, 12);
@@ -26,6 +29,7 @@ const bannerVersion = createHash('sha256')
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <svg class="symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 10 7-10 7V5Z"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
   <symbol id="i-inspect" viewBox="0 0 24 24"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6M8 12h8m-4-4v8"/></symbol>
@@ -46,6 +50,18 @@ const bannerVersion = createHash('sha256')
   <nav aria-label="Main navigation"><a href="#preview">Preview</a><a href="#installation">Install</a><a href="#setup">Setup</a><a href="#customization">Customize</a></nav>
   <div class="header-actions"><button class="icon-button" id="theme-toggle" aria-label="Switch to dark appearance"><svg><use href="#i-theme"/></svg></button><a class="github-link" href="https://github.com/emmanuel-defreitas/gpui-agentation" aria-label="Source on GitHub"><svg><use href="#i-github"/></svg><span>GitHub</span></a></div>
 </header>
+<div class="page-tools wrap">
+  <details class="page-share" id="page-share">
+    <summary><svg aria-hidden="true"><use href="#i-copy"/></svg>Copy this page<svg class="share-chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
+    <div class="page-share-panel">
+      <button id="copy-page" data-markdown={`${base}index.md`}><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy as Markdown<small>Plain text, ready for your agent</small></span></button>
+      <a href={claudeLink}><span class="share-provider" aria-hidden="true">Cl</span><span>Open in Claude Code<small>Start with a prefilled prompt</small></span><span aria-hidden="true">↗</span></a>
+      <a href="https://chatgpt.com/codex" target="_blank" rel="noopener noreferrer" id="open-codex" data-prompt={pagePrompt}><span class="share-provider" aria-hidden="true">Co</span><span>Open in Codex<small>Copies page context · paste to start</small></span><span aria-hidden="true">↗</span></a>
+      <a href={cursorLink} target="_blank" rel="noopener noreferrer"><span class="share-provider" aria-hidden="true">Cu</span><span>Open in Cursor<small>Start with a prefilled prompt</small></span><span aria-hidden="true">↗</span></a>
+      <a class="markdown-link" href={`${base}index.md`} target="_blank" rel="noopener noreferrer">View Markdown <span aria-hidden="true">↗</span></a>
+    </div>
+  </details>
+</div>
 <main id="main">
   <section class="hero wrap" aria-labelledby="hero-title">
     <div><h1 id="hero-title">Point it out.<br>Build it better.</h1><p>Visual feedback for your native GPUI app.<br>Annotate the interface. Give your agent the context.</p><a class="button primary" href="#installation">Add to your app <span aria-hidden="true">↗</span></a><a class="hero-secondary" href="https://crates.io/crates/gpui-agentation/0.3.0">Rust crate <span class="version">v0.3.0</span></a></div>

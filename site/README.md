@@ -40,9 +40,21 @@ not an executable GPUI app. A pause control stops the GIF and SVG loops. Visitor
 who request reduced motion receive a still poster and static SVGs by default.
 The site never calls the native loopback API or sends analytics; assets are
 self-hosted. Theme preference uses optional local storage. Clipboard writes
-happen only when a visitor clicks a Copy button.
+happen only when a visitor clicks a Copy button or Open in Codex.
 
 Fonts are self-hosted from bundled Ely assets. See `public/assets/Inter-LICENSE.txt`
 and `public/assets/JetBrainsMono-LICENSE.txt` for their licenses.
 The site and native implementation credit https://www.agentation.com/ for
 inspiration; they do not reuse Agentation's implementation or brand assets.
+
+## Copy this page
+
+The page menu copies a plain Markdown export generated from the rendered main
+content during every build. `index.md` retains the original setup snippets and
+absolute links. Claude Code and Cursor use their documented prompt deep links.
+Codex copies the context prompt and opens its web workspace, where visitors paste
+to start; no undocumented Codex prompt URL is assumed. Desktop link handlers
+require the corresponding app to be installed.
+
+Link references: [Claude Code](https://code.claude.com/docs/en/deep-links),
+[Cursor](https://cursor.com/docs/reference/deeplinks).

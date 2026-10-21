@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev --host 127.0.0.1",
-    "build": "astro build",
+    "build": "astro build && node scripts/export-markdown.mjs",
     "preview": "astro preview --host 127.0.0.1",
     "deploy": "node scripts/deploy.mjs",
     "render:banner": "node scripts/render-banner.mjs",
@@ -17,7 +17,8 @@
     "gsap": "^3.15.0"
   },
   "devDependencies": {
-    "@resvg/resvg-js": "^2.6.2"
+    "@resvg/resvg-js": "^2.6.2",
+    "turndown": "^7.2.4"
   },
   "engines": {
     "node": ">=22.22.0"
