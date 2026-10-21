@@ -1,5 +1,5 @@
 use crate::Rect;
-use ely_gpui_component::media::{Mark, Tool};
+use crate::ely::media::{Mark, Tool};
 use gpui::{PathBuilder, Window, point, px};
 use serde::{Deserialize, Serialize};
 

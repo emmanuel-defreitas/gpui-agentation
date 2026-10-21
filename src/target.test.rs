@@ -1,5 +1,5 @@
 use super::*;
-use ely_gpui_component::primitives::raise;
+use crate::ely::primitives::raise;
 use gpui::{Context, Modifiers, Render, TestAppContext, anchored, div, point, prelude::*, px};
 use std::{cell::Cell, rc::Rc};
 
