@@ -22,6 +22,7 @@ PATTERNS = [
     rf"The {V} candidate",
     rf"target the {V} Agentation API",
     rf"Version {V} does not",
+    rf"{V} is on \[crates\.io\]",
 ]
 FILES = [
     "README.md",
