@@ -51,6 +51,43 @@
   document.querySelectorAll('.copy-code').forEach((button) => {
     button.addEventListener('click', () => copy(button.closest('.code-block').querySelector('pre').textContent, button));
   });
+  const share = $('#page-share');
+  const copyPage = $('#copy-page');
+  let pageMarkdown;
+  let pageMarkdownText;
+  // Start loading the small static export before a click so clipboard writes
+  // retain the browser's user activation (including Safari).
+  const loadMarkdown = () => pageMarkdown ||= fetch(copyPage.dataset.markdown)
+    .then(response => { if (!response.ok) throw new Error('Markdown unavailable'); return response.text(); })
+    .then(text => { pageMarkdownText = text; return text; })
+    .catch(error => { pageMarkdown = undefined; throw error; });
+  share?.addEventListener('toggle', () => {
+    if (!share.open) return;
+    copyPage.disabled = true;
+    copyPage.setAttribute('aria-busy', 'true');
+    loadMarkdown().catch(() => {}).finally(() => {
+      copyPage.disabled = false;
+      copyPage.removeAttribute('aria-busy');
+    });
+  });
+  copyPage?.addEventListener('click', () => {
+    if (pageMarkdownText) copy(pageMarkdownText, copyPage);
+    else notify('Unable to load Markdown. Use View Markdown to copy it.');
+  });
+  $('#open-codex')?.addEventListener('click', () => {
+    // The normal anchor opens Codex; clipboard access starts during this click.
+    const prompt = $('#open-codex').dataset.prompt;
+    copy(pageMarkdownText ? `${prompt}\n\n${pageMarkdownText}` : prompt, $('#open-codex'));
+  });
+  document.addEventListener('click', event => {
+    if (share?.open && !share.contains(event.target)) share.open = false;
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && share?.open) {
+      share.open = false;
+      share.querySelector('summary').focus();
+    }
+  });
   const themeButton = $('#theme-toggle');
   let savedTheme;
   try { savedTheme = localStorage.getItem('agentation-site-theme'); } catch { /* Optional storage. */ }

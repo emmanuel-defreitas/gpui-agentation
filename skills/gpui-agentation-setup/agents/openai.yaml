@@ -1,0 +1,4 @@
+interface:
+  display_name: "GPUI Agentation Setup"
+  short_description: "Integrate native annotations with minimal host changes"
+  default_prompt: "Use $gpui-agentation-setup to add development annotations to this GPUI/Ely app with one screen-level registration."

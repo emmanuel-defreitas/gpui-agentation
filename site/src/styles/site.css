@@ -1133,3 +1133,20 @@ html {
 .demo-film>img {border-radius:16px;object-fit:contain}
 .demo-film figcaption {position:static;background:transparent;color:var(--muted);padding:12px 0}
 .film-control {background:var(--sunken);color:var(--text);border-color:var(--line)}
+
+/* Page context handoff. Native details keeps the menu useful without JS. */
+.page-tools {display:flex;justify-content:flex-end;margin-top:18px;margin-bottom:-34px;position:relative;z-index:10}
+.page-share {position:relative;font-size:12px}
+.page-share summary {list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;border:1px solid var(--line);border-radius:7px;background:var(--surface);padding:8px 11px;color:var(--muted)}
+.page-share summary::-webkit-details-marker {display:none}
+.page-share summary:hover,.page-share[open] summary {color:var(--text);background:var(--sunken)}
+.page-share summary:focus-visible {outline:2px solid var(--focus);outline-offset:4px}
+.page-share summary svg {width:15px;height:15px}
+.page-share .share-chevron {width:13px;height:13px;margin-left:4px}
+.page-share-panel {position:absolute;right:0;top:calc(100% + 8px);width:min(300px,calc(100vw - 40px));padding:6px;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:0 12px 32px #0002}
+.page-share-panel>a,.page-share-panel>button {display:flex;align-items:center;gap:11px;width:100%;padding:11px 10px;border:0;border-radius:5px;text-align:left;background:transparent;color:var(--text);font:inherit;text-decoration:none}
+.page-share-panel>a:hover,.page-share-panel>button:hover {background:var(--sunken);filter:none;text-decoration:none}
+.page-share-panel small {display:block;font-size:10px;color:var(--muted);margin-top:2px}
+.page-share-panel>a>span:last-child:not(:nth-child(2)) {margin-left:auto;color:var(--muted)}
+.share-provider {display:grid;place-items:center;width:20px;height:20px;flex-shrink:0;font:10px JetBrains,monospace;border:1px solid var(--line);border-radius:4px}
+.page-share-panel .markdown-link {border-top:1px solid var(--line);border-radius:0;color:var(--muted);font-size:11px;margin-top:4px;padding-bottom:7px}
