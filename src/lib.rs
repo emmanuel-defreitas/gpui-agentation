@@ -11,9 +11,13 @@ mod overlay;
 mod store;
 mod target;
 
-/// The exact Ely distribution used by Agentation, for shared theme and focus state.
-/// Existing Ely hosts must use this distribution too; do not mix it with Git Ely.
-pub use ely_gpui_component as ely;
+/// Bundled components from the exact pinned Ely revision.
+///
+/// These types and globals belong to Agentation, independently of any host Ely crate.
+#[allow(missing_docs, deprecated, unexpected_cfgs, clippy::all)]
+pub mod ely {
+    include!(concat!(env!("OUT_DIR"), "/ely/lib.rs"));
+}
 
 pub use drawing::AnnotationShape;
 pub use http::Server;

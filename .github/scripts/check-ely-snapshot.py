@@ -17,22 +17,36 @@ assert provenance["revision"] == REVISION, "Unexpected Ely revision"
 original = (snapshot / "Cargo.upstream.toml").read_bytes()
 assert hashlib.sha256(original).hexdigest() == provenance["manifest_sha256"], "Original manifest changed"
 upstream = tomllib.loads(original.decode())
-manifest = tomllib.loads((snapshot / "Cargo.toml").read_text())
+agentation = tomllib.loads((root / "Cargo.toml").read_text())
 assert provenance["repository"] == upstream["package"]["repository"]
-assert manifest["package"]["name"] == "gpui-agentation-ely"
-assert manifest["package"]["version"] == upstream["package"]["version"] == "0.1.1"
-assert manifest["package"]["license"] == upstream["package"]["license"] == "MIT"
-assert manifest["package"].get("publish") is not False
-assert manifest["lib"]["name"] == "ely_gpui_component"
-assert manifest["package"]["metadata"]["upstream"]["revision"] == REVISION
-assert manifest["lints"] == upstream["lints"], "Ely lint configuration changed"
-assert manifest["features"] == upstream["features"], "Ely features changed"
-assert manifest["dependencies"] == upstream["dependencies"], "Ely dependencies changed"
-for target in upstream["target"]:
-    assert manifest["target"][target].get("dependencies", {}) == upstream["target"][target].get("dependencies", {}), "Ely target dependencies changed"
-assert set(manifest["target"]) == set(upstream["target"])
-for dependency in ("gpui", "gpui_platform"):
-    assert manifest["dependencies"][dependency]["version"] == "=0.3.8"
+assert agentation["package"]["metadata"]["bundled-ely"] == {"repository": provenance["repository"], "revision": REVISION, "version": upstream["package"]["version"]}
+assert not (snapshot / "Cargo.toml").exists(), "Ely must be bundled, not a nested Cargo package"
+assert "ely-gpui-component" not in agentation["dependencies"]
+assert not any(spec.get("package") == "gpui-agentation-ely" for spec in agentation["dependencies"].values() if isinstance(spec, dict))
+native = agentation["features"]["native"]
+
+def check_dependency(name, expected, actual):
+    if isinstance(expected, str):
+        expected = {"version": expected}
+    assert actual.get("optional") is True, f"Ely dependency must be native-only: {name}"
+    for key in ("version", "package", "default-features"):
+        assert actual.get(key, True if key == "default-features" else None) == expected.get(key, True if key == "default-features" else None), f"Changed Ely dependency {name}: {key}"
+    for feature in expected.get("features", []):
+        assert feature in actual.get("features", []) or f"{name}/{feature}" in native, f"Missing pinned Ely feature: {name}/{feature}"
+    assert f"dep:{name}" in native, f"Ely dependency not enabled by native: {name}"
+
+for name, expected in upstream["dependencies"].items():
+    check_dependency(name, expected, agentation["dependencies"][name])
+for target, table in upstream["target"].items():
+    for name, expected in table.get("dependencies", {}).items():
+        check_dependency(name, expected, agentation["target"][target]["dependencies"][name])
+assert "gpui_platform/runtime_shaders" in native, "Preserve Ely's default runtime shaders"
+assert "dep:proc-macro2" in native
+assert agentation["build-dependencies"]["proc-macro2"]["optional"] is True
+assert agentation["features"]["default"] == ["mcp"]
+assert agentation["features"]["mcp"] == ["dep:reqwest", "dep:serde_json"]
+assert agentation["dependencies"]["gpui"]["version"] == "=0.3.8"
+assert agentation["dependencies"]["gpui_platform"]["version"] == "=0.3.8"
 files = {p.relative_to(snapshot).as_posix() for folder in ("src", "assets") for p in (snapshot / folder).rglob("*") if p.is_file()} | {"LICENSE"}
 assert files == set(provenance["files"]), "Snapshot file inventory changed"
 for name, expected in provenance["files"].items():
@@ -50,9 +64,4 @@ if args.upstream:
         for entry in archive:
             if entry.isfile():
                 assert hashlib.sha256(archive.extractfile(entry).read()).hexdigest() == provenance["files"][entry.name], f"Upstream mismatch: {entry.name}"
-agentation = tomllib.loads((root / "Cargo.toml").read_text())
-assert agentation["dependencies"]["ely-gpui-component"] == {
-    "package": "gpui-agentation-ely", "version": "=0.1.1", "path": "vendor/ely", "optional": True,
-}, "Agentation must use the exact snapshot"
-assert agentation["dependencies"]["gpui"]["version"] == "=0.3.8"
-print(f"Verified {len(files)} unchanged Ely files at {REVISION}; GPUI pins preserved")
+print(f"Verified {len(files)} bundled Ely files at {REVISION}; native-only dependencies and GPUI pins preserved")

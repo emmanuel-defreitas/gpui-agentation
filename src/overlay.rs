@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ely_gpui_component::{
+use crate::ely::{
     buttons::{ButtonVariant, IconButton},
     forms::{Input, TextInput},
     primitives::{Icon, IconName},
@@ -43,7 +43,7 @@ pub struct AnnotationOverlay {
     previous_focus: Option<FocusHandle>,
     notice: String,
     revision: u64,
-    tool: Option<ely_gpui_component::media::Tool>,
+    tool: Option<crate::ely::media::Tool>,
     color: usize,
     stroke: Vec<(f32, f32)>,
     toolbar_at: Option<(f32, f32)>,
