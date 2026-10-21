@@ -17,7 +17,7 @@ by the native feature, with GPUI and platform pinned to =0.3.8.
 
 ## Build adaptation
 
-For native builds, build/ely.rs copies Rust files into OUT_DIR and makes three
+For native builds, build/ely.rs copies Rust files into OUT_DIR and makes four
 limited adaptations without editing this snapshot:
 
 - Internal crate:: paths become crate::ely:: paths, including paths in macros.
@@ -25,9 +25,11 @@ limited adaptations without editing this snapshot:
   they were when Ely was an external dependency. The test-support feature is
   preserved for native test initialization.
 - RustEmbed's asset folder points to vendor/ely/assets inside the package.
+- The missing-assets diagnostic recommends gpui_agentation::ely::Assets and
+  Assets::before using the bundled public namespace.
 
-The adapter uses Rust tokens and byte offsets; comments, string literals,
-formatting and line numbers are preserved. Adapted output is never committed.
+The adapter uses Rust tokens and byte offsets; comments, all other string
+literals, formatting and line numbers are preserved. Adapted output is never committed.
 Dependency lint allowances are scoped to the bundled module. MCP-only builds
 skip source generation and do not activate Ely dependencies or its tokenizer.
 

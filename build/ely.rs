@@ -3,7 +3,11 @@ use std::{env, fs, path::Path};
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// Adapt paths as tokens, preserving comments, literals, formatting and line numbers.
+// Match only the pinned upstream diagnostic, leaving all other literals untouched.
+const UPSTREAM_ASSET_ERROR: &str = r#""ely: the asset source lacks {} of Ely's files, first {first}; pass `ely_gpui_component::Assets`, or `Assets::before` your own, to `Application::with_assets`""#;
+const BUNDLED_ASSET_ERROR: &str = r#""ely: the asset source lacks {} of Ely's files, first {first}; pass `gpui_agentation::ely::Assets`, or `gpui_agentation::ely::Assets::before` your own, to `Application::with_assets`""#;
+
+/// Adapt paths and the known asset diagnostic, preserving other text and line numbers.
 /// Upstream tests remain disabled, as they were when Ely was an external dependency.
 pub fn adapt(source: &str, assets: bool) -> String {
     let source = if assets {
@@ -49,6 +53,10 @@ fn collect(tokens: TokenStream, cfg: bool, edits: &mut Vec<(usize, usize, &'stat
             TokenTree::Ident(value) if cfg && value == "test" => {
                 let range = value.span().byte_range();
                 edits.push((range.start, range.end, "any()"));
+            }
+            TokenTree::Literal(value) if value.to_string() == UPSTREAM_ASSET_ERROR => {
+                let range = value.span().byte_range();
+                edits.push((range.start, range.end, BUNDLED_ASSET_ERROR));
             }
             TokenTree::Group(group) => {
                 let previous = index.checked_sub(1).and_then(|i| tokens.get(i));
