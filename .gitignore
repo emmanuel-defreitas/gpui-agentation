@@ -23,3 +23,6 @@
 
 # Website visual review captures
 /.impeccable/review/
+
+/.worktrees/
+__pycache__/

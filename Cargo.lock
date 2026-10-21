@@ -126,6 +126,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentation-consumer"
+version = "0.1.0"
+dependencies = [
+ "gpui-agentation",
+ "gpui-pre",
+ "gpui-pre-platform",
+ "tempfile",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2412,7 +2422,7 @@ dependencies = [
 
 [[package]]
 name = "gpui-agentation"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -2535,6 +2545,7 @@ dependencies = [
  "waker-fn",
  "web-time",
  "windows 0.62.2",
+ "zed-font-kit",
  "zed-scap",
 ]
 

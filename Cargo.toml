@@ -1,13 +1,13 @@
 [package]
 name = "gpui-agentation"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
 description = "Native GPUI development annotations with an optional stdio MCP bridge"
 repository = "https://github.com/emmanuel-defreitas/gpui-agentation"
 readme = "README.md"
-include = ["src/**", "tests/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "server.json", "docs/**", "ORIGIN.md", "build.rs", "build/**", "vendor/ely/src/**", "vendor/ely/assets/**", "vendor/ely/LICENSE", "vendor/ely/README.md", "vendor/ely/Cargo.upstream.toml", "vendor/ely/UPSTREAM.json"]
+include = ["/src/**", "/tests/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE", "/server.json", "/docs/**", "/ORIGIN.md", "/demo/**", "/examples/**", "/skills/**", "/Makefile", "/build.rs", "/build/**", "/vendor/ely/src/**", "/vendor/ely/assets/**", "/vendor/ely/LICENSE", "/vendor/ely/README.md", "/vendor/ely/Cargo.upstream.toml", "/vendor/ely/UPSTREAM.json"]
 
 [package.metadata.bundled-ely]
 repository = "https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components"
@@ -164,5 +164,12 @@ proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["cookies", "json", "multipart", "rustls", "stream"] }
 tempfile = { version = "3.27.0" }
 
+[[example]]
+name = "demo"
+path = "demo/main.rs"
+required-features = ["native"]
+
 [workspace]
+members = ["examples/consumer"]
+default-members = ["."]
 resolver = "2"
