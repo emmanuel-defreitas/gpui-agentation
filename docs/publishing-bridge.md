@@ -4,6 +4,9 @@ The 0.4.0 candidate contains the debug-only native library, bundled pinned Ely
 source/assets and a default-enabled stdio binary. There is one Cargo package to
 publish. Previously published releases remain usable and are not removed/yanked.
 
+When bumping the version, update `Cargo.toml` and `server.json`, then fix every
+reference that `make version-check` reports. Leave CHANGELOG history alone.
+
 ## Bundled Ely verification
 
 Run `python3 .github/scripts/check-ely-snapshot.py --upstream /path/to/pinned/ely`.
