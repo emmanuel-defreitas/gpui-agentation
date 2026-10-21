@@ -20,3 +20,6 @@
 /vendor/ely/target/
 /vendor/ely/Cargo.lock
 /target-mcp/
+
+# Website visual review captures
+/.impeccable/review/

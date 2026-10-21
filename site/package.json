@@ -1,0 +1,15 @@
+{
+  "name": "gpui-agentation-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/prepare.mjs && astro dev --host 127.0.0.1",
+    "build": "node scripts/prepare.mjs && astro build",
+    "preview": "astro preview --host 127.0.0.1",
+    "deploy": "node scripts/deploy.mjs"
+  },
+  "dependencies": {
+    "astro": "^6.0.0"
+  }
+}

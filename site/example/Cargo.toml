@@ -1,0 +1,12 @@
+[package]
+name = "agentation-consumer"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+gpui-agentation = { version = "=0.3.0", default-features = false, features = ["native"] }
+gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.8", features = ["font-kit"] }
+
+[workspace]

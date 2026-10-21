@@ -1,0 +1,123 @@
+---
+const base = import.meta.env.BASE_URL;
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Point at your native GPUI interface, leave a precise annotation, and give your coding agent the context to fix it. Try the preview and install gpui-agentation.">
+  <meta property="og:title" content="gpui-agentation — native UI feedback for agents">
+  <meta property="og:description" content="Annotate your GPUI app. Give your agent the context. A native Rust library with an optional MCP bridge.">
+  <meta property="og:type" content="website">
+  <title>gpui-agentation — native UI feedback for agents</title>
+  <link rel="icon" href={`${base}assets/mark.svg`} type="image/svg+xml">
+  <link rel="stylesheet" href={`${base}styles.css`}>
+  <script is:inline src={`${base}app.js`} defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<svg class="symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-inspect" viewBox="0 0 24 24"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6M8 12h8m-4-4v8"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 19 19 5M7 5h12v12"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="m4 16 12-12a2.8 2.8 0 0 1 4 4L8 20l-5 1 1-5Zm10-10 4 4M12 21h9"/></symbol>
+  <symbol id="i-comment" viewBox="0 0 24 24"><path d="M21 11a8.8 8.8 0 0 1-9 9 10 10 0 0 1-4-.8L3 21l1.8-5a10 10 0 0 1-.8-4 8.8 8.8 0 0 1 9-9 8.8 8.8 0 0 1 8 8Z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1-4-2-6-2m12 5v-4a3.5 3.5 0 0 0-1-3c3-.4 6-1.5 6-6a5 5 0 0 0-1-3.5 5 5 0 0 0-.1-3.5S17.7 1.6 15 3a12 12 0 0 0-6 0C6.3 1.6 5.1 2 5.1 2A5 5 0 0 0 5 5.5 5 5 0 0 0 4 9c0 4.5 3 5.6 6 6a3.5 3.5 0 0 0-1 3v4"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v16M12 4a8 8 0 0 1 0 16"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+</svg>
+<header class="header wrap">
+  <a href="#" class="brand" aria-label="gpui-agentation home"><img src={`${base}assets/mark.svg`} alt="" width="27" height="27"><span>gpui-agentation</span></a>
+  <nav aria-label="Main navigation"><a href="#preview">Preview</a><a href="#installation">Install</a><a href="#setup">Setup</a><a href="#customization">Customize</a></nav>
+  <div class="header-actions"><button class="icon-button" id="theme-toggle" aria-label="Switch to dark appearance"><svg><use href="#i-theme"/></svg></button><a class="github-link" href="https://github.com/emmanuel-defreitas/gpui-agentation" aria-label="Source on GitHub"><svg><use href="#i-github"/></svg><span>GitHub</span></a></div>
+</header>
+<main id="main">
+  <section class="hero wrap" aria-labelledby="hero-title">
+    <div><h1 id="hero-title">Point it out.<br>Build it better.</h1><p>Visual feedback for your native GPUI app.<br>Annotate the interface. Give your agent the context.</p><a class="button primary" href="#installation">Add to your app <span aria-hidden="true">↗</span></a><a class="hero-secondary" href="https://crates.io/crates/gpui-agentation/0.3.0">Rust crate <span class="version">v0.3.0</span></a></div>
+    <div class="hero-aside"><span class="pin static-pin">1</span><p>A precise place.<br>A clear comment.<br>A shorter path to the fix.</p></div>
+  </section>
+  <section class="preview-section wrap" id="preview" aria-labelledby="preview-title">
+    <div class="section-top"><h2 id="preview-title">Try the workflow</h2><span>Interactive browser preview · sample content</span></div>
+    <div class="workbench">
+      <div class="app-preview">
+        <div class="window-bar"><div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div><span>Fieldwork <span class="window-subtitle">/ Native app preview</span></span><span class="window-hint">GPUI</span></div>
+        <div class="demo-canvas" id="demo-canvas">
+          <div class="sample-app">
+            <div class="sample-nav"><span class="sample-logo">f.</span><strong>Fieldwork</strong><span class="sample-route">Workspace / Overview</span></div>
+            <div class="sample-heading" data-target="project-header" data-label="Project header" data-source="src/views/project.rs:42:9" tabindex="0" role="button" aria-label="Annotate Project header"><div><span class="sample-context">YOUR WORKSPACE</span><h3>A little room to focus.</h3><p>One place for the things you’re building.</p></div><span class="project-initials">JD</span></div>
+            <div class="project-row" data-target="project-row" data-label="Project row" data-source="src/components/project_row.rs:28:5" tabindex="0" role="button" aria-label="Annotate Project row"><span class="project-glyph" aria-hidden="true"><svg><use href="#i-box"/></svg></span><div><strong>Desktop refresh</strong><p>Refine the details. Ship the next version.</p></div><span class="project-status">In progress</span><svg class="project-arrow"><use href="#i-arrow"/></svg></div>
+            <div class="sample-bottom"><div data-target="activity" data-label="Activity panel" data-source="src/views/activity.rs:17:5" tabindex="0" role="button" aria-label="Annotate Activity panel"><span class="sample-context">RECENT ACTIVITY</span><p><span class="activity-dot"></span> A new idea, ready to explore.</p><span class="activity-time">Just now</span></div><div data-target="action-button" data-label="New project button" data-source="src/views/project.rs:86:13" tabindex="0" role="button" aria-label="Annotate New project button" class="sample-cta"><svg><use href="#i-plus"/></svg>New project</div></div>
+          </div>
+          <svg class="drawing-layer" id="drawing-layer" aria-hidden="true"></svg>
+          <div class="pin-layer" id="pin-layer"></div>
+          <div class="source-tooltip" id="source-tooltip" hidden></div>
+        </div>
+        <div class="toolbar" role="toolbar" aria-label="Annotation tools">
+          <button data-tool="inspect" aria-pressed="true"><svg><use href="#i-inspect"/></svg><span>Inspect</span></button><span class="tool-divider"></span>
+          <button data-tool="box" aria-pressed="false"><svg><use href="#i-box"/></svg><span>Box</span></button><button data-tool="arrow" aria-pressed="false"><svg><use href="#i-arrow"/></svg><span>Arrow</span></button><button data-tool="pen" aria-pressed="false"><svg><use href="#i-pen"/></svg><span>Pen</span></button>
+          <button class="comments-tool" id="comments-tool" aria-label="Toggle comments" aria-expanded="true" aria-controls="comment-panel"><svg><use href="#i-comment"/></svg><span class="comments-label">Comments</span><span class="count" id="comment-count">1</span></button>
+        </div>
+      </div>
+      <aside class="comment-panel" id="comment-panel" aria-labelledby="comments-title"><div class="comments-header"><h3 id="comments-title">Comments</h3><button class="text-button" id="reset-demo">Reset</button></div><p class="comment-help" id="demo-instruction">Select an element on the left to leave a comment.</p><div id="comment-list" class="comment-list"></div><button class="button copy-feedback" id="copy-feedback"><svg><use href="#i-copy"/></svg>Copy feedback</button></aside>
+    </div>
+    <p class="preview-caption"><span class="live-dot"></span><span>Inspect an element or draw an annotation. Add a comment, then copy the context.<br class="mobile-break"> This preview stays in your browser; the installed library runs inside your native app.</span></p>
+    <noscript><p class="notice">Enable JavaScript to try the preview. The installation and setup guide below works without it.</p></noscript>
+  </section>
+  <div class="docs-layout wrap">
+    <aside class="docs-nav"><span>Get started</span><a href="#installation">Installation</a><a href="#setup">Native app setup</a><a href="#mcp">Connect your agent</a><a href="#customization">Customization</a><a href="#credits">Credits</a><a href={`${base}example/`} class="download-link">Example files <span aria-hidden="true">↗</span></a></aside>
+    <div class="docs-content">
+      <section id="installation" class="doc-section"><h2>Small package.<br>Native feedback.</h2><p>Add the library to your GPUI app. Install the bridge separately if you want your coding agent to read and respond to annotations through MCP.</p>
+        <div class="requirements"><span>Rust 1.95+</span><span>GPUI 0.3.8</span><span>Debug builds</span><span>MIT</span></div>
+        <h3>01 <span>Add the native library</span></h3><p>In your app’s <code>Cargo.toml</code>, enable <code>native</code> and turn off default features. Ely’s pinned source and assets come bundled in the package.</p>
+        <div class="code-block"><div class="code-header"><span>Cargo.toml</span><button class="copy-code" aria-label="Copy native dependencies"><svg><use href="#i-copy"/></svg><span>Copy</span></button></div><pre is:raw><code>[dependencies]
+gpui-agentation = { version = "0.3.0", default-features = false, features = ["native"] }
+gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }</code></pre></div>
+        <p class="small-note">Use the same <code>gpui-pre</code> version and registry source throughout your app. Other GPUI sources produce incompatible Rust types.</p>
+        <h3>02 <span>Install the optional MCP bridge</span></h3><div class="code-block"><div class="code-header"><span>Terminal</span><button class="copy-code" aria-label="Copy bridge installation command"><svg><use href="#i-copy"/></svg><span>Copy</span></button></div><pre is:raw><code>cargo install gpui-agentation --version 0.3.0 --locked</code></pre></div><p>The default install builds the portable bridge executable. It does not compile GPUI or Ely and does not launch your app.</p>
+      </section>
+      <section id="setup" class="doc-section"><h2>Wire it in once.</h2><p>Keep the integration at your application root. Register meaningful component boundaries you want to select, rather than wrapping every widget.</p><p class="notice">These instructions use the published 0.3.0 overlay API. Gate all annotation imports, initialization, fields, and render hooks with <code>#[cfg(debug_assertions)]</code>: release builds expose no annotation API.</p>
+        <ol class="setup-steps"><li><h3>Initialize the bundled UI</h3><p>Add <code>gpui_agentation::ely::Assets</code> to your <code>Application</code> and call <code>gpui_agentation::ely::init(cx)</code> before mounting. Use <code>Assets::before(host_assets)</code> to combine asset sources. The root needs a bundled Ely <code>FocusScope</code> for keyboard handling.</p></li><li><h3>Mount one overlay per window</h3><p>Retain the entity on your root view, with your app name, route, local storage path, and loopback port.</p><div class="code-block"><div class="code-header"><span>Root view initialization · debug only</span><button class="copy-code" aria-label="Copy overlay initialization"><svg><use href="#i-copy"/></svg><span>Copy</span></button></div><pre is:raw><code>let feedback = gpui_agentation::AnnotationOverlay::mount(
+    "My app",
+    "gpui://my-app/home",
+    "target/agentation/feedback.json",
+    4748,
+    window,
+    cx,
+)?;</code></pre></div></li><li><h3>Register the places worth discussing</h3><p>Start root rendering with <code>begin_frame(window, cx)</code>. Register selected components with stable IDs and readable names. Render the overlay as the last child.</p><div class="code-block"><div class="code-header"><span>Root render · debug only</span><button class="copy-code" aria-label="Copy target registration"><svg><use href="#i-copy"/></svg><span>Copy</span></button></div><pre is:raw><code>gpui_agentation::begin_frame(window, cx);
+
+let content = gpui_agentation::target(
+    "project-header", "Project header", header,
+);
+
+div().relative().size_full()
+    .child(content)
+    .child(self.feedback.clone())</code></pre></div><p>GPUI has no browser DOM. Explicit registration captures bounds and the Rust caller’s file, line, and column without adding a layout box. A component root usually provides a useful starting point.</p></li></ol>
+        <div class="example-callout"><div><h3>A complete, small app</h3><p>Includes assets, focus, debug guards, a selectable component, and the overlay.</p></div><a class="button" href={`${base}example/`}>Open example <svg><use href="#i-arrow"/></svg></a></div>
+      </section>
+      <section id="mcp" class="doc-section"><h2>Give your agent<br>the whole comment.</h2><p>Run your native app in debug mode, then add the installed bridge to an MCP client that supports stdio servers. The bridge forwards requests to the app’s local listener.</p>
+        <div class="code-block"><div class="code-header"><span>MCP client configuration · JSON</span><button class="copy-code" aria-label="Copy MCP client configuration"><svg><use href="#i-copy"/></svg><span>Copy</span></button></div><pre is:raw><code>{
+  "mcpServers": {
+    "gpui_agentation": {
+      "command": "gpui-agentation",
+      "args": ["--url", "http://127.0.0.1:4748/mcp"]
+    }
+  }
+}</code></pre></div><p>Use your client’s equivalent server configuration if its schema differs. The agent can read pending annotations, acknowledge them, reply, and resolve or dismiss feedback. Keep the native app running while using these tools.</p><p class="small-note">Loopback only. No API key. Browser origins are rejected by the native API. Nothing in this browser preview connects to your local server.</p><a class="inline-link" href="https://registry.modelcontextprotocol.io/v0.1/servers/io.github.emmanuel-defreitas%2Fgpui-agentation/versions/0.3.0">View the MCP Registry entry <span aria-hidden="true">↗</span></a>
+      </section>
+      <section id="customization" class="doc-section"><h2>Make it fit your app.</h2><p>The integration points are small and explicit. Start with the defaults and adjust the context your agent needs.</p><dl class="options"><div><dt>App name & route</dt><dd>Name the app when mounting. Call <code>set_route(url, window, cx)</code> on navigation to group saved feedback by screen.</dd></div><div><dt>Selectable components</dt><dd>Choose which component roots to register with <code>target(id, label, child)</code>. Keep IDs stable and unique within the window.</dd></div><div><dt>Storage</dt><dd>Set a local JSON path when mounting. Use one running app process per store file; keep feedback files out of version control.</dd></div><div><dt>Local port</dt><dd>Change the mount port if <code>4748</code> is in use, and match it in your MCP client’s <code>--url</code>. A busy port leaves local notes usable.</dd></div><div><dt>Drawing tools</dt><dd>Use Inspect, Box, Arrow, and Pen in the native toolbar. Four built-in color swatches distinguish drawing strokes.</dd></div><div><dt>Build features</dt><dd>Use <code>native</code> for the debug library, default <code>mcp</code> for the bridge, or both when developing this package.</dd></div></dl><p class="small-note">Version 0.3.0 does not expose a public toolbar layout or custom palette builder.</p>
+      </section>
+      <section id="credits" class="doc-section credits"><h2>A familiar idea.<br>A native implementation.</h2><p>Inspired by <a href="https://www.agentation.com/">Agentation</a> and its approach to giving agents precise visual feedback. Thank you for the inspiration.</p><p>gpui-agentation is an independent Rust implementation for GPUI. It is not affiliated with Agentation and does not implement its complete protocol. The native interface uses bundled <a href="https://elygpui.com/">Ely components</a>; upstream licenses and attribution are preserved.</p><div class="credits-links"><a href="https://github.com/emmanuel-defreitas/gpui-agentation">Project source <span aria-hidden="true">↗</span></a><a href="https://github.com/emmanuel-defreitas/gpui-agentation/blob/main/LICENSE">MIT license <span aria-hidden="true">↗</span></a><a href="https://www.agentation.com/">Agentation <span aria-hidden="true">↗</span></a></div></section>
+    </div>
+  </div>
+</main>
+<footer class="wrap"><a class="brand" href="#"><img src={`${base}assets/mark.svg`} alt="" width="22" height="22">gpui-agentation</a><span>Made for the details.</span><a href="#installation">Get started <span aria-hidden="true">↑</span></a></footer>
+<dialog id="note-dialog" aria-labelledby="note-title"><form method="dialog" id="note-form"><div class="note-header"><h3 id="note-title">New annotation</h3><button class="icon-button" value="cancel" aria-label="Cancel annotation" formnovalidate><svg><use href="#i-close"/></svg></button></div><p id="note-target"></p><label class="sr-only" for="note-text">Comment</label><textarea id="note-text" placeholder="Describe what should change…" rows="3" maxlength="1000" required></textarea><div class="note-footer"><span>Preview only · stays in this tab</span><button class="button primary" id="save-note" value="save"><svg><use href="#i-check"/></svg>Save comment</button></div></form></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
