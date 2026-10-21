@@ -3,18 +3,20 @@
 Astro generates a static documentation and preview site at
 https://emmanuel-defreitas.github.io/gpui-agentation/.
 
-Requires Node.js 22.12+ (or a newer version supported by Astro).
+Requires Node.js 22.22+ (or a newer version supported by Astro).
 
 ```sh
 cd site
 npm ci
 npm run dev
-npm run build
+npm run check
 npm run preview
 ```
 
 The configured project base is `/gpui-agentation/`; use that path in local
 preview URLs. `dist/` is generated and excluded from source control.
+`npm run check` builds the production site and checks local links, assets,
+highlighted JSON, and annotation media. CI runs the same command.
 Kirari highlights Rust, TOML, shell, and JSON at build time, so code snippets
 ship as escaped token spans without a client highlighter. GSAP handles the three
 inline SVG feature sequences. The complete example-app page and downloads have
@@ -27,7 +29,7 @@ illustration, SVG feature work, and optional GIF regeneration command.
 
 The site can publish from a dedicated `gh-pages` branch with `.nojekyll`.
 This avoids adding third-party Actions or changing repository protections.
-Run `npm run deploy` to build, copy only `dist/` into a temporary checkout,
+Run `npm run deploy` to build and validate, copy only `dist/` into a temporary checkout,
 and push `gh-pages` without force. It preserves deployment history and leaves
 your working tree untouched. In GitHub Settings → Pages, use **Deploy from a branch**, `gh-pages`,
 root. Never publish the repository root, private application files, or native

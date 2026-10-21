@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const site = fileURLToPath(new URL('../', import.meta.url));
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const git = (args, cwd = root) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
-execFileSync('npm', ['run', 'build'], {
+execFileSync('npm', ['run', 'check'], {
   cwd: site, stdio: 'inherit', env: { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' },
 });
 const remote = git(['remote', 'get-url', 'origin']);
