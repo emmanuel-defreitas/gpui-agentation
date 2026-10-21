@@ -6,6 +6,8 @@ The interaction and HTTP resource model follow [Agentation](https://www.agentati
 This is an independent GPUI implementation, not the React package or a complete
 Agentation protocol implementation.
 
+[Preview, installation, and setup guide](https://emmanuel-defreitas.github.io/gpui-agentation/)
+
 ## Install
 
 One Cargo package contains the native GPUI/Ely library and an optional stdio
