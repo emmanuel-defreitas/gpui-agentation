@@ -3,7 +3,7 @@
 
 CARGO ?= cargo
 
-.PHONY: help fetch dev consumer bridge bridge-check build check fmt fmt-check lint test test-doc doc release-check hot-reload-test version-check ci workflows-check
+.PHONY: help fetch dev consumer bridge bridge-check build check fmt fmt-check lint test test-doc doc release-check hot-reload-test version-check ci
 
 help: ## Show available commands
 	@awk 'BEGIN { FS = ":.*## "; print "Usage: make <target>\n" } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -68,5 +68,3 @@ ci: ## Run the same formatting, lint, test, and release checks as Rust CI
 	$(MAKE) release-check
 	$(MAKE) bridge-check
 
-workflows-check: ## Compile and lint agentic workflows (requires gh aw and actionlint)
-	gh aw compile --actionlint

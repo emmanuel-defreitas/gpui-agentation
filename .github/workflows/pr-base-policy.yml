@@ -50,7 +50,7 @@ jobs:
               "" \
               "To ship this change:" \
               "1. Merge your work into \`dev\` (every PR targets \`dev\`)." \
-              "2. Let the \`dev-to-next\` workflow open a \`dev → next\` PR." \
+              "2. Open a \`dev → next\` PR." \
               "3. Open a \`next → main\` PR to promote to production — on merge, \`release-tag.yml\`" \
               "   creates the semver tag." \
               "" \

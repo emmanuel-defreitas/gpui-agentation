@@ -1,7 +1,5 @@
-# Stage 3 — When a PR is opened from a lifecycle branch (feature/bug/doc/chore) into dev, convert
-# it to draft. Deterministic, no reasoning required, so this is a plain workflow rather than an
-# agentic one. (gh-aw exposes no "convert incoming PR to draft" safe-output, and its agent job is
-# read-only.)
+# Stage 2 — When a PR is opened from a lifecycle branch (feature/bug/doc/chore) into dev, convert
+# it to draft. Deterministic, no reasoning required.
 name: PR Feature → Draft
 
 on:
