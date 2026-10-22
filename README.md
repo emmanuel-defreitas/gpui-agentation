@@ -5,7 +5,7 @@
 Point at a running GPUI app, leave a note, and your coding agent gets the
 element, its bounds, and its Rust source location.
 
-> **Status: pre-release.** 0.4.1 is on [crates.io](https://crates.io/crates/gpui-agentation);
+> **Status: pre-release.** The 0.4.2 candidate is being prepared for release;
 > `dev` is heading to 0.5. Pre-1.0: the API can change between minor releases, so
 > pin the version. Debug builds only: release builds expose no annotation API.
 > Pinned to `gpui-pre =0.3.8`. [MIT](LICENSE).
@@ -93,7 +93,7 @@ make dev
 2. Select an element or draw, then write a comment and save.
 3. Open **Comments → Copy** to copy your feedback as Markdown.
 
-For rebuilds on save, enable **Settings → Development → Hot reload**. It rebuilds
+For rebuilds on save, enable **Settings → Hot reload → Server status**. It rebuilds
 and restarts the app after a successful build; in-memory state resets, saved
 annotations survive. [Demo details](demo/README.md)
 
