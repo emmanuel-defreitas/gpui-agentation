@@ -200,8 +200,9 @@ fn settings_content(
                 .child(
                     div()
                         .debug_selector(|| "feedback-mcp-config-toggle".into())
-                        .child(
-                            Button::new("feedback-mcp-config-toggle", "MCP config")
+                        .child(DisclosureButton {
+                            expanded: this.mcp_config_expanded,
+                            button: Button::new("feedback-mcp-config-toggle", "MCP config")
                                 .variant(ButtonVariant::Ghost)
                                 .icon(if this.mcp_config_expanded {
                                     IconName::ChevronDown
@@ -214,7 +215,7 @@ fn settings_content(
                                         cx.notify();
                                     });
                                 }),
-                        ),
+                        }),
                 )
                 .child(
                     div()
@@ -418,6 +419,25 @@ impl AnnotationOverlay {
     }
 }
 
+// The pinned Ely Button has no expanded-state builder. Annotate its rendered
+// interactive root so focus, click handling, and the accessibility state belong
+// to the same button, rather than adding another accessible wrapper.
+#[derive(IntoElement)]
+struct DisclosureButton {
+    button: Button,
+    expanded: bool,
+}
+
+impl RenderOnce for DisclosureButton {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let mut button = self.button.render(window, cx).into_any_element();
+        let root = button
+            .downcast_mut::<gpui::Stateful<gpui::Div>>()
+            .expect("pinned Ely Button renders a stateful Div");
+        std::mem::replace(root, div().id("unused-disclosure-root")).aria_expanded(self.expanded)
+    }
+}
+
 #[derive(IntoElement)]
 struct CopyConfigButton {
     button: Button,
@@ -545,6 +565,30 @@ impl RenderOnce for StarButton {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[gpui::test]
+    fn disclosure_exposes_expanded_state_on_the_actual_button(cx: &mut gpui::TestAppContext) {
+        use gpui::Element;
+
+        cx.update(crate::ely::init_for_tests);
+        let (_, cx) = cx.add_window_view(|_, _| gpui::EmptyView);
+        cx.update(|window, cx| {
+            for expanded in [false, true, false] {
+                let mut element = DisclosureButton {
+                    button: Button::new("test-config-toggle", "MCP config"),
+                    expanded,
+                }
+                .render(window, cx)
+                .into_any_element();
+                let root = element.downcast_mut::<gpui::Stateful<gpui::Div>>().unwrap();
+                assert_eq!(root.a11y_role(), Some(gpui::Role::Button));
+                let mut node = gpui::accesskit::Node::new(gpui::Role::Button);
+                root.write_a11y_info(&mut node);
+                assert_eq!(node.label(), Some("MCP config"));
+                assert_eq!(node.is_expanded(), Some(expanded));
+            }
+        });
+    }
 
     #[gpui::test]
     fn settings_scroll_should_reach_sheet_edges_with_padding_inside_content(

@@ -6,6 +6,7 @@
   labels, and a crates.io link in About. The displayed version follows the package.
 - Make MCP configuration collapsible and initially closed, with a left-aligned
   disclosure and a trailing Copy button that also works while collapsed.
+- Expose the MCP config disclosure’s expanded state to assistive technology.
 - Move MCP status before Comments in the development banner and hide annotation
   count badges when there are no notes.
 - Update setup instructions to match the new Settings labels. Keep the public
