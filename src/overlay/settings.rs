@@ -178,7 +178,7 @@ fn settings_content(
             if this.mcp_config_copied {
                 "copied!"
             } else {
-                "Copy config"
+                "Copy"
             },
         )
         .disabled(endpoint.is_none())
@@ -293,9 +293,12 @@ fn settings_content(
                 .flex()
                 .gap_2()
                 .child(
-                    Button::new("feedback-docs", "Docs (coming soon)")
+                    Button::new("feedback-crates", "crates.io")
                         .size(ControlSize::Sm)
-                        .disabled(true),
+                        .icon(IconName::Package)
+                        .on_click(|_, _, cx| {
+                            cx.open_url("https://crates.io/crates/gpui-agentation")
+                        }),
                 )
                 .child(StarButton(
                     Button::new("feedback-github", "Star on GitHub")
@@ -335,14 +338,14 @@ fn hot_reload_section(this: &AnnotationOverlay, owner: Entity<AnnotationOverlay>
         .flex()
         .flex_col()
         .gap_2()
-        .child(Overline::new("Development"))
+        .child(Overline::new("Hot reload"))
         .child(
             div()
                 .flex()
                 .items_center()
                 .justify_between()
                 .gap_3()
-                .child("Hot reload")
+                .child("Server status")
                 .child(
                     div()
                         .debug_selector(|| "feedback-hot-reload-toggle".into())
@@ -367,7 +370,7 @@ fn hot_reload_section(this: &AnnotationOverlay, owner: Entity<AnnotationOverlay>
                                 "feedback-hot-reload-toggle",
                                 this.hot_reload_status.enabled,
                             )
-                            .name("Hot reload")
+                            .name("Hot reload server status")
                             .disabled(!this.hot_reload_status.available || this.hot_reload_pending)
                             .on_change(move |enabled, _, cx| {
                                 reload_owner.update(cx, |this, cx| {
@@ -407,6 +410,25 @@ impl AnnotationOverlay {
             });
         }));
         cx.notify();
+    }
+}
+
+// The pinned Ely Button has no expanded-state builder. Annotate its rendered
+// interactive root so focus, click handling, and the accessibility state belong
+// to the same button, rather than adding another accessible wrapper.
+#[derive(IntoElement)]
+struct DisclosureButton {
+    button: Button,
+    expanded: bool,
+}
+
+impl RenderOnce for DisclosureButton {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let mut button = self.button.render(window, cx).into_any_element();
+        let root = button
+            .downcast_mut::<gpui::Stateful<gpui::Div>>()
+            .expect("pinned Ely Button renders a stateful Div");
+        std::mem::replace(root, div().id("unused-disclosure-root")).aria_expanded(self.expanded)
     }
 }
 
@@ -466,16 +488,20 @@ fn annotation_sheet(
         .bg(cx.theme().colors.sunken)
         .border_b_1()
         .border_color(cx.theme().colors.border)
-        .child(Icon::new(if settings {
-            IconName::Settings
-        } else {
-            IconName::MessageSquare
-        }))
+        .child(
+            Icon::new(if settings {
+                IconName::Settings
+            } else {
+                IconName::MessageSquare
+            })
+            .size(if settings { IconSize::Lg } else { IconSize::Md }),
+        )
         .child(
             div()
                 .flex()
                 .flex_col()
                 .gap_1()
+                .when(settings, |title| title.gap_0())
                 .flex_1()
                 .child(Heading::new(5, title).line_height(gpui::relative(1.15)))
                 .child(Caption::new("gpui-dev-mcp")),
@@ -533,6 +559,30 @@ impl RenderOnce for StarButton {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[gpui::test]
+    fn disclosure_exposes_expanded_state_on_the_actual_button(cx: &mut gpui::TestAppContext) {
+        use gpui::Element;
+
+        cx.update(crate::ely::init_for_tests);
+        let (_, cx) = cx.add_window_view(|_, _| gpui::EmptyView);
+        cx.update(|window, cx| {
+            for expanded in [false, true, false] {
+                let mut element = DisclosureButton {
+                    button: Button::new("test-config-toggle", "MCP config"),
+                    expanded,
+                }
+                .render(window, cx)
+                .into_any_element();
+                let root = element.downcast_mut::<gpui::Stateful<gpui::Div>>().unwrap();
+                assert_eq!(root.a11y_role(), Some(gpui::Role::Button));
+                let mut node = gpui::accesskit::Node::new(gpui::Role::Button);
+                root.write_a11y_info(&mut node);
+                assert_eq!(node.label(), Some("MCP config"));
+                assert_eq!(node.is_expanded(), Some(expanded));
+            }
+        });
+    }
 
     #[gpui::test]
     fn settings_scroll_should_reach_sheet_edges_with_padding_inside_content(

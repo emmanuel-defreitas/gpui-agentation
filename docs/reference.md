@@ -1,6 +1,6 @@
 # Development reference
 
-Detailed native integration and API behavior for gpui-agentation 0.4.1.
+Detailed native integration and API behavior for gpui-agentation 0.4.2.
 Start with the [README](../README.md) or [consumer setup guide](consumer-setup.md).
 
 Native feedback for GPUI development builds: select a registered element, write
@@ -24,14 +24,14 @@ Its loopback server exposes both REST/SSE and a Streamable HTTP MCP endpoint.
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "0.4.1", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.4.2", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
 Enable `native` and disable default features for a host app:
 
 ```toml
-gpui-agentation = { version = "0.4.1", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.4.2", default-features = false, features = ["native"] }
 ```
 
 Keep `gpui-pre =0.3.8`. Source and assets for Ely revision
@@ -380,6 +380,6 @@ See [ORIGIN.md](../ORIGIN.md) for the source snapshot and license attribution.
 
 ## Optional hot reload
 
-Run `make dev`, then enable **Settings → Development → Hot reload**. The bundled
+Run `make dev`, then enable **Settings → Hot reload → Server status**. The bundled
 Python 3 supervisor rebuilds on save and restarts only after a successful build.
 No extra component wrappers are required. See [runner setup and limitations](../demo/README.md#hot-reload).
