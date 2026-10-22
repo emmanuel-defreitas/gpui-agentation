@@ -2,8 +2,7 @@
 # Deterministic (no reasoning): fires when the `status:in-progress` label is added, derives the
 # branch prefix from the issue's `type:*` label (feature/bug/doc/chore), slugifies the issue
 # title, and uses `gh issue develop` to create the branch AND register the native GitHub
-# issue<->branch development link in one step. Plain .yml, not agentic, by the same rule as
-# pr-feature-draft.yml ("gh-aw's agent job is read-only").
+# issue<->branch development link in one step.
 name: Issue → Feature Branch
 
 on:

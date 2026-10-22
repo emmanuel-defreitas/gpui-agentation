@@ -1,6 +1,6 @@
 # Development reference
 
-Detailed native integration and API behavior for gpui-agentation 0.4.0.
+Detailed native integration and API behavior for gpui-agentation 0.4.1.
 Start with the [README](../README.md) or [consumer setup guide](consumer-setup.md).
 
 Native feedback for GPUI development builds: select a registered element, write
@@ -24,14 +24,14 @@ Its loopback server exposes both REST/SSE and a Streamable HTTP MCP endpoint.
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "0.4.0", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.4.1", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
 Enable `native` and disable default features for a host app:
 
 ```toml
-gpui-agentation = { version = "0.4.0", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.4.1", default-features = false, features = ["native"] }
 ```
 
 Keep `gpui-pre =0.3.8`. Source and assets for Ely revision
@@ -351,7 +351,6 @@ make fmt             # Format Rust sources
 make test            # Run workspace and documentation tests
 make doc             # Generate development API documentation
 make ci              # Run the complete Rust CI checks
-make workflows-check # Compile/lint agentic workflows (gh aw + actionlint)
 ```
 
 `make ci` runs the following checks in order and stops on failure. Clippy and
@@ -369,7 +368,7 @@ cargo check --workspace --all-targets --release --all-features --locked
 
 This repository was generated from `exegia/corpora-template`. `dev` is the
 default integration branch; promote through `next` into `main`. The template's
-branch policy, secret scanning, and agentic workflow sources are retained.
+branch policy and secret scanning are retained.
 Python packaging and the older Make-based release pipeline were removed;
 Rust CI runs `make ci` for formatting, Clippy, tests, and release compilation
 on macOS. The Makefile provides local build and validation commands; release

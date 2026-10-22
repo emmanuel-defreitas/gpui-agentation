@@ -31,7 +31,7 @@ and complete only independent setup work; do not migrate its renderer or
 upgrade its UI dependencies as an incidental installation step.
 
 Add `gpui-agentation` as a normal dependency with `default-features = false` and
-`features = ["native"]`, using version 0.4.0 or an authorized local checkout.
+`features = ["native"]`, using version 0.4.1 or an authorized local checkout.
 Keep the lockfile. Source and assets for pinned Ely are bundled; never add a
 separate Ely dependency for Agentation. Its internal Ely globals are independent
 of a host Ely crate. Preserve the host’s existing theme and focus setup.

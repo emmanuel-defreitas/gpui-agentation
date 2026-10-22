@@ -54,21 +54,17 @@ Type inference uses the same conventional-commit vocabulary as `release-tag.yml`
 | `[FEATURE]` | `type:feature` | feature work inferred from `feat:` titles |
 | `[DOC]` | `type:docs` | docs work inferred from `docs:` titles |
 | `[CHORE]` | `type:chore` | default for everything else |
-| `[ci-failure]` | `ci-failure, bug` | `ci-failure-diagnose.md` |
-| `[release]` | `release` | `dev-to-next.md` |
-| `[qa]` | `qa, e2e` | `pr-merged-qa-scenarios.md` |
 
 ## Release flow: `dev → next → main`
 
-1. **PR → `dev`** — CI, SemVer-title validation, and the Copilot review workflow run. Lifecycle PRs
+1. **PR → `dev`** — CI and SemVer-title validation run. Lifecycle PRs
    are squash-merged, then `dev-release-candidate.yml` tags the squash merge.
-2. **Stage 8 (`dev-to-next.md`)** — when validation passes on `dev`, an agentic workflow opens a
-   `dev → next` PR and updates `CHANGELOG.md`, `README.md`, `CLAUDE.md`, and existing version
-   manifests.
+2. **Promotion PR** — when validation passes on `dev`, open the `dev → next` PR by hand and update
+   `CHANGELOG.md`, `README.md`, and existing version manifests on it.
 3. **Preview** — merging to `next` runs `next-preview.yml`, which runs configured install, test,
    build, container, and preview deployment commands.
-4. **Release PR** — a successful preview opens a `next → main` PR. `next-to-main-wiki.md` refines
-   release documentation on that PR branch.
+4. **Release PR** — a successful preview opens a `next → main` PR. Refine release documentation on
+   that PR branch by hand.
 5. **Release** — merging `next → main` creates the SemVer tag and GitHub Release; the published
    release triggers the configured production deployment.
 
@@ -106,8 +102,6 @@ issue (type:feature) ──status:in-progress──▶ feature/123-slug
 - `.github/LIFECYCLE.md`
 - `.github/workflows/pr-base-policy.yml`
 - `.github/workflows/pr-branch-enforcement.yml`
-- `.github/workflows/dev-to-next.md`
-- `.github/workflows/next-to-main-wiki.md`
 - `.github/workflows/release-tag.yml`
 - `.github/workflows/issue-start-branch.yml`
 - `.github/scripts/create-triage-labels.sh`
