@@ -2,7 +2,8 @@ use super::*;
 use crate::ely::{
     agent::{McpServer, McpServerList, ServerState},
     buttons::{IconButton, SegmentedControl},
-    forms::{FormField, JsonInput, Switch},
+    forms::{JsonInput, Switch},
+    layout::Collapsible,
     primitives::{FocusScope, IconName, Place},
     theme::ActiveTheme,
     typography::{Caption, Overline},
@@ -184,6 +185,7 @@ fn settings_content(
         .on_click(move |_, _, cx| copy_owner.update(cx, |this, cx| this.copy_mcp_config(cx))),
         copied: this.mcp_config_copied,
     };
+    let config_owner = owner.clone();
     let toggle_owner = owner.clone();
     let server_list = McpServerList::new(
         "feedback-mcp-server",
@@ -211,6 +213,50 @@ fn settings_content(
     .on_toggle(move |_, enabled, _, cx| {
         toggle_owner.update(cx, |this, cx| this.set_mcp_enabled(enabled, cx));
     });
+    let config_section = div()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(
+            div()
+                .debug_selector(|| "feedback-mcp-config-toggle".into())
+                .child(
+                    Button::new("feedback-mcp-config-toggle", "MCP config")
+                        .variant(ButtonVariant::Ghost)
+                        .full_width()
+                        .icon(if this.mcp_config_expanded {
+                            IconName::ChevronDown
+                        } else {
+                            IconName::ChevronRight
+                        })
+                        .on_click(move |_, _, cx| {
+                            config_owner.update(cx, |this, cx| {
+                                this.mcp_config_expanded = !this.mcp_config_expanded;
+                                cx.notify();
+                            });
+                        }),
+                ),
+        )
+        .child(
+            Collapsible::new("feedback-mcp-config-details", this.mcp_config_expanded).child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(config)
+                    .child(Caption::new(
+                        "Turn on to connect an MCP client. Annotations remain available.",
+                    ))
+                    .child(
+                        div().flex().justify_end().child(
+                            div()
+                                .flex_none()
+                                .debug_selector(|| "feedback-mcp-copy-config-target".into())
+                                .child(copy),
+                        ),
+                    ),
+            ),
+        );
     let position_section = div()
         .debug_selector(|| "feedback-settings-position".into())
         .flex()
@@ -224,20 +270,7 @@ fn settings_content(
         .gap_2()
         .child(Overline::new("MCP"))
         .child(server_list)
-        .child(
-            FormField::new("feedback-mcp-field", "MCP config")
-                .help("Available to local clients while this app is running.")
-                .description("Turn on to connect an MCP client. Annotations remain available.")
-                .child(config),
-        )
-        .child(
-            div().flex().justify_end().child(
-                div()
-                    .flex_none()
-                    .debug_selector(|| "feedback-mcp-copy-config-target".into())
-                    .child(copy),
-            ),
-        )
+        .child(config_section)
         .when(!this.settings_status.is_empty(), |section| {
             section.child(Caption::new(this.settings_status.clone()))
         });
@@ -583,6 +616,13 @@ mod tests {
         cx.run_until_parked();
         cx.update(|window, cx| window.draw(cx).clear(cx));
         cx.run_until_parked();
+        assert!(cx.debug_bounds("feedback-mcp-config-code").is_none());
+        let toggle = cx.debug_bounds("feedback-mcp-config-toggle").unwrap();
+        cx.simulate_click(toggle.center(), gpui::Modifiers::none());
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.run_until_parked();
+        assert!(cx.update(|_, cx| overlay.read(cx).mcp_config_expanded));
         let field = cx.debug_bounds("feedback-mcp-config-code").unwrap();
         assert!(
             field.size.height > gpui::px(100.),
