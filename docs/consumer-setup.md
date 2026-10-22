@@ -66,7 +66,7 @@ Use the same GPUI package/source as Agentation:
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "0.4.1", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.4.2", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 gpui-platform = { package = "gpui-pre-platform", version = "=0.3.8" }
 ```
@@ -285,7 +285,7 @@ python3 /path/to/gpui-agentation/src/hot_reload/runner.py \
   --manifest-path /path/to/consumer/Cargo.toml --bin my-app
 ```
 
-Then enable **Settings → Development → Hot reload**. The switch starts off;
+Then enable **Settings → Hot reload → Server status**. The switch starts off;
 turning it off pauses rebuilds without closing the app. Build failures keep
 the last running app alive until a later successful save. A successful build
 restarts the process: save host app work first; only persisted state survives.

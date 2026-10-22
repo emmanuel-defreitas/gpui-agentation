@@ -63,6 +63,12 @@ fn banner_tools_and_trailing_actions_should_remain_reachable_while_annotating(
         );
     }
     let notes = cx.debug_bounds("banner-notes").unwrap();
+    let status = cx.debug_bounds("banner-mcp-status").unwrap();
+    assert!(
+        status.right() <= notes.left(),
+        "MCP status precedes Comments"
+    );
+    assert!(cx.debug_bounds("feedback-annotation-count").is_none());
     cx.simulate_click(notes.center(), Modifiers::none());
     draw(cx);
     cx.update(|_, cx| assert!(overlay.read(cx).review_open));
@@ -232,6 +238,7 @@ fn comments_sheet_should_share_header_fill_width_and_keep_copy_at_bottom(cx: &mu
         })
     });
     draw(cx);
+    assert!(cx.debug_bounds("feedback-annotation-count").is_some());
     let comments = cx.debug_bounds("banner-notes").unwrap();
     cx.simulate_click(comments.center(), Modifiers::none());
     draw(cx);
