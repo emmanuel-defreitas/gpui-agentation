@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1
+
+- Rewrite the README around what the agent receives, the pre-release status, a
+  "Why this" section and a release-gated integration example.
+- Add crates.io keywords, categories and homepage.
+- Add `make version-check`, which fails when a documented version disagrees
+  with `Cargo.toml`.
+- Remove the GitHub agentic workflows and the Claude Code Review workflow;
+  fix committer identities for release tags and the branch-tag enforcement job.
+- No API or behaviour changes: nothing under `src/` changed since 0.4.0.
+
 ## 0.4.0
 
 - Add a minimal Agentation integration API with internal assets, initialization,
