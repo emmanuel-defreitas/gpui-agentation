@@ -186,56 +186,6 @@ fn settings_content(
         copied: this.mcp_config_copied,
     };
     let config_owner = owner.clone();
-    let config_section = div()
-        .flex()
-        .flex_col()
-        .gap_2()
-        .child(
-            div()
-                .w_full()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div()
-                        .debug_selector(|| "feedback-mcp-config-toggle".into())
-                        .child(DisclosureButton {
-                            expanded: this.mcp_config_expanded,
-                            button: Button::new("feedback-mcp-config-toggle", "MCP config")
-                                .variant(ButtonVariant::Ghost)
-                                .icon(if this.mcp_config_expanded {
-                                    IconName::ChevronDown
-                                } else {
-                                    IconName::ChevronRight
-                                })
-                                .on_click(move |_, _, cx| {
-                                    config_owner.update(cx, |this, cx| {
-                                        this.mcp_config_expanded = !this.mcp_config_expanded;
-                                        cx.notify();
-                                    });
-                                }),
-                        }),
-                )
-                .child(
-                    div()
-                        .flex_none()
-                        .debug_selector(|| "feedback-mcp-copy-config-target".into())
-                        .child(copy),
-                ),
-        )
-        .child(
-            Collapsible::new("feedback-mcp-config-details", this.mcp_config_expanded).child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(config)
-                    .child(Caption::new(
-                        "Turn on to connect an MCP client. Annotations remain available.",
-                    )),
-            ),
-        );
     let toggle_owner = owner.clone();
     let server_list = McpServerList::new(
         "feedback-mcp-server",
@@ -263,6 +213,50 @@ fn settings_content(
     .on_toggle(move |_, enabled, _, cx| {
         toggle_owner.update(cx, |this, cx| this.set_mcp_enabled(enabled, cx));
     });
+    let config_section = div()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(
+            div()
+                .debug_selector(|| "feedback-mcp-config-toggle".into())
+                .child(
+                    Button::new("feedback-mcp-config-toggle", "MCP config")
+                        .variant(ButtonVariant::Ghost)
+                        .full_width()
+                        .icon(if this.mcp_config_expanded {
+                            IconName::ChevronDown
+                        } else {
+                            IconName::ChevronRight
+                        })
+                        .on_click(move |_, _, cx| {
+                            config_owner.update(cx, |this, cx| {
+                                this.mcp_config_expanded = !this.mcp_config_expanded;
+                                cx.notify();
+                            });
+                        }),
+                ),
+        )
+        .child(
+            Collapsible::new("feedback-mcp-config-details", this.mcp_config_expanded).child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(config)
+                    .child(Caption::new(
+                        "Turn on to connect an MCP client. Annotations remain available.",
+                    ))
+                    .child(
+                        div().flex().justify_end().child(
+                            div()
+                                .flex_none()
+                                .debug_selector(|| "feedback-mcp-copy-config-target".into())
+                                .child(copy),
+                        ),
+                    ),
+            ),
+        );
     let position_section = div()
         .debug_selector(|| "feedback-settings-position".into())
         .flex()
@@ -674,15 +668,6 @@ mod tests {
         cx.run_until_parked();
         assert!(cx.debug_bounds("feedback-mcp-config-code").is_none());
         let toggle = cx.debug_bounds("feedback-mcp-config-toggle").unwrap();
-        let copy = cx.debug_bounds("feedback-mcp-copy-config-target").unwrap();
-        assert_eq!(toggle.center().y, copy.center().y);
-        assert!(toggle.right() < copy.left());
-        cx.simulate_click(copy.center(), gpui::Modifiers::none());
-        cx.run_until_parked();
-        cx.update(|_, cx| {
-            assert!(overlay.read(cx).mcp_config_copied);
-            assert!(!overlay.read(cx).mcp_config_expanded);
-        });
         cx.simulate_click(toggle.center(), gpui::Modifiers::none());
         cx.run_until_parked();
         cx.update(|window, cx| window.draw(cx).clear(cx));
