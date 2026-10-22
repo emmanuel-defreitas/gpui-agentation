@@ -152,13 +152,13 @@ impl AnnotationOverlay {
             .gap_1()
             .ml_auto()
             .flex_none()
+            .child(status)
             .child(
                 div()
                     .debug_selector(|| "banner-notes".into())
                     .pr_1()
                     .child(comments),
             )
-            .child(status)
             .child(
                 div()
                     .debug_selector(|| "feedback-settings-trigger-target".into())

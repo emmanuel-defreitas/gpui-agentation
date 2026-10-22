@@ -285,7 +285,7 @@ python3 /path/to/gpui-agentation/src/hot_reload/runner.py \
   --manifest-path /path/to/consumer/Cargo.toml --bin my-app
 ```
 
-Then enable **Settings → Development → Hot reload**. The switch starts off;
+Then enable **Settings → Hot reload → Server status**. The switch starts off;
 turning it off pauses rebuilds without closing the app. Build failures keep
 the last running app alive until a later successful save. A successful build
 restarts the process: save host app work first; only persisted state survives.

@@ -93,7 +93,7 @@ make dev
 2. Select an element or draw, then write a comment and save.
 3. Open **Comments → Copy** to copy your feedback as Markdown.
 
-For rebuilds on save, enable **Settings → Development → Hot reload**. It rebuilds
+For rebuilds on save, enable **Settings → Hot reload → Server status**. It rebuilds
 and restarts the app after a successful build; in-memory state resets, saved
 annotations survive. [Demo details](demo/README.md)
 

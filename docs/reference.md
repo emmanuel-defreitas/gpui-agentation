@@ -380,6 +380,6 @@ See [ORIGIN.md](../ORIGIN.md) for the source snapshot and license attribution.
 
 ## Optional hot reload
 
-Run `make dev`, then enable **Settings → Development → Hot reload**. The bundled
+Run `make dev`, then enable **Settings → Hot reload → Server status**. The bundled
 Python 3 supervisor rebuilds on save and restarts only after a successful build.
 No extra component wrappers are required. See [runner setup and limitations](../demo/README.md#hot-reload).
