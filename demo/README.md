@@ -43,7 +43,7 @@ This preview shows static states, not a recording of pointer interaction.
 ## Hot reload
 
 `make dev` launches the bundled Python 3 supervisor and a debug Cargo build.
-Open **Settings → Development → Hot reload** to start watching source saves.
+Open **Settings → Hot reload → Server status** to start watching source saves.
 Switch it off to pause watching without closing the app. The switch is off by
 default, and disabled when launched without the supervisor.
 

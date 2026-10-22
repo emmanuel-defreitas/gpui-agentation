@@ -1304,7 +1304,16 @@ pub(super) fn annotation_count(count: usize, over: impl IntoElement, cx: &App) -
         .relative()
         .flex_none()
         .child(over)
-        .child(div().absolute().top_neg_1().right_neg_1().child(badge))
+        .when(count > 0, |root| {
+            root.child(
+                div()
+                    .debug_selector(|| "feedback-annotation-count".into())
+                    .absolute()
+                    .top_neg_1()
+                    .right_neg_1()
+                    .child(badge),
+            )
+        })
 }
 
 #[cfg(test)]
