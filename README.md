@@ -5,7 +5,7 @@
 Point at a running GPUI app, leave a note, and your coding agent gets the
 element, its bounds, and its Rust source location.
 
-> **Status: pre-release.** 0.4.0 is on [crates.io](https://crates.io/crates/gpui-agentation);
+> **Status: pre-release.** 0.4.1 is on [crates.io](https://crates.io/crates/gpui-agentation);
 > `dev` is heading to 0.5. Pre-1.0: the API can change between minor releases, so
 > pin the version. Debug builds only: release builds expose no annotation API.
 > Pinned to `gpui-pre =0.3.8`. [MIT](LICENSE).
