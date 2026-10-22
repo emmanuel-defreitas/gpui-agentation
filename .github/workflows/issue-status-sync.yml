@@ -1,11 +1,6 @@
-# Issue triage — status safety net. The lifecycle already covers most branch/PR -> status
-# transitions: stage 3 (pr-feature-draft.yml) drafts the PR, stage 6 (pr-feature-review.md) sets
-# status:in-review on ready_for_review, stage 7 (pr-merged-qa-scenarios.md) sets status:qa on
-# merge. The one uncovered branch state is "a draft PR was opened" -> ensure the linked issue is
-# status:in-progress (normally already true from Issue -> Feature Branch). Deterministic.
-#
-# In-review and merged transitions are intentionally NOT handled here to avoid two automations
-# fighting over the same labels — stages 6 and 7 stay authoritative.
+# Issue triage — status safety net. When a draft PR is opened from a lifecycle branch, ensure the
+# linked issue is status:in-progress (normally already true from Issue -> Feature Branch).
+# Deterministic. The in-review and qa transitions are not automated; set those labels by hand.
 name: Issue Status Sync
 
 on:

@@ -1,3 +1,2 @@
-.github/workflows/*.lock.yml linguist-generated=true merge=ours
 # Byte-identical pinned upstream dependency; review provenance and packaging.
 vendor/ely/** linguist-vendored=true -whitespace -text

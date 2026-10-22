@@ -22,6 +22,3 @@ cargo check --release --all-features --locked
 `dev` is the default branch. Changes target `dev`; promotion runs through `next`
 into `main`. See `.github/BRANCH-AND-RELEASE-POLICY.md` for the inherited policy.
 Use conventional commits. Keep edits scoped and preserve public API behavior.
-
-Agentic workflow Markdown is the source of truth. Recompile edited workflow
-sources with `gh aw compile`; do not hand-edit their generated lock files.
