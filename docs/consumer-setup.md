@@ -66,7 +66,7 @@ Use the same GPUI package/source as Agentation:
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "0.4.1", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.4.2", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 gpui-platform = { package = "gpui-pre-platform", version = "=0.3.8" }
 ```

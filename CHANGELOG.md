@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.2
+
+- Refine Settings with a larger icon, tighter header spacing, clearer hot reload
+  labels, and a crates.io link in About. The displayed version follows the package.
+- Make MCP configuration collapsible and initially closed, with a left-aligned
+  disclosure and a trailing Copy button that also works while collapsed.
+- Move MCP status before Comments in the development banner and hide annotation
+  count badges when there are no notes.
+- Update setup instructions to match the new Settings labels. Keep the public
+  API, loopback protections, GPUI pin, and bundled Ely snapshot unchanged.
+
 ## 0.4.1
 
 - Rewrite the README around what the agent receives, the pre-release status, a
