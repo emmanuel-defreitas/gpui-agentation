@@ -4,7 +4,7 @@ Source: https://emmanuel-defreitas.github.io/gpui-agentation/
 
 Visual feedback for your native GPUI app. Annotate the interface. Give your agent the context.
 
-[Add to your app ↗](https://emmanuel-defreitas.github.io/gpui-agentation/#installation) [Rust crate v0.5.0](https://crates.io/crates/gpui-agentation/0.5.0) 
+[Add to your app ↗](https://emmanuel-defreitas.github.io/gpui-agentation/#installation) [Rust crate v0.5.1](https://crates.io/crates/gpui-agentation/0.5.1) 
 
 ## See feedback take shape.
 
@@ -40,7 +40,7 @@ Cargo.toml
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "0.5.0", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.5.1", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
@@ -51,7 +51,7 @@ Use the same `gpui-pre` version and registry source throughout your app. Other G
 Terminal
 
 ```shell
-cargo install gpui-agentation --version 0.5.0 --locked
+cargo install gpui-agentation --version 0.5.1 --locked
 ```
 
 The default install builds the portable bridge executable. It does not compile GPUI or Ely and does not launch your app.
@@ -60,7 +60,7 @@ The default install builds the portable bridge executable. It does not compile G
 
 Keep the integration at your application root. Register meaningful component boundaries you want to select, rather than wrapping every widget.
 
-These instructions target the 0.5.0 Agentation API. Gate all annotation imports, initialization, fields, and render hooks with `#[cfg(debug_assertions)]`: release builds expose no annotation API.
+These instructions target the 0.5.1 Agentation API. Gate all annotation imports, initialization, fields, and render hooks with `#[cfg(debug_assertions)]`: release builds expose no annotation API.
 
 1.  ### Initialize Agentation
     
@@ -111,7 +111,7 @@ Use your client’s equivalent server configuration if its schema differs. The a
 
 Loopback only. No API key. Browser origins are rejected by the native API. The site’s illustrations do not connect to your local server.
 
-[View the MCP Registry entry ↗](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.emmanuel-defreitas%2Fgpui-agentation/versions/0.5.0) 
+[View the MCP Registry entry ↗](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.emmanuel-defreitas%2Fgpui-agentation/versions/0.5.1) 
 
 ## Give your agent a working guide.
 
@@ -159,7 +159,7 @@ Use Inspect, Box, Arrow, and Pen in the native toolbar. Four built-in color swat
 
 Use `native` for the debug library, default `mcp` for the bridge, or both when developing this package.
 
-Version 0.5.0 does not expose a public toolbar layout or custom palette builder.
+Version 0.5.1 does not expose a public toolbar layout or custom palette builder.
 
 ## A familiar idea. A native implementation.
 
