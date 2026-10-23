@@ -29,6 +29,10 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate release metadata before preview
+        run: make version-check release-version-check
       - name: Run configured install, test, and build commands
         run: |
           set -euo pipefail

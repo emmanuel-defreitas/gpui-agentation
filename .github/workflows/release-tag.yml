@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: main
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
 
       - name: Compute next version, tag, and release
         env:
@@ -45,55 +45,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Latest stable tag (vX.Y.Z), or v0.0.0 if none. Dev candidate tags do not establish
-          # the production release baseline.
-          latest=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)
-          stable_baseline=$latest
-          latest=${latest:-v0.0.0}
-          base=${latest#v}
-          IFS=. read -r major minor patch <<< "$base"
-          major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
-
-          # Commit subjects + bodies since the last tag up to the merge commit.
-          range="${latest}..${MERGE_SHA}"
-          subjects=$(git log --pretty=%s "${range}" 2>/dev/null || true)
-          bodies=$(git log --pretty=%b "${range}" 2>/dev/null || true)
-
-          # Determine bump level from conventional commits.
-          bump="patch"
-          if printf '%s\n%s\n' "$subjects" "$bodies" | grep -qiE 'BREAKING[[:space:]]+CHANGE'; then
-            bump="major"
-          elif printf '%s\n' "$subjects" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
-            bump="major"
-          elif printf '%s\n' "$subjects" | grep -qiE '^(feat|feature)(\(|:|!)'; then
-            bump="minor"
-          elif printf '%s\n' "$subjects" | grep -qiE '^fix(\(|:|!)'; then
-            bump="patch"
-          fi
-
-          case "$bump" in
-            major) major=$((major+1)); minor=0; patch=0 ;;
-            minor) minor=$((minor+1)); patch=0 ;;
-            patch) patch=$((patch+1)) ;;
-          esac
-
-          new_tag="v${major}.${minor}.${patch}"
-          # Bootstrap missing GitHub tag history from the reviewed package version.
-          # Once stable tags exist, require conventional-commit math to agree.
-          reviewed_tag="v$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
-          if [[ ! "$reviewed_tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "Expected a reviewed stable Cargo version, got $reviewed_tag" >&2
-            exit 1
-          fi
-          if [[ -z "$stable_baseline" ]]; then
-            new_tag=$reviewed_tag
-            bump=initial
-          elif [[ "$new_tag" != "$reviewed_tag" ]]; then
-            echo "Conventional bump $new_tag does not match reviewed $reviewed_tag" >&2
-            exit 1
-          fi
+          # Validate the exact reviewed merge commit before creating any tag.
+          # Preparation, promotion PRs, previews and tagging share this version math.
+          make version-check release-version-check
           python3 .github/scripts/check-bridge-release.py --require-publishable
-          echo "Bump: $bump  →  $latest → $new_tag  (merge $MERGE_SHA)"
+          new_tag="v$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
 
           # The tag points at the reviewed merge commit so the release is anchored to the PR.
           git tag -a "$new_tag" -m "Release $new_tag (PR #$PR_NUMBER)" "$MERGE_SHA"
@@ -103,7 +59,7 @@ jobs:
           notes=$(printf '%s\n' \
             "Release ${new_tag} — promoted from ${MERGE_SHA:0:7} via PR #${PR_NUMBER}." \
             "" \
-            "Conventional-commit bump: **${bump}** (${latest} → ${new_tag})." \
+            "Release metadata and documentation match the reviewed conventional-commit version." \
             "" \
             "PR: ${PR_URL}")
           gh release create "$new_tag" \

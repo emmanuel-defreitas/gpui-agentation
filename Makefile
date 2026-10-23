@@ -3,7 +3,7 @@
 
 CARGO ?= cargo
 
-.PHONY: help fetch dev consumer bridge bridge-check build check fmt fmt-check lint test test-doc doc release-check hot-reload-test version-check ci
+.PHONY: help fetch dev consumer bridge bridge-check build check fmt fmt-check lint test test-doc doc release-check hot-reload-test version-check version-test release-prepare release-version-check ci
 
 help: ## Show available commands
 	@awk 'BEGIN { FS = ":.*## "; print "Usage: make <target>\n" } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -56,8 +56,17 @@ hot-reload-test: ## Test watcher filtering, failed builds, restart recovery and 
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s src/hot_reload -p 'test_*.py'
 
 version-check: ## Verify documented crate versions match Cargo.toml and server.json
-	python3 .github/scripts/check-version-refs.py
-	python3 .github/scripts/check-bridge-release.py
+	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-version-refs.py
+	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-bridge-release.py
+
+version-test: ## Test release synchronization and conventional-commit version rules
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts -p 'test_release_version.py'
+
+release-prepare: ## Synchronize the next release version locally (optional VERSION=x.y.z)
+	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release_version.py prepare "$(VERSION)"
+
+release-version-check: ## Verify metadata and the version required for promotion
+	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release_version.py check-release
 
 ci: ## Run the same formatting, lint, test, and release checks as Rust CI
 	$(MAKE) fmt-check
@@ -65,6 +74,6 @@ ci: ## Run the same formatting, lint, test, and release checks as Rust CI
 	$(MAKE) test
 	$(MAKE) hot-reload-test
 	$(MAKE) version-check
+	$(MAKE) version-test
 	$(MAKE) release-check
 	$(MAKE) bridge-check
-
