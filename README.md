@@ -262,10 +262,9 @@ annotations survive. [Demo details](demo/README.md)
 - [ ] Add text annotation tool
 - [ ] Update Comment annotation UX
 - [ ] Add gpui-devtools features from [joris-gallot/gpui-devtools](https://github.com/joris-gallot/gpui-devtools)
-- [ ] Port MCP tools to a standalone macOS companion app
 - [ ] Extends AI features from [hexuria/gpui-agent](https://github.com/hexuria/gpui-agent)
-- [ ] Ship 0.5 from `dev`
 - [ ] Stabilize the API toward 1.0
+- [ ] Port MCP tools to a standalone macOS companion app
 
 See the [open issues](https://github.com/emmanuel-defreitas/gpui-agentation/issues)
 for a full list of proposed features (and known issues).
