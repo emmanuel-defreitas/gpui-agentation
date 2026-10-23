@@ -17,6 +17,21 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  release-versions:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: make version-check version-test
+      - name: Require the reviewed promotion version
+        if: github.event_name == 'pull_request' && (github.base_ref == 'next' || github.base_ref == 'main')
+        env:
+          PROMOTION_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 .github/scripts/release_version.py check-release --revision "$PROMOTION_HEAD_SHA"
+
   rust:
     runs-on: macos-latest
     steps:
@@ -27,7 +42,6 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: python3 .github/scripts/check-ely-snapshot.py
-      - run: python3 .github/scripts/check-version-refs.py
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo test --workspace --all-features --locked

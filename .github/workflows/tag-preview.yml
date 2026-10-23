@@ -1,0 +1,63 @@
+# Tag preview — advisory next-version preview via anothrNick/github-tag-action.
+#
+# This is a DRY RUN. It computes what the next semver tag *would* be and writes it
+# to the job summary / logs. It never pushes a tag and never creates a release.
+#
+# Authoritative tagging is unchanged and still owned by:
+#   - release-tag.yml          (vX.Y.Z on next → main, validated against Cargo.toml)
+#   - dev-release-candidate.yml / next-preview.yml  (-dev.N / preview tags)
+#
+# github-tag-action bumps from #major/#minor/#patch tokens in commit messages,
+# falling back to DEFAULT_BUMP. It does NOT read conventional-commit subjects, so
+# treat this preview as a rough hint, not the number release-tag.yml will produce.
+name: Tag Preview (dry run)
+
+on:
+  pull_request:
+    branches: [dev]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read   # dry run only — no tag push, no release
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history + tags are required to compute the bump
+
+      - name: Preview next tag
+        id: tagprev
+        uses: anothrNick/github-tag-action@1.75.0   # pinned; check tags page before bumping
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: true
+          DEFAULT_BUMP: patch           # matches release-tag.yml's "anything else → patch"
+          DEFAULT_BRANCH: dev           # repo default branch is dev, not main/master
+          RELEASE_BRANCHES: dev         # preview a clean release-style bump
+          TAG_PREFIX: v                 # repo tags use the v prefix (v0.4.2, ...)
+          VERBOSE: true
+
+      - name: Write preview to job summary
+        env:
+          NEW_TAG: ${{ steps.tagprev.outputs.new_tag }}
+          PART: ${{ steps.tagprev.outputs.part }}
+          LATEST_TAG: ${{ steps.tagprev.outputs.tag }}
+        run: |
+          {
+            echo "### 🔖 Next-version preview (dry run)"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Predicted next tag | \`${NEW_TAG:-n/a}\` |"
+            echo "| Bumped part | \`${PART:-n/a}\` |"
+            echo "| Latest tag | \`${LATEST_TAG:-n/a}\` |"
+            echo ""
+            echo "> Advisory only — no tag was pushed. The authoritative \`vX.Y.Z\`"
+            echo "> tag and GitHub Release are produced by **release-tag.yml** when"
+            echo "> the \`next → main\` promotion PR merges."
+          } >> "$GITHUB_STEP_SUMMARY"

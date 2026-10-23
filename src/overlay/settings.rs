@@ -220,8 +220,8 @@ fn settings_content(
         .child(
             div()
                 .debug_selector(|| "feedback-mcp-config-toggle".into())
-                .child(
-                    Button::new("feedback-mcp-config-toggle", "MCP config")
+                .child(DisclosureButton {
+                    button: Button::new("feedback-mcp-config-toggle", "MCP config")
                         .variant(ButtonVariant::Ghost)
                         .full_width()
                         .icon(if this.mcp_config_expanded {
@@ -235,7 +235,8 @@ fn settings_content(
                                 cx.notify();
                             });
                         }),
-                ),
+                    expanded: this.mcp_config_expanded,
+                }),
         )
         .child(
             Collapsible::new("feedback-mcp-config-details", this.mcp_config_expanded).child(
