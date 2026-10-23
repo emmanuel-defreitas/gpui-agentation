@@ -8,6 +8,7 @@ import tomllib
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--require-publishable", action="store_true")
+parser.add_argument("--check-package-size", action="store_true")
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[2]
 manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
@@ -37,4 +38,13 @@ if args.require_publishable and package.get("publish") is False:
 for specification in manifest.get("dependencies", {}).values():
     if args.require_publishable and isinstance(specification, dict) and ("git" in specification or "path" in specification) and not specification.get("version"):
         raise SystemExit("Publication requires registry-compatible dependencies, including optional native dependencies")
+if args.check_package_size:
+    archive = root / "target" / "package" / f'{package["name"]}-{version}.crate'
+    if not archive.is_file():
+        raise SystemExit("Package archive missing; run cargo package --no-verify --all-features --locked first")
+    size = archive.stat().st_size
+    limit = 10 * 1024 * 1024
+    if size > limit:
+        raise SystemExit(f"Package archive is {size} bytes; crates.io allows at most {limit} bytes")
+    print(f"Package archive size: {size} / {limit} bytes")
 print(f'Validated {package["name"]} {version} and Registry metadata')

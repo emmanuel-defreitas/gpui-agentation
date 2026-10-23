@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1
+
+- Exclude README demonstration GIFs from the Cargo archive to keep it below
+  crates.io's 10 MiB upload limit. The media remains in the repository and site.
+- Check the actual package archive size before compiling publication candidates,
+  with regression coverage for missing archives and the size boundary.
+- Preserve all native sources, bundled Ely assets, licenses, examples, and skills.
+
 ## 0.5.0
 
 - Add an MCP exploration skill covering tool discovery, feedback context,

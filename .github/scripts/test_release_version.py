@@ -106,6 +106,25 @@ class ReleaseVersionTests(unittest.TestCase):
                         "error::EncodingWarning", str(script)], check=True,
                        capture_output=True, encoding="utf-8")
 
+    def test_package_size_guard_rejects_missing_and_oversized_archives(self):
+        script = self.root / ".github/scripts/check-bridge-release.py"
+        script.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(release.ROOT / ".github/scripts/check-bridge-release.py", script)
+        command = [sys.executable, str(script), "--check-package-size"]
+        missing = subprocess.run(command, capture_output=True, encoding="utf-8")
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("Package archive missing", missing.stderr)
+        archive = self.root / "target/package" / f"gpui-agentation-{self.original}.crate"
+        archive.parent.mkdir(parents=True)
+        with archive.open("wb") as file:
+            file.truncate(10 * 1024 * 1024)
+        subprocess.run(command, check=True, capture_output=True, encoding="utf-8")
+        with archive.open("ab") as file:
+            file.write(b"x")
+        oversized = subprocess.run(command, capture_output=True, encoding="utf-8")
+        self.assertNotEqual(oversized.returncode, 0)
+        self.assertIn("crates.io allows at most", oversized.stderr)
+
     def test_gate_detects_drift_in_docs_lock_registry_and_settings(self):
         for name in ("README.md", "site/src/pages/index.astro", "Cargo.lock", "server.json", "src/overlay/settings.rs"):
             path = self.root / name
