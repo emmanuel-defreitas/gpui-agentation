@@ -1,6 +1,7 @@
 <a id="readme-top"></a>
 
 <!-- PROJECT SHIELDS -->
+
 [![Contributors][contributors-shield]][contributors-url]
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
@@ -57,6 +58,7 @@
         <li><a href="#inspect-and-annotate">Inspect and annotate</a></li>
         <li><a href="#capture-feedback">Capture feedback</a></li>
         <li><a href="#connect-your-agent">Connect your agent</a></li>
+        <li><a href="#agent-skills">Agent skills</a></li>
       </ul>
     </li>
     <li><a href="#try-the-demo">Try the Demo</a></li>
@@ -69,6 +71,7 @@
 </details>
 
 <!-- ABOUT THE PROJECT -->
+
 ## About The Project
 
 [![gpui-agentation dashboard demo][product-screenshot]](https://emmanuel-defreitas.github.io/gpui-agentation/)
@@ -98,6 +101,7 @@ production telemetry or session replay, use something else.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- GETTING STARTED -->
+
 ## Getting Started
 
 Add gpui-agentation to your own GPUI app in three steps: install the crate,
@@ -114,12 +118,14 @@ Ely is bundled, so there is nothing else to install.
 ### Installation
 
 1. Add the crate with the native feature set:
+
    ```sh
    cargo add gpui-agentation --no-default-features --features native
    ```
 
 2. The crate does not exist in release builds, so every call sits behind
    `#[cfg(debug_assertions)]` and release returns your content unchanged:
+
    ```rust
    // Launch: serve Agentation's assets, then initialize.
    let app = gpui_platform::application();
@@ -156,6 +162,7 @@ The [consumer example](examples/consumer/README.md) keeps all of this in one
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- USAGE EXAMPLES -->
+
 ## Usage
 
 ### Inspect and annotate
@@ -195,9 +202,36 @@ The endpoint runs on loopback. Clients that require stdio can use the
 
 _For more examples, please refer to the [Reference](docs/reference.md)._
 
+### Agent skills
+
+Give your coding agent a reusable workflow for installation or exploring a
+running app's feedback. Both skills live under [`skills/`](skills/):
+
+| Skill                                                              | Use it to                                                                                                                                     |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| [gpui-agentation-setup](skills/gpui-agentation-setup/SKILL.md)     | Integrate the native library into a GPUI app, register screens, and verify debug and release builds.                                          |
+| [gpui-agentation-explore](skills/gpui-agentation-explore/SKILL.md) | Discover the connected MCP tools, read sessions and notes, export Markdown, and work through requested feedback with verified status updates. |
+
+From a clone of this repository, copy either skill directory into your host
+project's `.agents/skills/` directory, or into `~/.agents/skills/` for personal
+use across projects. For example, to install the exploration skill in a host:
+
+```sh
+mkdir -p /path/to/your-app/.agents/skills
+cp -R skills/gpui-agentation-explore /path/to/your-app/.agents/skills/
+```
+
+In Zed, start a new conversation after copying, then invoke
+`/gpui-agentation-explore` or `/gpui-agentation-setup`. Other agents can load the
+linked `SKILL.md` directly or use their supported skill directory. Try:
+“Use gpui-agentation-explore to discover my app's MCP tools and summarize pending
+feedback without changing notes.” Skills provide instructions; connect the
+running debug app's MCP server separately using the steps above.
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- DEMO -->
+
 ## Try the Demo
 
 Clone the repository and run the bundled demo app:
@@ -219,12 +253,17 @@ annotations survive. [Demo details](demo/README.md)
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- ROADMAP -->
+
 ## Roadmap
 
 - [x] Inspect, Box, Arrow, and Pen annotation tools
 - [x] Loopback MCP server plus REST/SSE access
 - [x] Hot reload for rebuild-on-save
-- [ ] Promote the 0.4.2 candidate to production
+- [ ] Add text annotation tool
+- [ ] Update Comment annotation UX
+- [ ] Add gpui-devtools features from [joris-gallot/gpui-devtools](https://github.com/joris-gallot/gpui-devtools)
+- [ ] Port MCP tools to a standalone macOS companion app
+- [ ] Extends AI features from [hexuria/gpui-agent](https://github.com/hexuria/gpui-agent)
 - [ ] Ship 0.5 from `dev`
 - [ ] Stabilize the API toward 1.0
 
@@ -234,6 +273,7 @@ for a full list of proposed features (and known issues).
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- CONTRIBUTING -->
+
 ## Contributing
 
 Contributions are what make the open source community such an amazing place to
@@ -262,6 +302,7 @@ versions. See the [release policy](.github/BRANCH-AND-RELEASE-POLICY.md).
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- LICENSE -->
+
 ## License
 
 Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information.
@@ -269,6 +310,7 @@ Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- CONTACT -->
+
 ## Contact
 
 Emmanuel De Freitas — [@emmanuel-defreitas](https://github.com/emmanuel-defreitas)
@@ -278,6 +320,7 @@ Project Link: [https://github.com/emmanuel-defreitas/gpui-agentation](https://gi
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- ACKNOWLEDGMENTS -->
+
 ## Acknowledgments
 
 - Inspired by [Agentation](https://www.agentation.com/). Independent GPUI
@@ -289,6 +332,7 @@ Project Link: [https://github.com/emmanuel-defreitas/gpui-agentation](https://gi
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- MARKDOWN LINKS & IMAGES -->
+
 [contributors-shield]: https://img.shields.io/github/contributors/emmanuel-defreitas/gpui-agentation.svg?style=for-the-badge
 [contributors-url]: https://github.com/emmanuel-defreitas/gpui-agentation/graphs/contributors
 [forks-shield]: https://img.shields.io/github/forks/emmanuel-defreitas/gpui-agentation.svg?style=for-the-badge
