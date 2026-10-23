@@ -15,6 +15,12 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Validate the reviewed release version
+        run: make version-check release-version-check
       - name: Open the approved preview for production review
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

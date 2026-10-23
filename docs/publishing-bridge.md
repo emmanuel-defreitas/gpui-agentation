@@ -4,8 +4,14 @@ The 0.4.2 candidate contains the debug-only native library, bundled pinned Ely
 source/assets and a default-enabled stdio binary. There is one Cargo package to
 publish. Previously published releases remain usable and are not removed/yanked.
 
-When bumping the version, update `Cargo.toml` and `server.json`, then fix every
-reference that `make version-check` reports. Leave CHANGELOG history alone.
+Before promotion, run `make release-prepare`. It infers the stable version from
+conventional commits and updates Cargo.toml, Cargo.lock, server.json, current
+documentation, setup skill, and site references together. Use
+`make release-prepare VERSION=x.y.z` to prepare an explicit stable version; the
+promotion gate still requires it to agree with conventional-commit history.
+Settings, CLI, and MCP versions derive from Cargo at build time. Review the diff,
+add release notes to CHANGELOG.md without rewriting history, and run
+`make version-check version-test release-version-check` before promotion.
 
 ## Bundled Ely verification
 
@@ -22,8 +28,8 @@ assets, upstream manifest, provenance and license notices. See
 
 ## Release sequence
 
-1. Review changes against `dev`; promote `dev → next → main`.
-2. Update Cargo.toml, Cargo.lock and server.json together. The candidate Registry
+1. Prepare the version and review changes against `dev`; promote `dev → next → main`.
+2. Include the synchronized version files in that review. The candidate Registry
    version must be new: 0.1.0 identifies the old bridge and 0.2.0 the prior
    combined package in the live Registry.
 3. Check identity with `python3 .github/scripts/check-bridge-release.py`.

@@ -30,8 +30,7 @@
   </p>
 </div>
 
-> **Status: pre-release.** The 0.4.2 candidate is being prepared for release;
-> `dev` is heading to 0.5. Pre-1.0: the API can change between minor releases, so
+> **Version: 0.4.2.** Pre-1.0: the API can change between minor releases, so
 > pin the version. Debug builds only — release builds expose no annotation API.
 > Pinned to `gpui-pre =0.3.8`.
 
@@ -252,6 +251,13 @@ create a pull request. You can also simply open an issue with the tag
 
 Changes target `dev`, then promote through `next` to `main`. Run `make ci` for
 checks or `make help` for available commands.
+
+Before promotion, run `make release-prepare` to calculate the next stable version
+from conventional commits and synchronize Cargo, the lockfile, Registry metadata,
+documentation, skills, and site references. Settings, CLI, and MCP versions derive
+from Cargo at build time. Review that diff and update `CHANGELOG.md` before
+committing through the promotion PRs. CI and release tagging reject mismatched
+versions. See the [release policy](.github/BRANCH-AND-RELEASE-POLICY.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
