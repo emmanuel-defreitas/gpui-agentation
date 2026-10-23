@@ -1,6 +1,6 @@
 [package]
 name = "gpui-agentation"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
@@ -10,7 +10,7 @@ homepage = "https://emmanuel-defreitas.github.io/gpui-agentation/"
 keywords = ["gpui", "mcp", "devtools", "annotations", "inspector"]
 categories = ["development-tools", "development-tools::debugging", "gui"]
 readme = "README.md"
-include = ["/src/**", "/tests/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE", "/server.json", "/docs/**", "/ORIGIN.md", "/demo/**", "/examples/**", "/skills/**", "/Makefile", "/build.rs", "/build/**", "/vendor/ely/src/**", "/vendor/ely/assets/**", "/vendor/ely/LICENSE", "/vendor/ely/README.md", "/vendor/ely/Cargo.upstream.toml", "/vendor/ely/UPSTREAM.json"]
+include = ["/src/**", "/tests/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE", "/server.json", "/docs/**", "!/docs/assets/*.gif", "/ORIGIN.md", "/demo/**", "/examples/**", "/skills/**", "/Makefile", "/build.rs", "/build/**", "/vendor/ely/src/**", "/vendor/ely/assets/**", "/vendor/ely/LICENSE", "/vendor/ely/README.md", "/vendor/ely/Cargo.upstream.toml", "/vendor/ely/UPSTREAM.json"]
 
 [package.metadata.bundled-ely]
 repository = "https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components"

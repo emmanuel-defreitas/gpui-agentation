@@ -1,6 +1,6 @@
 # Publish the combined gpui-agentation package
 
-The 0.5.0 candidate contains the debug-only native library, bundled pinned Ely
+The 0.5.1 candidate contains the debug-only native library, bundled pinned Ely
 source/assets and a default-enabled stdio binary. There is one Cargo package to
 publish. Previously published releases remain usable and are not removed/yanked.
 
@@ -12,6 +12,11 @@ promotion gate still requires it to agree with conventional-commit history.
 Settings, CLI, and MCP versions derive from Cargo at build time. Review the diff,
 add release notes to CHANGELOG.md without rewriting history, and run
 `make version-check version-test release-version-check` before promotion.
+
+The Cargo archive excludes the README demonstration GIFs under `docs/assets/`;
+they remain available in the repository and site. Before compiling the publication
+candidate, the publishing workflow packages it and checks crates.io's 10 MiB
+upload limit with `check-bridge-release.py --check-package-size`.
 
 ## Bundled Ely verification
 

@@ -31,7 +31,7 @@
   </p>
 </div>
 
-> **Version: 0.5.0.** Pre-1.0: the API can change between minor releases, so
+> **Version: 0.5.1.** Pre-1.0: the API can change between minor releases, so
 > pin the version. Debug builds only — release builds expose no annotation API.
 > Pinned to `gpui-pre =0.3.8`.
 
