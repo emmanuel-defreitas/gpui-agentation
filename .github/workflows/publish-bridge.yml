@@ -60,6 +60,8 @@ jobs:
       - name: Format, lint, test and dry-run the exact package
         working-directory: .
         run: |
+          cargo package --no-verify --all-features --locked
+          python3 .github/scripts/check-bridge-release.py --require-publishable --check-package-size
           cargo fmt -- --check
           cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
           cargo test --workspace --all-features --locked
