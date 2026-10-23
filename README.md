@@ -31,7 +31,7 @@
   </p>
 </div>
 
-> **Version: 0.4.2.** Pre-1.0: the API can change between minor releases, so
+> **Version: 0.5.0.** Pre-1.0: the API can change between minor releases, so
 > pin the version. Debug builds only — release builds expose no annotation API.
 > Pinned to `gpui-pre =0.3.8`.
 
@@ -283,9 +283,9 @@ create a pull request. You can also simply open an issue with the tag
 "enhancement". Don't forget to give the project a star! Thanks again!
 
 1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feat/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feat/AmazingFeature`)
+2. Create your Feature Branch (`git checkout -b feature/123-amazing-feature`)
+3. Commit your Changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the Branch (`git push origin feature/123-amazing-feature`)
 5. Open a Pull Request
 
 Changes target `dev`, then promote through `next` to `main`. Run `make ci` for

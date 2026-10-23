@@ -4,6 +4,8 @@ import io
 import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import tempfile
 import tomllib
 import unittest
@@ -82,16 +84,32 @@ class ReleaseVersionTests(unittest.TestCase):
 
     def test_unclassified_reference_stops_preparation_before_any_writes(self):
         readme = self.root / "README.md"
-        readme.write_text(readme.read_text() + f"\nUnknown current version {self.original}\n")
+        readme.write_text(readme.read_text(encoding="utf-8") + f"\nUnknown current version {self.original}\n")
         before = self.snapshot()
         with self.assertRaisesRegex(ValueError, "unclassified mention"):
             release.prepare(self.root, "9.8.7")
         self.assertEqual(before, self.snapshot())
 
+    def test_settings_drift_stops_preparation_before_any_writes(self):
+        settings = self.root / "src/overlay/settings.rs"
+        settings.write_text(settings.read_text(encoding="utf-8").replace('env!("CARGO_PKG_VERSION")', '"0.0.0"'))
+        before = self.snapshot()
+        with self.assertRaisesRegex(ValueError, "Settings About version"):
+            release.prepare(self.root, "9.8.7")
+        self.assertEqual(before, self.snapshot())
+
+    def test_bridge_checker_reads_utf8_independently_of_platform_defaults(self):
+        script = self.root / ".github/scripts/check-bridge-release.py"
+        script.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(release.ROOT / ".github/scripts/check-bridge-release.py", script)
+        subprocess.run([sys.executable, "-X", "warn_default_encoding", "-W",
+                        "error::EncodingWarning", str(script)], check=True,
+                       capture_output=True, encoding="utf-8")
+
     def test_gate_detects_drift_in_docs_lock_registry_and_settings(self):
         for name in ("README.md", "site/src/pages/index.astro", "Cargo.lock", "server.json", "src/overlay/settings.rs"):
             path = self.root / name
-            original = path.read_text()
+            original = path.read_text(encoding="utf-8")
             if name.endswith("settings.rs"):
                 broken = original.replace('env!("CARGO_PKG_VERSION")', '"0.0.0"')
             else:

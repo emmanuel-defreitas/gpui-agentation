@@ -31,7 +31,7 @@ FILES = [
 
 
 def current_version(root):
-    return tomllib.loads((root / "Cargo.toml").read_text())["package"]["version"]
+    return tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
 
 
 def stable_version(value):
@@ -69,7 +69,7 @@ def reference_updates(root, version):
     old = current_version(root)
     updates, errors = {}, []
     for name in FILES:
-        text = (root / name).read_text()
+        text = (root / name).read_text(encoding="utf-8")
         spans = sorted({match.span(1) for pattern in PATTERNS
                         for match in re.finditer(pattern, text)})
         if not spans:
@@ -88,7 +88,7 @@ def reference_updates(root, version):
 
 def version_updates(root, version):
     updates = reference_updates(root, version)
-    manifest = (root / "Cargo.toml").read_text()
+    manifest = (root / "Cargo.toml").read_text(encoding="utf-8")
     section = re.search(r"(?ms)^\[package\]\n.*?(?=^\[|\Z)", manifest)
     if not section:
         raise ValueError("Cargo.toml: missing package table")
@@ -97,13 +97,13 @@ def version_updates(root, version):
     if count != 1:
         raise ValueError("Cargo.toml: missing package version")
     updates["Cargo.toml"] = manifest[:section.start()] + package + manifest[section.end():]
-    lock = (root / "Cargo.lock").read_text()
+    lock = (root / "Cargo.lock").read_text(encoding="utf-8")
     lock, count = re.subn(r'(\[\[package\]\]\nname = "gpui-agentation"\nversion = ")[^"]+("\n)',
                           rf"\g<1>{version}\2", lock)
     if count != 1:
         raise ValueError("Cargo.lock: expected exactly one gpui-agentation package")
     updates["Cargo.lock"] = lock
-    registry = json.loads((root / "server.json").read_text())
+    registry = json.loads((root / "server.json").read_text(encoding="utf-8"))
     registry["version"] = version
     entries = [entry for entry in registry["packages"]
                if entry.get("registryType") == "cargo" and entry.get("identifier") == "gpui-agentation"]
@@ -115,15 +115,19 @@ def version_updates(root, version):
     return updates
 
 
+def check_settings_version(root):
+    settings = (root / "src/overlay/settings.rs").read_text(encoding="utf-8")
+    if not re.search(r'"GPUI Agentation \{\}"\s*,\s*env!\("CARGO_PKG_VERSION"\)', settings):
+        raise ValueError("Settings About version must derive from CARGO_PKG_VERSION")
+
+
 def check_references(root):
     version = stable_version(current_version(root))
     errors = []
     for name, expected in version_updates(root, version).items():
-        if (root / name).read_text() != expected:
+        if (root / name).read_text(encoding="utf-8") != expected:
             errors.append(f"{name}: release version must match Cargo.toml {version}")
-    settings = (root / "src/overlay/settings.rs").read_text()
-    if not re.search(r'"GPUI Agentation \{\}"\s*,\s*env!\("CARGO_PKG_VERSION"\)', settings):
-        errors.append("Settings About version must derive from CARGO_PKG_VERSION")
+    check_settings_version(root)
     if errors:
         raise ValueError("Version references out of sync:\n" + "\n".join(errors))
     print(f"Release manifests, docs, site and Settings match Cargo.toml {version}")
@@ -141,11 +145,12 @@ def prepare(root, version=None):
     version = stable_version(version) if version else next_version(root)
     if tuple(map(int, version.split("."))) < tuple(map(int, current_version(root).split("."))):
         raise ValueError("Refusing to decrease the package version")
+    check_settings_version(root)
     updates = version_updates(root, version)
     # Compute and validate every edit before writing any file.
     for name, text in updates.items():
-        if (root / name).read_text() != text:
-            (root / name).write_text(text)
+        if (root / name).read_text(encoding="utf-8") != text:
+            (root / name).write_text(text, encoding="utf-8")
             print(f"Updated {name}")
     check_references(root)
     print("Review the diff and CHANGELOG.md, then commit through dev → next → main.")

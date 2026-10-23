@@ -1,6 +1,6 @@
 # Publish the combined gpui-agentation package
 
-The 0.4.2 candidate contains the debug-only native library, bundled pinned Ely
+The 0.5.0 candidate contains the debug-only native library, bundled pinned Ely
 source/assets and a default-enabled stdio binary. There is one Cargo package to
 publish. Previously published releases remain usable and are not removed/yanked.
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.0
+
+- Add an MCP exploration skill covering tool discovery, feedback context,
+  native annotation features, and verified note resolution.
+- Document both agent skills, their installation, and the roadmap in the
+  README and site; add native inspection and annotation demonstration GIFs.
+- Add one release preparation command that synchronizes Cargo, the lockfile,
+  Registry metadata, current documentation, skills, and site references.
+- Validate promotion and preview versions against conventional commits and
+  check the exact reviewed commit before creating a stable release tag.
+- Add release regression tests, validate Settings before writing release files,
+  and read release metadata as UTF-8 across platforms, including Windows.
+- Align contribution examples with lifecycle branches and conventional commits;
+  keep the advisory dev version preview separate from production versioning.
+- Preserve the native public API, loopback guards, GPUI pin, bundled Ely snapshot,
+  and the empty release-build annotation API.
+
 ## 0.4.2
 
 - Refine Settings with a larger icon, tighter header spacing, clearer hot reload

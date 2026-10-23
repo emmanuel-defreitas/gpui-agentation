@@ -10,9 +10,9 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--require-publishable", action="store_true")
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[2]
-manifest = tomllib.loads((root / "Cargo.toml").read_text())
+manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
 package = manifest["package"]
-registry = json.loads((root / "server.json").read_text())
+registry = json.loads((root / "server.json").read_text(encoding="utf-8"))
 candidate = os.environ.get("BRIDGE_RELEASE_VERSION", package["version"])
 version = candidate.removeprefix("v")
 if not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", version):
@@ -30,7 +30,7 @@ entry = registry["packages"][0]
 if entry["registryType"] != "cargo" or entry["identifier"] != package["name"] or entry["transport"]["type"] != "stdio":
     raise SystemExit("Registry package must identify the Cargo/stdio bridge")
 marker = f'mcp-name: {registry["name"]}'
-if not any(line.startswith("- MCP Registry name:") and marker in line for line in (root / "README.md").read_text().splitlines()):
+if not any(line.startswith("- MCP Registry name:") and marker in line for line in (root / "README.md").read_text(encoding="utf-8").splitlines()):
     raise SystemExit("Cargo README must contain the visible MCP ownership marker")
 if args.require_publishable and package.get("publish") is False:
     raise SystemExit("Publication blocked: package publishing is explicitly disabled")
