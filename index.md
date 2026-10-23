@@ -4,7 +4,7 @@ Source: https://emmanuel-defreitas.github.io/gpui-agentation/
 
 Visual feedback for your native GPUI app. Annotate the interface. Give your agent the context.
 
-[Add to your app ↗](https://emmanuel-defreitas.github.io/gpui-agentation/#installation) [Rust crate v0.4.0](https://crates.io/crates/gpui-agentation/0.4.0) 
+[Add to your app ↗](https://emmanuel-defreitas.github.io/gpui-agentation/#installation) [Rust crate v0.5.0](https://crates.io/crates/gpui-agentation/0.5.0) 
 
 ## See feedback take shape.
 
@@ -40,7 +40,7 @@ Cargo.toml
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "0.4.0", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.5.0", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
@@ -51,7 +51,7 @@ Use the same `gpui-pre` version and registry source throughout your app. Other G
 Terminal
 
 ```shell
-cargo install gpui-agentation --version 0.4.0 --locked
+cargo install gpui-agentation --version 0.5.0 --locked
 ```
 
 The default install builds the portable bridge executable. It does not compile GPUI or Ely and does not launch your app.
@@ -60,7 +60,7 @@ The default install builds the portable bridge executable. It does not compile G
 
 Keep the integration at your application root. Register meaningful component boundaries you want to select, rather than wrapping every widget.
 
-These instructions target the 0.4.0 Agentation API. Gate all annotation imports, initialization, fields, and render hooks with `#[cfg(debug_assertions)]`: release builds expose no annotation API.
+These instructions target the 0.5.0 Agentation API. Gate all annotation imports, initialization, fields, and render hooks with `#[cfg(debug_assertions)]`: release builds expose no annotation API.
 
 1.  ### Initialize Agentation
     
@@ -111,7 +111,25 @@ Use your client’s equivalent server configuration if its schema differs. The a
 
 Loopback only. No API key. Browser origins are rejected by the native API. The site’s illustrations do not connect to your local server.
 
-[View the MCP Registry entry ↗](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.emmanuel-defreitas%2Fgpui-agentation/versions/0.4.0) 
+[View the MCP Registry entry ↗](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.emmanuel-defreitas%2Fgpui-agentation/versions/0.5.0) 
+
+## Give your agent a working guide.
+
+Two reusable skills help your agent install gpui-agentation and explore feedback from a running app. Choose the workflow you need.
+
+**[Setup skill ↗](https://github.com/emmanuel-defreitas/gpui-agentation/blob/dev/skills/gpui-agentation-setup/SKILL.md) **
+
+`gpui-agentation-setup` guides native library integration, screen registration, and debug and release verification.
+
+**[Exploration skill ↗](https://github.com/emmanuel-defreitas/gpui-agentation/blob/dev/skills/gpui-agentation-explore/SKILL.md) **
+
+`gpui-agentation-explore` discovers MCP tools, reads sessions and pending notes, exports Markdown, and guides requested fixes through acknowledgment, replies, and verified resolution. It also explains the native drawing tools and API limits.
+
+From a repository clone, copy the chosen directory under `skills/` into your host project’s `.agents/skills/`, or `~/.agents/skills/` for personal use across projects. In Zed, start a new conversation and invoke `/gpui-agentation-explore` or `/gpui-agentation-setup`. Other agents can load the linked `SKILL.md` directly or use their supported skill directory.
+
+Try: “Use gpui-agentation-explore to discover my app’s MCP tools and summarize pending feedback without changing notes.” Connect the running debug app’s MCP server first; installing a skill provides instructions, not a server connection.
+
+The linked skills track the `dev` branch. Use the skill from your host’s gpui-agentation revision when working with a pinned version.
 
 ## Make it fit your app.
 
@@ -141,7 +159,7 @@ Use Inspect, Box, Arrow, and Pen in the native toolbar. Four built-in color swat
 
 Use `native` for the debug library, default `mcp` for the bridge, or both when developing this package.
 
-Version 0.4.0 does not expose a public toolbar layout or custom palette builder.
+Version 0.5.0 does not expose a public toolbar layout or custom palette builder.
 
 ## A familiar idea. A native implementation.
 
