@@ -59,12 +59,15 @@ Type inference uses the same conventional-commit vocabulary as `release-tag.yml`
 
 1. **PR → `dev`** — CI and SemVer-title validation run. Lifecycle PRs
    are squash-merged, then `dev-release-candidate.yml` tags the squash merge.
-2. **Promotion PR** — when validation passes on `dev`, open the `dev → next` PR by hand and update
-   `CHANGELOG.md`, `README.md`, and existing version manifests on it.
+2. **Prepare and promote** — run `make release-prepare` in a branch targeting `dev`.
+   It synchronizes Cargo.toml, Cargo.lock, server.json, current docs, skills, and
+   site references. Settings, CLI, and MCP versions derive from Cargo. Review the
+   generated diff and update `CHANGELOG.md`, merge through review, then open
+   `dev → next` after validation passes. No command commits or pushes changes.
 3. **Preview** — merging to `next` runs `next-preview.yml`, which runs configured install, test,
    build, container, and preview deployment commands.
-4. **Release PR** — a successful preview opens a `next → main` PR. Refine release documentation on
-   that PR branch by hand.
+4. **Release PR** — a successful preview opens a `next → main` PR. Promotion
+   checks reject stale metadata or a version that disagrees with commit history.
 5. **Release** — merging `next → main` creates the SemVer tag and GitHub Release; the published
    release triggers the configured production deployment.
 
@@ -76,7 +79,12 @@ Type inference uses the same conventional-commit vocabulary as `release-tag.yml`
 | any `feat:` / `feature:` subject | **minor** |
 | any `fix:` subject (or default) | **patch** |
 
-If no earlier tag exists, versioning starts from `v0.0.0`. Release candidates use
+Version preparation, promotion checks, and final tagging share
+`.github/scripts/release_version.py`. Only stable tags reachable from the promoted
+commit establish the baseline. With no stable tag, the reviewed Cargo version
+bootstraps the first release. `make release-prepare VERSION=x.y.z` accepts an
+explicit stable version, but promotion still checks it against commit history.
+Historical versions and dependency pins are preserved. Release candidates use
 `vX.Y.Z-dev.<PR-number>` and do not replace the production tag.
 
 ## Cheat sheet

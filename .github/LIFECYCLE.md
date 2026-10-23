@@ -10,7 +10,7 @@ Automation for the `feature/** → dev → next → main` lifecycle, built on pl
 | Branch → issue | `<prefix>/123-slug` where prefix is one of `feature`, `bug`, `doc`, `chore` | `issue-start-branch.yml` |
 | Base branches | `dev` (default/integration), `next` (preview), `main` (production) | triggers + `pr-base-policy.yml` |
 | Versioning | Conventional-commit SemVer candidate on `dev` merge; production tag on `next → main` | `dev-release-candidate.yml`, `release-tag.yml` |
-| Release docs | Edited by hand on the `dev → next` and `next → main` PR branches | `CHANGELOG.md`, `README.md` |
+| Release versions | `make release-prepare` synchronizes current references before promotion; release notes remain manual | `release_version.py`, `CHANGELOG.md` |
 
 Create these labels once via `.github/scripts/create-triage-labels.sh`: `status:todo`,
 `status:in-progress`, `status:in-review`, `status:qa`, `release:approved`, `needs-base-fix`,
@@ -34,8 +34,12 @@ Create these labels once via `.github/scripts/create-triage-labels.sh`: `status:
 
 Manual steps (formerly agentic):
 
-- After `Validation` passes on `dev`, open the `dev → next` promotion PR yourself and update `CHANGELOG.md` and any version manifests on it. Do not merge without review.
-- Update release documentation on the `next → main` PR branch.
+- Before promoting, run `make release-prepare` on the release preparation branch
+  targeting `dev`, review the generated version diff, and update `CHANGELOG.md`.
+  Merge it through review, then open `dev → next` after validation passes.
+- Promotion PR checks, preview CI, and release tagging require synchronized
+  metadata and the same conventional-commit version. Protected branches are not
+  patched after promotion; fix a failed gate through the reviewed `dev` lane.
 - Set `status:in-review` when a PR is ready for review and `status:qa` after merge, if you use those labels.
 
 ## Branch & release policy
