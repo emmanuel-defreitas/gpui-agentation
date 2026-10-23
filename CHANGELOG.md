@@ -12,6 +12,8 @@
   check the exact reviewed commit before creating a stable release tag.
 - Add release regression tests, validate Settings before writing release files,
   and read release metadata as UTF-8 across platforms, including Windows.
+- Restore the MCP config button's expanded/collapsed accessibility state by
+  using its disclosure wrapper in the Settings UI.
 - Align contribution examples with lifecycle branches and conventional commits;
   keep the advisory dev version preview separate from production versioning.
 - Preserve the native public API, loopback guards, GPUI pin, bundled Ely snapshot,
