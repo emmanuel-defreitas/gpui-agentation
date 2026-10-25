@@ -20,7 +20,14 @@ impl Devtools {
 
     pub(super) fn init(cx: &mut App) {
         #[cfg(debug_assertions)]
-        gpui_agentation::init(cx).expect("initialize Agentation");
+        {
+            gpui_agentation::init(cx).expect("initialize Agentation");
+            cx.set_menus(vec![
+                gpui::Menu::new("Agentation consumer")
+                    .items([gpui::MenuItem::action("Quit", crate::Quit)]),
+                gpui_agentation::debug_menu(),
+            ]);
+        }
         #[cfg(not(debug_assertions))]
         let _ = cx;
     }
