@@ -167,6 +167,7 @@ fn banner_should_reserve_space_below_custom_titlebar_and_reflow_when_position_ch
 #[gpui::test]
 fn palette_should_open_from_single_swatch_select_color_and_dismiss(cx: &mut TestAppContext) {
     let (overlay, cx) = overlay(cx);
+    cx.simulate_resize(gpui::size(gpui::px(640.), gpui::px(620.)));
     draw(cx);
     assert!(cx.debug_bounds("banner-palette-color-2").is_none());
     let trigger = cx.debug_bounds("banner-palette-trigger").unwrap();

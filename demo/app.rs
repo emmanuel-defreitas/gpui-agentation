@@ -1,6 +1,5 @@
 use gpui::{prelude::*, *};
 use gpui_agentation::ely::{
-    Assets,
     buttons::Button,
     primitives::FocusScope,
     theme::{ActiveTheme, Mode, Theme},
@@ -19,9 +18,15 @@ impl Render for Demo {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         begin_frame(window, cx);
 
+        let overlay = self.overlay.clone();
         let colors = &cx.theme().colors;
         FocusScope::new(&self.focus).root().size_full().child(
             div()
+                .id("demo-root")
+                .capture_action(move |action: &gpui_agentation::AnnotationCommand, window, cx| {
+                    overlay.update(cx, |overlay, cx| overlay.dispatch_command(action, window, cx));
+                    cx.stop_propagation();
+                })
                 .relative()
                 .size_full()
                 .bg(colors.bg)
@@ -48,7 +53,7 @@ impl Render for Demo {
                         ),
                 )
                 .child(div().text_color(colors.fg_muted).child(
-                    "Choose Inspect, Box, Arrow, or Pen in the banner. Comments, MCP status, and Settings are on the right.",
+                    "Turn annotations on, then choose Inspect, Box, Arrow, Pen, Comment, or Textbox. Shortcuts appear while annotations are on.",
                 ))
                 .child(target(
                     "demo-counter",
@@ -96,56 +101,64 @@ impl Render for Demo {
 }
 
 pub(super) fn run() {
-    gpui_platform::application().with_assets(Assets).run(|cx| {
-        gpui_agentation::ely::init(cx).expect("initialize Ely");
-        cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
-        cx.on_action(|_: &Quit, cx| cx.quit());
-        let window = cx
-            .open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                        None,
-                        size(px(900.), px(620.)),
-                        cx,
-                    ))),
-                    titlebar: Some(TitlebarOptions {
-                        title: Some("GPUI Agentation demo".into()),
-                        ..Default::default()
-                    }),
-                    window_min_size: Some(size(px(640.), px(480.))),
-                    ..Default::default()
-                },
-                |window, cx| {
-                    cx.new(|cx| {
-                        let focus = cx.focus_handle();
-                        window.focus(&focus, cx);
-                        let overlay = AnnotationOverlay::mount(
-                            "Agentation demo",
-                            "gpui://demo/home",
-                            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                                .join("target/demo/feedback.json"),
-                            4749,
-                            window,
+    gpui_platform::application()
+        .with_assets(gpui_agentation::Assets)
+        .run(|cx| {
+            gpui_agentation::ely::init(cx).expect("initialize Ely");
+            cx.set_menus(vec![
+                Menu::new("Agentation demo").items([MenuItem::action("Quit", Quit)]),
+                gpui_agentation::debug_menu(),
+            ]);
+            cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
+            cx.on_action(|_: &Quit, cx| cx.quit());
+            let _window = cx
+                .open_window(
+                    WindowOptions {
+                        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                            None,
+                            size(px(900.), px(620.)),
                             cx,
-                        )
-                        .expect("mount annotation overlay");
-                        Demo {
-                            focus,
-                            overlay,
-                            count: 0,
-                        }
-                    })
-                },
-            )
-            .expect("open demo window");
-        if let Some(dir) = std::env::args().nth(1) {
-            export_preview(window, std::path::PathBuf::from(dir), cx);
-        }
-        cx.activate(true);
-    });
+                        ))),
+                        titlebar: Some(TitlebarOptions {
+                            title: Some("GPUI Agentation demo".into()),
+                            ..Default::default()
+                        }),
+                        window_min_size: Some(size(px(640.), px(480.))),
+                        ..Default::default()
+                    },
+                    |window, cx| {
+                        cx.new(|cx| {
+                            let focus = cx.focus_handle();
+                            window.focus(&focus, cx);
+                            let overlay = AnnotationOverlay::mount(
+                                "Agentation demo",
+                                "gpui://demo/home",
+                                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                                    .join("target/demo/feedback.json"),
+                                4749,
+                                window,
+                                cx,
+                            )
+                            .expect("mount annotation overlay");
+                            Demo {
+                                focus,
+                                overlay,
+                                count: 0,
+                            }
+                        })
+                    },
+                )
+                .expect("open demo window");
+            #[cfg(feature = "test-support")]
+            if let Some(dir) = std::env::args().nth(1) {
+                export_preview(_window, std::path::PathBuf::from(dir), cx);
+            }
+            cx.activate(true);
+        });
 }
 
 // Export actual Metal-rendered frames without recording other desktop windows.
+#[cfg(feature = "test-support")]
 fn export_preview(window: WindowHandle<Demo>, dir: std::path::PathBuf, cx: &mut App) {
     std::fs::create_dir_all(&dir).expect("create preview directory");
     Theme::update(cx, |theme| theme.reduced_motion = true);

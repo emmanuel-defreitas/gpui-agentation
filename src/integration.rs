@@ -3,8 +3,8 @@ use std::{borrow::Cow, path::PathBuf};
 
 use crate::ely::{primitives::FocusScope, theme::Theme};
 use gpui::{
-    AnyElement, App, AssetSource, Entity, FocusHandle, Global, IntoElement, ParentElement,
-    SharedString, Styled, Window, div,
+    AnyElement, App, AssetSource, Entity, FocusHandle, Global, InteractiveElement, IntoElement,
+    ParentElement, SharedString, Styled, Window, div,
 };
 
 use crate::{AnnotationOverlay, Error, begin_frame, target};
@@ -18,17 +18,41 @@ pub struct Assets;
 impl Assets {
     /// Serve Agentation's assets first, falling back to the host's other assets.
     pub fn before(other: impl AssetSource) -> impl AssetSource {
-        crate::ely::Assets::before(other)
+        CombinedAssets(other)
     }
 }
 
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> gpui::Result<Option<Cow<'static, [u8]>>> {
+        if path == "agentation/mcp.svg" {
+            return Ok(Some(Cow::Borrowed(include_bytes!("assets/mcp.svg"))));
+        }
         crate::ely::Assets.load(path)
     }
 
     fn list(&self, path: &str) -> gpui::Result<Vec<SharedString>> {
-        crate::ely::Assets.list(path)
+        let mut paths = crate::ely::Assets.list(path)?;
+        if "agentation/mcp.svg".starts_with(path) {
+            paths.push("agentation/mcp.svg".into());
+        }
+        Ok(paths)
+    }
+}
+
+struct CombinedAssets<T>(T);
+impl<T: AssetSource> AssetSource for CombinedAssets<T> {
+    fn load(&self, path: &str) -> gpui::Result<Option<Cow<'static, [u8]>>> {
+        match Assets.load(path)? {
+            Some(bytes) => Ok(Some(bytes)),
+            None => self.0.load(path),
+        }
+    }
+    fn list(&self, path: &str) -> gpui::Result<Vec<SharedString>> {
+        let mut paths = Assets.list(path)?;
+        paths.extend(self.0.list(path)?);
+        paths.sort();
+        paths.dedup();
+        Ok(paths)
     }
 }
 
@@ -120,11 +144,19 @@ impl Agentation {
         cx: &mut App,
     ) -> AnyElement {
         begin_frame(window, cx);
+        let overlay = self.overlay.clone();
         FocusScope::new(&self.focus)
             .root()
             .size_full()
             .child(
                 div()
+                    .id("agentation-host-root")
+                    .capture_action(move |action: &crate::AnnotationCommand, window, cx| {
+                        overlay.update(cx, |overlay, cx| {
+                            overlay.dispatch_command(action, window, cx)
+                        });
+                        cx.stop_propagation();
+                    })
                     .size_full()
                     .flex()
                     .flex_col()

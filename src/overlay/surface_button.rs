@@ -66,9 +66,9 @@ impl RenderOnce for SurfaceButton {
         let theme = cx.theme();
         let (background, foreground) = self.colors.unwrap_or({
             if self.selected {
-                (theme.colors.bg, theme.colors.fg)
+                (theme.colors.accent, theme.colors.on_accent)
             } else {
-                (theme.colors.fg, theme.colors.bg)
+                (theme.colors.surface, theme.colors.fg)
             }
         });
         let (hover, pressed) = if self.colors.is_some() {
