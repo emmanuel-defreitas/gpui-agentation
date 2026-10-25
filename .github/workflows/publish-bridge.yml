@@ -91,3 +91,43 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: cargo publish --all-features --locked
+
+  registry:
+    needs: [verify, publish]
+    if: inputs.publish == true && needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      BRIDGE_RELEASE_VERSION: ${{ inputs.version }}
+      MCP_PUBLISHER_VERSION: v1.8.2
+      # Official linux/amd64 release asset; update both pins together.
+      MCP_PUBLISHER_SHA256: d0554112d8f7affad9a10041776d63129a60b163c05036ae26caf73ecbbd89c8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.commit }}
+          persist-credentials: false
+      - name: Check the matching Registry metadata
+        run: python3 .github/scripts/check-bridge-release.py --require-publishable
+      - name: Install the pinned MCP publisher
+        shell: bash
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/mcp-publisher"
+          mkdir -p "$directory"
+          archive="$directory/mcp-publisher_linux_amd64.tar.gz"
+          curl --fail --location --silent --show-error --retry 3 \
+            --output "$archive" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          printf '%s  %s\n' "$MCP_PUBLISHER_SHA256" "$archive" | sha256sum --check -
+          tar --extract --gzip --file "$archive" --directory "$directory" mcp-publisher
+      - name: Validate the Registry schema
+        run: '"$RUNNER_TEMP/mcp-publisher/mcp-publisher" validate server.json'
+      - name: Authenticate to MCP Registry with GitHub OIDC
+        run: '"$RUNNER_TEMP/mcp-publisher/mcp-publisher" login github-oidc --registry https://registry.modelcontextprotocol.io'
+      - name: Publish and verify the Registry listing
+        run: python3 .github/scripts/publish_mcp_registry.py --publisher "$RUNNER_TEMP/mcp-publisher/mcp-publisher"
