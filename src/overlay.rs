@@ -78,6 +78,13 @@ pub struct AnnotationOverlay {
     history: Vec<(Option<crate::Annotation>, Option<crate::Annotation>)>,
     future: Vec<(Option<crate::Annotation>, Option<crate::Annotation>)>,
     pin_drag: Option<(crate::Annotation, (f32, f32))>,
+    textbox_drag: Option<(crate::Annotation, (f32, f32))>,
+    annotation_press: Option<gpui::Point<gpui::Pixels>>,
+    textbox_bounds: std::collections::HashMap<String, gpui::Bounds<gpui::Pixels>>,
+    mentions: mentions::Mentions,
+    context_request: Option<(u64, gpui::Point<gpui::Pixels>)>,
+    context_note: Option<String>,
+    context_number: u64,
     banner_bottom: f32,
     settings_open: bool,
     review_open: bool,
@@ -198,14 +205,20 @@ impl AnnotationOverlay {
                 let _ = owner.update(cx, |this, cx| this.intercept_shortcut(event, window, cx));
             }
         });
-        let menu_updates = cx.observe_self(move |this, cx| this.sync_debug_menu(window_id, cx));
+        let menu_updates = cx.observe_self(move |this, cx| {
+            this.sync_mentions(cx);
+            this.sync_debug_menu(window_id, cx);
+        });
         let menu_activation = cx.observe_window_activation(window, move |this, window, cx| {
             if window.is_window_active() {
                 this.sync_debug_menu(window_id, cx);
             }
         });
         let inputs = vec![
-            cx.observe(&input, |_, _, cx| cx.notify()),
+            cx.observe(&input, |this, _, cx| {
+                this.sync_mentions(cx);
+                cx.notify();
+            }),
             shortcuts,
             menu_updates,
             menu_activation,
@@ -294,6 +307,13 @@ impl AnnotationOverlay {
             history: vec![],
             future: vec![],
             pin_drag: None,
+            textbox_drag: None,
+            annotation_press: None,
+            textbox_bounds: Default::default(),
+            mentions: Default::default(),
+            context_request: None,
+            context_note: None,
+            context_number: 0,
             banner_bottom: 0.,
             settings_open: false,
             review_open: false,
@@ -332,6 +352,11 @@ impl AnnotationOverlay {
                 self.future.clear();
                 self.selected_note = None;
                 self.pin_drag = None;
+                self.textbox_drag = None;
+                self.textbox_bounds.clear();
+                self.mentions = Default::default();
+                self.context_request = None;
+                self.context_note = None;
                 self.draft = None;
                 self.return_focus(window, cx);
                 self.stroke.clear();
@@ -390,6 +415,11 @@ impl AnnotationOverlay {
         self.active = false;
         self.draft = None;
         self.pin_drag = None;
+        if self.textbox_drag.take().is_some() {
+            if let Ok(session) = self.store.session(&self.session.id) {
+                self.session = session;
+            }
+        }
         self.stroke.clear();
         self.hovered = None;
         self.pointer = None;
@@ -448,7 +478,7 @@ impl AnnotationOverlay {
                     index: Some(a.index),
                     editing: matches!(a.feedback.shape, Some(crate::AnnotationShape::Text { .. })),
                     original_comment: a.feedback.comment.clone(),
-                    color: a.feedback.shape.as_ref().map_or(self.color, |s| s.color()),
+                    color: a.annotation_color(),
                     url: a.url,
                     shape: a.feedback.shape,
                     target: Target {
@@ -529,7 +559,7 @@ impl AnnotationOverlay {
                 .replace_note(Some(previous), Some(&note))
                 .map(|_| note)
         } else {
-            self.store.add(
+            self.store.add_colored(
                 &self.session.id,
                 AnnotationInput {
                     comment,
@@ -541,6 +571,7 @@ impl AnnotationOverlay {
                     y: draft.y,
                     shape,
                 },
+                Some(draft.color),
             )
         };
         let saved = result.is_ok();
@@ -593,6 +624,7 @@ impl AnnotationOverlay {
         }
         self.record_change(before, None);
         self.session.annotations.retain(|note| note.id != id);
+        self.textbox_bounds.remove(id);
         if self.selected_note.as_deref() == Some(id) {
             self.selected_note = None;
         }
@@ -708,6 +740,7 @@ impl AnnotationOverlay {
                             div()
                                 .w_full()
                                 .whitespace_normal()
+                                .text_color(cx.theme().colors.bg.opacity(0.5))
                                 .text_size(cx.theme().text_size(crate::ely::theme::TextSize::Base))
                                 .line_height(gpui::relative(1.4))
                                 .flex()
@@ -731,15 +764,18 @@ impl AnnotationOverlay {
 #[cfg(test)]
 use crate::AnnotationPatch;
 
+mod annotation_menu;
 mod banner;
 pub mod commands;
 mod history;
+mod mentions;
 #[cfg(test)]
 #[path = "overlay/release.test.rs"]
 mod release_tests;
 mod settings;
 mod surface;
 mod surface_button;
+mod textbox;
 
 impl Render for AnnotationOverlay {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

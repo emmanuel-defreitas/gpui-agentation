@@ -68,6 +68,10 @@ fn textbox_saves_inline_and_reopens_for_editing_without_a_comment(cx: &mut TestA
     let text = cx.debug_bounds("feedback-textbox").unwrap();
     cx.simulate_click(text.center(), Modifiers::none());
     draw(cx);
+    assert!(cx.debug_bounds("feedback-textbox-selected").is_some());
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).selected_note.as_deref(), Some(id.as_str())));
+    cx.simulate_keystrokes("enter");
+    draw(cx);
     cx.update(|window, cx| {
         let this = overlay.read(cx);
         assert_eq!(
@@ -126,6 +130,78 @@ fn deletion_undo_and_redo_keep_annotation_identity_and_number(cx: &mut TestAppCo
     cx.simulate_keystrokes("ctrl-shift-z");
     draw(cx);
     cx.update(|_, cx| assert!(overlay.read(cx).store.annotation(&note.id).is_err()));
+}
+
+#[gpui::test]
+fn textbox_pin_selection_pointer_drag_and_context_actions_preserve_identity(
+    cx: &mut TestAppContext,
+) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    cx.simulate_input("Draggable textbox");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    let before = cx.update(|_, cx| overlay.read(cx).session.annotations[0].clone());
+    assert!(cx.debug_bounds("feedback-marker-number-1").is_some());
+    let body = cx.debug_bounds("feedback-textbox").unwrap();
+    cx.update(|_, cx| {
+        let measured = overlay.read(cx).textbox_bounds[&before.id];
+        assert!(measured.size.width > gpui::px(40.));
+        assert!(measured.size.height > gpui::px(20.));
+    });
+    cx.simulate_click(body.center(), Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("feedback-textbox-selected").is_some());
+    let start = cx.debug_bounds("feedback-textbox").unwrap().center();
+    cx.simulate_mouse_move(start, None, Modifiers::none());
+    cx.simulate_mouse_down(start, gpui::MouseButton::Left, Modifiers::none());
+    let end = start + gpui::point(px(92.), px(40.));
+    cx.simulate_mouse_move(end, Some(gpui::MouseButton::Left), Modifiers::none());
+    draw(cx);
+    cx.simulate_mouse_up(end, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let after = overlay.read(cx).store.annotation(&before.id).unwrap();
+        assert_eq!(after.index, before.index);
+        assert_eq!(after.feedback.comment, before.feedback.comment);
+        assert_ne!(after.feedback.shape, before.feedback.shape);
+    });
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            assert_eq!(this.store.annotation(&before.id).unwrap(), before);
+            this.note_action(
+                &before.id,
+                super::annotation_menu::NoteAction::Color(1),
+                window,
+                cx,
+            );
+            assert_eq!(this.store.annotation(&before.id).unwrap().color, Some(1));
+            this.undo(window, cx);
+            assert_eq!(this.store.annotation(&before.id).unwrap(), before);
+        })
+    });
+    draw(cx);
+    let at = cx.debug_bounds("feedback-textbox").unwrap().center();
+    cx.simulate_mouse_move(at, None, Modifiers::none());
+    cx.simulate_mouse_down(at, gpui::MouseButton::Right, Modifiers::none());
+    cx.simulate_mouse_up(at, gpui::MouseButton::Right, Modifiers::none());
+    draw(cx);
+    let delete = cx
+        .debug_bounds("menu-row-Delete")
+        .expect("annotation context menu");
+    cx.simulate_click(delete.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| assert!(overlay.read(cx).store.annotation(&before.id).is_err()));
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|_, cx| {
+        assert_eq!(
+            overlay.read(cx).store.annotation(&before.id).unwrap(),
+            before
+        )
+    });
 }
 
 #[gpui::test]

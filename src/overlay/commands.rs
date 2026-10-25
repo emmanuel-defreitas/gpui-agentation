@@ -234,6 +234,17 @@ impl AnnotationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.mention_key(event, window, cx) {
+            cx.stop_propagation();
+            return;
+        }
+        if event.keystroke.key == "enter" && self.draft.is_none() && self.focus.is_focused(window) {
+            if let Some(id) = self.selected_note.clone() {
+                self.edit(&id, window, cx);
+                cx.stop_propagation();
+                return;
+            }
+        }
         if !self.active || self.settings_open || self.review_open {
             return;
         }

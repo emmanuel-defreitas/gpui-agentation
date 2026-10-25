@@ -53,7 +53,7 @@ impl Render for Demo {
                         ),
                 )
                 .child(div().text_color(colors.fg_muted).child(
-                    "Turn annotations on, then choose Inspect, Box, Arrow, Pen, Comment, or Textbox. Shortcuts appear while annotations are on.",
+                    "Turn annotations on, then choose Inspect, Box, Arrow, Pen, Comment, or Textbox. Hover a tool to see its shortcut.",
                 ))
                 .child(target(
                     "demo-counter",

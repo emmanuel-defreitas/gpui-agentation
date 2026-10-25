@@ -187,7 +187,19 @@ impl Store {
 
     /// Add validated feedback to a session.
     pub fn add(&self, session_id: &str, input: AnnotationInput) -> Result<Annotation, Error> {
+        self.add_colored(session_id, input, None)
+    }
+
+    pub(crate) fn add_colored(
+        &self,
+        session_id: &str,
+        input: AnnotationInput,
+        color: Option<usize>,
+    ) -> Result<Annotation, Error> {
         validate(&input)?;
+        if color.is_some_and(|color| color >= 4) {
+            return Err(Error::Invalid("invalid annotation color".into()));
+        }
         self.mutate(|data| {
             let session = data
                 .sessions
@@ -208,6 +220,7 @@ impl Store {
                 timestamp: now(),
                 status: AnnotationStatus::Pending,
                 kind: "feedback".into(),
+                color,
                 feedback: input,
                 thread: vec![],
             };
@@ -296,6 +309,9 @@ impl Store {
         let note = expected.or(replacement).ok_or(Error::NotFound)?;
         if let Some(next) = replacement {
             validate(&next.feedback)?;
+            if next.color.is_some_and(|color| color >= 4) {
+                return Err(Error::Invalid("invalid annotation color".into()));
+            }
             if next.id != note.id || next.session_id != note.session_id || next.index != note.index
             {
                 return Err(Error::Invalid("annotation identity changed".into()));

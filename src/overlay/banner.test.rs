@@ -49,7 +49,25 @@ fn mode_switch_toggles_once_and_keycaps_follow_annotation_mode(cx: &mut TestAppC
         );
         draw(cx);
         cx.update(|_, cx| assert_eq!(overlay.read(cx).active, active));
-        assert_eq!(cx.debug_bounds("feedback-shortcut-b").is_some(), active);
+        assert!(
+            cx.debug_bounds("feedback-shortcut-b").is_none(),
+            "keycaps are not inside toolbar buttons"
+        );
+        let tool = cx.debug_bounds("banner-box").unwrap();
+        cx.simulate_mouse_move(tool.center(), None, Modifiers::none());
+        cx.executor().advance_clock(Duration::from_millis(800));
+        draw(cx);
+        assert_eq!(
+            cx.debug_bounds("feedback-shortcut-b").is_some(),
+            active,
+            "keycap belongs to the tooltip"
+        );
+        cx.simulate_mouse_move(
+            gpui::point(gpui::px(1.), gpui::px(400.)),
+            None,
+            Modifiers::none(),
+        );
+        draw(cx);
     }
 }
 

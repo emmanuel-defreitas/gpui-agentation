@@ -110,6 +110,17 @@ impl AnnotationOverlay {
                     .py_1()
                     .rounded_full()
                     .bg(cx.theme().colors.surface)
+                    .tooltip(crate::ely::primitives::Tooltip::rich(|_, _| {
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child("Annotation mode")
+                            .child(crate::ely::typography::Kbd::new(
+                                super::commands::shortcut("toggle").unwrap(),
+                            ))
+                            .into_any_element()
+                    }))
                     .child(
                         crate::ely::primitives::Icon::new(IconName::Power)
                             .size(crate::ely::theme::IconSize::Sm),
@@ -244,6 +255,7 @@ impl AnnotationOverlay {
             false,
         )
         .icon_only()
+        .shortcut(super::commands::shortcut("comments").unwrap())
         .on_click(cx.listener(|this, _, window, cx| {
             this.open_sheet(false, window, cx);
         }));
@@ -286,9 +298,17 @@ impl AnnotationOverlay {
                     .size(gpui::rems(1.0))
                     .text_color(cx.theme().colors.fg),
             )
-            .tooltip(crate::ely::primitives::Tooltip::text(format!(
-                "MCP {status}"
-            )));
+            .tooltip(crate::ely::primitives::Tooltip::rich(move |_, _| {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(format!("MCP {status}"))
+                    .child(crate::ely::typography::Kbd::new(
+                        super::commands::shortcut("mcp").unwrap(),
+                    ))
+                    .into_any_element()
+            }));
         let trailing = div()
             .flex()
             .items_center()
@@ -314,6 +334,7 @@ impl AnnotationOverlay {
                             false,
                         )
                         .icon_only()
+                        .shortcut(super::commands::shortcut("settings").unwrap())
                         .on_click(
                             cx.listener(|this, _, window, cx| this.open_sheet(true, window, cx)),
                         ),
@@ -331,7 +352,7 @@ impl AnnotationOverlay {
             .items_center()
             .gap_2()
             .px_3()
-            .py_1()
+            .py_2()
             .text_color(cx.theme().colors.fg)
             .border_b_1()
             .border_color(cx.theme().colors.border)

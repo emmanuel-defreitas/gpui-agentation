@@ -84,11 +84,25 @@ pub struct Annotation {
     pub status: AnnotationStatus,
     /// This implementation emits feedback notes.
     pub kind: String,
+    /// Optional Ely annotation color, zero through three; older notes use their shape color.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<usize>,
     /// Element context and human comment.
     #[serde(flatten)]
     pub feedback: AnnotationInput,
     /// Conversation visible to both the human and agent.
     pub thread: Vec<ThreadMessage>,
+}
+
+impl Annotation {
+    pub(crate) fn annotation_color(&self) -> usize {
+        self.color.unwrap_or_else(|| {
+            self.feedback
+                .shape
+                .as_ref()
+                .map_or(0, |shape| shape.color())
+        })
+    }
 }
 
 /// Mutable annotation fields. Omitted fields are preserved.

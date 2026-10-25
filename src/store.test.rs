@@ -467,3 +467,19 @@ fn api_comment_updates_change_the_visible_textbox_text() {
     );
     assert_eq!(store.annotation(&note.id).unwrap(), updated);
 }
+
+#[test]
+fn annotation_color_persists_without_turning_element_feedback_into_a_drawing() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("colors.json");
+    let store = Store::open(&path).unwrap();
+    let session = store.ensure_session("Color", "gpui://color").unwrap();
+    let note = store.add_colored(&session.id, feedback(), Some(3)).unwrap();
+    assert_eq!(note.color, Some(3));
+    assert!(note.feedback.shape.is_none());
+    assert_eq!(
+        Store::open(path).unwrap().annotation(&note.id).unwrap(),
+        note
+    );
+    assert!(store.add_colored(&session.id, feedback(), Some(4)).is_err());
+}

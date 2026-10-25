@@ -101,7 +101,7 @@ impl RenderOnce for SurfaceButton {
             .flex_none()
             .h(theme.control_height(self.size))
             .px_2()
-            .when(self.icon_only && self.shortcut.is_none(), |root| {
+            .when(self.icon_only || self.shortcut.is_some(), |root| {
                 root.w(theme.control_height(self.size)).px_0()
             })
             .border_1()
@@ -113,17 +113,26 @@ impl RenderOnce for SurfaceButton {
             .text_color(foreground)
             .child(Icon::new(self.icon).size(IconSize::Sm).color(foreground))
             .when(self.icon_only, |root| {
-                root.tooltip(crate::ely::primitives::Tooltip::text(self.label.clone()))
+                let label = self.label.clone();
+                let shortcut = self.shortcut.clone();
+                root.tooltip(crate::ely::primitives::Tooltip::rich(move |_, _| {
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(label.clone())
+                        .when_some(shortcut.clone(), |tip, keys| {
+                            let selector = format!("feedback-shortcut-{keys}");
+                            tip.child(
+                                div()
+                                    .debug_selector(move || selector.clone())
+                                    .child(crate::ely::typography::Kbd::new(&keys)),
+                            )
+                        })
+                        .into_any_element()
+                }))
             })
             .when(!self.icon_only, |root| root.child(self.label.clone()))
-            .when_some(self.shortcut, |root, keys| {
-                let selector = format!("feedback-shortcut-{keys}");
-                root.child(
-                    div()
-                        .debug_selector(move || selector.clone())
-                        .child(crate::ely::typography::Kbd::new(&keys)),
-                )
-            })
             .when(self.disabled, |root| {
                 root.opacity(0.45)
                     .cursor_not_allowed()

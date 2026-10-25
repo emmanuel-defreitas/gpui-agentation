@@ -20,8 +20,8 @@ use gpui::{
 };
 
 #[derive(Clone)]
-struct FeedbackDrag {
-    owner: EntityId,
+pub(super) struct FeedbackDrag {
+    pub owner: EntityId,
 }
 
 const TOOLS: [(Option<Tool>, IconName, &str); 6] = [
@@ -186,7 +186,7 @@ pub(super) fn comment_input(
         root.style().refine(
             &gpui::StyleRefinement::default()
                 .bg(background)
-                .text_color(colors.bg)
+                .text_color(colors.bg.opacity(0.5))
                 .border_0()
                 .rounded_none()
                 .p_0(),
@@ -202,7 +202,8 @@ pub(super) fn comment_input(
                     .absolute()
                     .top_0()
                     .left_0()
-                    .text_color(colors.bg)
+                    .text_size(cx.theme().text_size(TextSize::Sm))
+                    .text_color(colors.bg.opacity(0.5))
                     .child(if textbox {
                         "Type text…"
                     } else {
@@ -523,6 +524,28 @@ impl AnnotationOverlay {
         if self.toolbar_drag.take().is_some() {
             self.persist_toolbar(cx);
         }
+        if let Some((before, offset)) = self.textbox_drag.take() {
+            let p = normalized(at, window);
+            let after = super::textbox::moved_textbox(
+                &before,
+                (
+                    (p.0 - offset.0).clamp(0.0, 1.0),
+                    (p.1 - offset.1).clamp(0.0, 1.0),
+                ),
+                viewport(window),
+            );
+            if before != after {
+                match self.store.replace_note(Some(&before), Some(&after)) {
+                    Ok(()) => self.record_change(Some(before), Some(after)),
+                    Err(error) => self.notice = error.to_string(),
+                }
+            }
+            if let Ok(session) = self.store.session(&self.session.id) {
+                self.session = session;
+            }
+            cx.notify();
+            return;
+        }
         if let Some((before, offset)) = self.pin_drag.take() {
             let mut after = before.clone();
             let p = normalized(at, window);
@@ -593,13 +616,32 @@ impl AnnotationOverlay {
         cx.notify();
     }
 
-    fn advance_drag(
+    pub(super) fn advance_drag(
         &mut self,
         at: gpui::Point<gpui::Pixels>,
         window: &Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some((before, offset)) = &self.pin_drag {
+        if let Some((before, offset)) = &self.textbox_drag {
+            let p = normalized(at, window);
+            let after = super::textbox::moved_textbox(
+                before,
+                (
+                    (p.0 - offset.0).clamp(0.0, 1.0),
+                    (p.1 - offset.1).clamp(0.0, 1.0),
+                ),
+                viewport(window),
+            );
+            if let Some(note) = self
+                .session
+                .annotations
+                .iter_mut()
+                .find(|n| n.id == before.id)
+            {
+                *note = after;
+            }
+            cx.notify();
+        } else if let Some((before, offset)) = &self.pin_drag {
             let p = normalized(at, window);
             let p = (
                 (p.0 - offset.0).clamp(0.0, 1.0),
@@ -658,6 +700,11 @@ impl AnnotationOverlay {
                             false,
                         )
                         .icon_only()
+                        .when(self.active, |button| {
+                            button.when_some(super::commands::shortcut(name), |button, keys| {
+                                button.shortcut(keys)
+                            })
+                        })
                         .disabled(disabled)
                         .on_click(cx.listener(
                             move |this, _, window, cx| {
@@ -734,10 +781,11 @@ impl AnnotationOverlay {
                 content = content.child(
                     super::surface_button::SurfaceButton::new(
                         ("feedback-tool", index),
-                        format!("{name} · {}", tool_shortcut(tool)),
+                        name,
                         icon,
                         self.tool == tool,
                     )
+                    .shortcut(tool_shortcut(tool).to_ascii_lowercase())
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.choose_tool(tool, window, cx);
                     })),
@@ -880,9 +928,13 @@ impl AnnotationOverlay {
                 matches!(
                     note.status,
                     AnnotationStatus::Pending | AnnotationStatus::Acknowledged
-                ) && note.feedback.shape.as_ref().is_some_and(|shape| {
-                    shape.hit((at.x.into(), at.y.into()), viewport(window), 8.0)
-                })
+                ) && (self
+                    .textbox_bounds
+                    .get(&note.id)
+                    .is_some_and(|bounds| bounds.contains(&at))
+                    || note.feedback.shape.as_ref().is_some_and(|shape| {
+                        shape.hit((at.x.into(), at.y.into()), viewport(window), 8.0)
+                    }))
             })
             .map(|note| note.id.clone())
     }
@@ -948,6 +1000,13 @@ impl AnnotationOverlay {
             .on_mouse_down_out(
                 cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
                     if event.button == MouseButton::Left {
+                        if this
+                            .mentions
+                            .bounds
+                            .is_some_and(|bounds| bounds.contains(&event.position))
+                        {
+                            return;
+                        }
                         let dismissed = this.dismiss_note(window, cx);
                         window.prevent_default();
                         if !dismissed {
@@ -1260,30 +1319,8 @@ impl AnnotationOverlay {
                 height: 0.0,
             };
             if let Some(AnnotationShape::Text { at, text, color }) = &a.feedback.shape {
-                if selected_id == Some(a.id.as_str()) {
-                    continue;
-                }
-                let id = a.id.clone();
-                layer = layer.child(
-                    div()
-                        .id(format!("feedback-text-{id}"))
-                        .debug_selector(|| "feedback-textbox".into())
-                        .absolute()
-                        .left(px(at.0 * w))
-                        .top(px(at.1 * h))
-                        .max_w(px((w - at.0 * w).max(1.0)))
-                        .text_size(px(16.0))
-                        .line_height(px(22.0))
-                        .text_color(cx.theme().colors.chart[*color])
-                        .cursor_pointer()
-                        .occlude()
-                        .flex()
-                        .flex_col()
-                        .children(text.split('\n').map(|line| div().child(line.to_owned())))
-                        .on_click(
-                            cx.listener(move |this, _, window, cx| this.edit(&id, window, cx)),
-                        ),
-                );
+                let _ = (at, text, color);
+                layer = layer.child(self.textbox(a, window, cx));
             } else {
                 layer = layer.child(self.marker(&a.id, a.index, bounds, window, cx));
             }
@@ -1291,12 +1328,16 @@ impl AnnotationOverlay {
         if self.draft.is_some() {
             layer = layer.child(self.panel(window, cx));
         }
+        if let Some(popup) = self.mention_popup(window, cx) {
+            layer = layer.child(popup);
+        }
         if !self.banner && !self.toolbar_hidden {
             layer = layer.child(self.toolbar(window, cx));
         }
         if self.settings_open || self.review_open {
             layer = layer.child(self.sheet(window, cx));
         }
+        layer = layer.child(self.annotation_context_layer(cx));
         let scope = FocusScope::new(&self.focus)
             .size_full()
             .child(layer)
@@ -1319,6 +1360,18 @@ impl AnnotationOverlay {
                     .relative()
                     .w(px(w))
                     .h(px(h))
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
+                            if this.settings_open || this.review_open {
+                                return;
+                            }
+                            if let Some(id) = this.shape_at(event.position, window) {
+                                this.show_annotation_menu(&id, event.position, window, cx);
+                                cx.stop_propagation();
+                            }
+                        }),
+                    )
                     .on_drag_move(cx.listener(
                         move |this, event: &DragMoveEvent<FeedbackDrag>, window, cx| {
                             if event.drag(cx).owner == owner {
@@ -1361,6 +1414,10 @@ impl AnnotationOverlay {
                     )
                     .capture_key_down(cx.listener(
                         |this, event: &gpui::KeyDownEvent, window, cx| {
+                            if event.keystroke.key == "escape" && this.take_mention_escape() {
+                                cx.stop_propagation();
+                                return;
+                            }
                             if event.keystroke.key == "escape"
                                 && (this.settings_open || this.review_open)
                             {
@@ -1373,7 +1430,9 @@ impl AnnotationOverlay {
                             {
                                 this.stroke.clear();
                                 this.toolbar_drag = None;
-                                if this.pin_drag.take().is_some() {
+                                if this.pin_drag.take().is_some()
+                                    | this.textbox_drag.take().is_some()
+                                {
                                     if let Ok(session) = this.store.session(&this.session.id) {
                                         this.session = session;
                                     }
@@ -1393,7 +1452,7 @@ impl AnnotationOverlay {
         )
     }
 
-    fn marker(
+    pub(super) fn marker(
         &self,
         id: &str,
         index: u64,
@@ -1406,10 +1465,12 @@ impl AnnotationOverlay {
             bounds.x + bounds.width / 2.0,
             bounds.y + bounds.height / 2.0,
         );
+        let scale = self.pin_scale(&id, window, cx);
         let side = cx
             .theme()
             .control_height(ControlSize::Lg)
-            .to_pixels(window.rem_size());
+            .to_pixels(window.rem_size())
+            * scale;
         let focus = window
             .use_keyed_state(format!("feedback-marker-focus-{id}"), cx, |_, cx| {
                 cx.focus_handle()
@@ -1422,14 +1483,16 @@ impl AnnotationOverlay {
             .annotations
             .iter()
             .find(|n| n.id == id)
-            .and_then(|n| n.feedback.shape.as_ref())
-            .map_or(cx.theme().colors.chart[self.color], |s| {
-                cx.theme().colors.chart[s.color()]
+            .map_or(cx.theme().colors.chart[self.color], |note| {
+                cx.theme().colors.chart[note.annotation_color()]
             });
         let drag_id = id.clone();
+        let menu_id = id.clone();
         let drag_owner = cx.entity().downgrade();
         let owner = cx.entity_id();
         let button = number_badge(index.to_string(), ControlSize::Lg, cx)
+            .size(side)
+            .text_size(cx.theme().text_size(TextSize::Sm) * scale)
             .bg(amber)
             .debug_selector(move || format!("feedback-marker-number-{index}"))
             .id(format!("feedback-marker-{id}"))
@@ -1445,19 +1508,54 @@ impl AnnotationOverlay {
                         return;
                     }
                     if let Ok(note) = this.store.annotation(&drag_id) {
+                        if matches!(note.feedback.shape, Some(AnnotationShape::Text { .. })) {
+                            this.begin_textbox_drag(&drag_id, window, cx);
+                            this.advance_drag(window.mouse_position(), window, cx);
+                            return;
+                        }
                         let (_, h) = viewport(window);
-                        let p = normalized(window.mouse_position(), window);
+                        let p = normalized(
+                            this.annotation_press
+                                .take()
+                                .unwrap_or(window.mouse_position()),
+                            window,
+                        );
                         let offset = (
                             p.0 - note.feedback.x / 100.0,
                             p.1 - note.feedback.y / h.max(1.0),
                         );
                         this.pin_drag = Some((note, offset));
+                        this.advance_drag(window.mouse_position(), window, cx);
                     }
                 });
                 cx.new(|_| EmptyView)
             })
-            .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
-            .on_click(cx.listener(move |this, _, window, cx| this.edit(&id, window, cx)));
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, event: &gpui::MouseDownEvent, window, _| {
+                    this.annotation_press = Some(event.position);
+                    window.prevent_default();
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
+                    this.show_annotation_menu(&menu_id, event.position, window, cx);
+                    cx.stop_propagation();
+                }),
+            )
+            .on_click(
+                cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
+                    if this.session.annotations.iter().any(|n| {
+                        n.id == id && matches!(n.feedback.shape, Some(AnnotationShape::Text { .. }))
+                    }) && event.click_count() < 2
+                    {
+                        this.select_textbox(&id, window, cx);
+                    } else {
+                        this.edit(&id, window, cx);
+                    }
+                }),
+            );
         let at = centered_panel(center, (side.into(), side.into()), viewport(window), 0.0);
         div()
             .absolute()
