@@ -31,8 +31,7 @@
   </p>
 </div>
 
-> **Version: 0.5.1.** Pre-1.0: the API can change between minor releases, so
-> pin the version. Debug builds only — release builds expose no annotation API.
+> **Version: 6.0.0.** Debug builds only — release builds expose no annotation API.
 > Pinned to `gpui-pre =0.3.8`.
 
 <!-- TABLE OF CONTENTS -->
@@ -167,7 +166,8 @@ The [consumer example](examples/consumer/README.md) keeps all of this in one
 
 ### Inspect and annotate
 
-Choose **Inspect**, **Box**, **Arrow**, or **Pen**, then select an element or draw
+Turn **Annotations on**, then choose **Inspect**, **Box**, **Arrow**, **Pen**,
+**Comment**, or **Textbox**. Select an element or draw
 on the screen. Inspect surfaces the element's ID, label, bounds, and Rust call
 site.
 
@@ -177,6 +177,22 @@ Draw an arrow (or a box or freehand pen stroke) to point your agent at exactly
 the right spot.
 
 ![Drawing an annotation arrow](docs/assets/annotation-arrow.gif)
+
+While annotation mode is on, use **I / B / A / P / C / T** to select a tool.
+Shortcuts appear on the tool buttons. **Ctrl/Cmd+S** saves the current draft;
+**Ctrl/Cmd+Z** and **Ctrl/Cmd+Shift+Z** undo and redo annotation changes.
+**Delete/Backspace** removes a selected annotation when its text field is not
+being edited. Text fields retain their ordinary typing and text undo behavior.
+
+Textboxes use plain text with one style and size. Click a textbox to edit it;
+saving displays the text directly on the canvas without opening a comment.
+Drag numbered pins to reposition them independently of their drawings.
+
+Include `gpui_agentation::debug_menu()` in your host's `cx.set_menus(...)` list
+to expose the controls in the native **Debug** menu. `Agentation::root` routes
+those menu commands to the active window. **Settings → Toolbar → None** hides
+the embedded toolbar. Toolbar placement persists per application in its notes
+file and is shared by windows mounted against that file.
 
 ### Capture feedback
 
@@ -259,8 +275,8 @@ annotations survive. [Demo details](demo/README.md)
 - [x] Inspect, Box, Arrow, and Pen annotation tools
 - [x] Loopback MCP server plus REST/SSE access
 - [x] Hot reload for rebuild-on-save
-- [ ] Add text annotation tool
-- [ ] Update Comment annotation UX
+- [x] Add text annotation tool
+- [x] Update Comment annotation UX
 - [ ] Add gpui-devtools features from [joris-gallot/gpui-devtools](https://github.com/joris-gallot/gpui-devtools)
 - [ ] Extends AI features from [hexuria/gpui-agent](https://github.com/hexuria/gpui-agent)
 - [ ] Stabilize the API toward 1.0

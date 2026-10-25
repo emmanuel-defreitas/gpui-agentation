@@ -1,5 +1,19 @@
 # Changelog
 
+## 6.0.0 (unreleased)
+
+- Add an explicit annotation mode switch, visible tool shortcuts, save, undo/redo,
+  and undoable deletion; ordinary text entry keeps its editing shortcuts.
+- Add plain textboxes with inline editing and no automatic comment popup.
+- Color comment editors from their annotation and use a comment icon for Comments.
+- Reposition numbered pins without changing their drawings; pin moves are undoable.
+- Persist Banner, Floating, None, and floating coordinates across routes, windows,
+  and restarts using the same app store.
+- Use a transparent banner, theme-aware buttons, a horizontal palette on wide
+  windows, and an MCP toggle prefixed by the official MCP mark.
+- Expose a host-composable Debug menu and route its commands through Agentation.
+- Keep the GPUI/Ely pins, loopback API guards, and debug-only crate boundary.
+
 ## 0.5.1
 
 - Exclude README demonstration GIFs from the Cargo archive to keep it below
