@@ -2,9 +2,10 @@
 
 ## 6.0.0 (unreleased)
 
-- Add an explicit annotation mode switch, visible tool shortcuts, save, undo/redo,
+- Add an explicit annotation mode switch, tool shortcut tooltips, save, undo/redo,
   and undoable deletion; ordinary text entry keeps its editing shortcuts.
-- Add plain textboxes with inline editing and no automatic comment popup.
+- Add plain textboxes with numbered pins, selection bounds, dragging, inline
+  editing and no automatic comment popup.
 - Color comment editors from their annotation and use a comment icon for Comments.
 - Reposition numbered pins without changing their drawings; pin moves are undoable.
 - Persist Banner, Floating, None, and floating coordinates across routes, windows,
@@ -12,8 +13,15 @@
 - Use a transparent banner, theme-aware buttons, a horizontal palette on wide
   windows, and an MCP toggle prefixed by the official MCP mark.
 - Expose a host-composable Debug menu and route its commands through Agentation.
-- Refine the banner with an icon/switch pill, icon-only controls and Ely keycaps;
-  reduce floating comment width by one third and use quieter headers and shadows.
+- Refine the banner with an icon/switch pill, extra padding, icon-only controls
+  and Ely keycaps in tooltips; reduce floating comment width by one third and use
+  smaller placeholders, 50% text opacity, quieter headers and subtle shadows.
+- Mention notes through an @ dropdown with mouse/keyboard selection and animated
+  pin previews; typing a note number previews its pin directly.
+- Add annotation Edit, Delete and Color context menus using AppKit on macOS and
+  themed Ely menus elsewhere, with undo support.
+- Add the Text shape variant and optional persisted Annotation.color field;
+  downstream exhaustive matches and struct literals must account for these.
 - Group native Debug commands with history availability, mode-dependent New/Color,
   toolbar visibility and checked positions, Comments, Settings and GitHub links.
 - Keep the GPUI/Ely pins, loopback API guards, and debug-only crate boundary.

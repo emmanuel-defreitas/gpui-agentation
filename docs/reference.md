@@ -386,10 +386,12 @@ No extra component wrappers are required. See [runner setup and limitations](../
 
 ## Annotation controls
 
-Annotation mode uses an icon-and-switch pill. Banner tools show icons with Ely
-keycaps while mode is on, and retain accessible names and tooltips. Floating
+Annotation mode uses an icon-and-switch pill. Tool shortcuts appear as Ely
+keycaps inside tooltips while mode is on; buttons retain accessible names. The
+banner has extra vertical padding. Floating
 comment panels are 16 rem wide, with smaller headers, icon-only actions and a
-subtle theme shadow. Tool keys are I (Inspect),
+subtle theme shadow. Placeholder text uses the smaller theme size; comment text
+uses 50% opacity. Tool keys are I (Inspect),
 B (Box), A (Arrow), P (Pen), C (Comment), and T (Textbox). These keys override
 host bindings while annotation mode owns focus; text entry keeps character
 input and text undo/redo. Ctrl/Cmd+S saves the current annotation draft.
@@ -400,10 +402,26 @@ An undo that conflicts with an external edit or reply is rejected without
 changing the annotation.
 
 Textboxes store an `AnnotationShape::Text { at, text, color }`, render at 16
-logical pixels, and reopen for direct plain-text editing. They do not open a
-separate comment. Numbered pins can move independently of the underlying shape;
-position changes update the existing percentage-x/logical-y fields and support
-undo/redo.
+logical pixels, and begin with a numbered pin. A single click selects the
+bounding box; double-click or Enter edits the text. Dragging the body or its pin
+moves both together. Saving does not open a separate comment. Other numbered
+pins move independently of the underlying shape. Position changes preserve note
+identity, update percentage-x/logical-y fields and support undo/redo.
+
+Typing `@` in a floating comment opens up to six matching notes from the current
+session. Search by number or comment text; an exact number ranks first. Hovering
+or navigating suggestions previews the corresponding pin with a short scale
+transition. Typing `#12` also previews note 12. Click, Enter or Tab inserts `@#12 `;
+Escape closes the list while keeping the comment open. Motion respects the
+theme's reduced-motion setting.
+
+Right-click any annotation for Edit…, Delete and a checked Color submenu.
+macOS uses an AppKit system context menu; other platforms use the themed Ely
+context menu. Color and Delete actions participate in local undo/redo. The
+optional persisted `Annotation.color` field retains element-note colors without
+changing their annotation type; older records fall back to their shape color.
+Adding this field and the Text shape variant changes public Rust struct/enum
+construction, which is part of this major release.
 
 Compose the native menu with the host's menus:
 

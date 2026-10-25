@@ -179,14 +179,21 @@ the right spot.
 ![Drawing an annotation arrow](docs/assets/annotation-arrow.gif)
 
 While annotation mode is on, use **I / B / A / P / C / T** to select a tool.
-Shortcuts appear as Ely keycaps beside the tool icons. **Ctrl/Cmd+S** saves the current draft;
+Hover a tool to see its shortcut as an Ely keycap in the tooltip. **Ctrl/Cmd+S** saves the current draft;
 **Ctrl/Cmd+Z** and **Ctrl/Cmd+Shift+Z** undo and redo annotation changes.
 **Delete/Backspace** removes a selected annotation when its text field is not
 being edited. Text fields retain their ordinary typing and text undo behavior.
 
-Textboxes use plain text with one style and size. Click a textbox to edit it;
-saving displays the text directly on the canvas without opening a comment.
-Drag numbered pins to reposition them independently of their drawings.
+Textboxes use plain text with one style and size, preceded by a numbered pin.
+Click to select and show the bounding box; drag the text or pin to move both.
+Double-click or press Enter on the selected textbox to edit it. Saving displays
+the text directly on the canvas without opening a comment.
+Other numbered pins can be dragged independently of their drawings.
+
+In a floating comment, type **@** to choose an existing note or **#12** to
+preview pin 12. Hovering a suggestion or using the arrow keys animates its pin;
+click, Enter or Tab inserts an **@#12** reference. Escape dismisses the list.
+Right-click an annotation for Edit, Delete and Color actions, with undo support.
 
 Include `gpui_agentation::debug_menu()` in your host's `cx.set_menus(...)` list
 to expose the controls in the native **Debug** menu. `Agentation::root` routes
