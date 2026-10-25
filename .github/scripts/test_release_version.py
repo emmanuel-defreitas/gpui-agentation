@@ -210,6 +210,7 @@ class ReleaseVersionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "at least 2.0.0"):
             release.next_version(self.root)
         self.release_plan("1.2.3", "6.0.0")
+        release.prepare(self.root, "7.0.0")
         with self.assertRaisesRegex(ValueError, "Promotion requires 6.0.0"):
             release.check_release(self.root)
 
