@@ -1,6 +1,6 @@
 # Development reference
 
-Detailed native integration and API behavior for gpui-agentation 6.0.0.
+Detailed native integration and API behavior for gpui-agentation 0.6.0.
 Start with the [README](../README.md) or [consumer setup guide](consumer-setup.md).
 
 Native feedback for GPUI development builds: select a registered element, write
@@ -24,14 +24,14 @@ Its loopback server exposes both REST/SSE and a Streamable HTTP MCP endpoint.
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "6.0.0", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.6.0", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
 Enable `native` and disable default features for a host app:
 
 ```toml
-gpui-agentation = { version = "6.0.0", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.6.0", default-features = false, features = ["native"] }
 ```
 
 Keep `gpui-pre =0.3.8`. Source and assets for Ely revision

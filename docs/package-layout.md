@@ -25,7 +25,7 @@ Use the native feature explicitly:
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "6.0.0", default-features = false, features = ["native"] }
+gpui-agentation = { version = "0.6.0", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
