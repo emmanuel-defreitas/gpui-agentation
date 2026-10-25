@@ -1,6 +1,11 @@
 # Changelog
 
-## 6.0.0 (unreleased)
+## 0.6.0 (2026-10-25)
+
+- Correct the intended release number from 6.0.0 to 0.6.0. The mistaken 6.0.0
+  crate was yanked and its GitHub release and tag removed; the features remain.
+- Advance breaking changes to the next minor version during pre-1.0 development;
+  retain major bumps for breaking changes at 1.0.0 and later.
 
 - Add an explicit annotation mode switch, tool shortcut tooltips, save, undo/redo,
   and undoable deletion; ordinary text entry keeps its editing shortcuts.

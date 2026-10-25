@@ -62,7 +62,7 @@ def next_version(root, revision="HEAD"):
     if re.search(r"BREAKING[\s-]+CHANGE", subjects + "\n" + bodies, re.I) or re.search(
         r"^[a-z]+(?:\([^)]*\))?!:", subjects, re.M
     ):
-        inferred = f"{major + 1}.0.0"
+        inferred = f"0.{minor + 1}.0" if major == 0 else f"{major + 1}.0.0"
     elif re.search(r"^(feat|feature)(\(|:|!)", subjects, re.M | re.I):
         inferred = f"{major}.{minor + 1}.0"
     else:

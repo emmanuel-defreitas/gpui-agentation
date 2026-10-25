@@ -31,7 +31,7 @@
   </p>
 </div>
 
-> **Version: 6.0.0.** Debug builds only — release builds expose no annotation API.
+> **Version: 0.6.0.** Debug builds only — release builds expose no annotation API.
 > Pinned to `gpui-pre =0.3.8`.
 
 <!-- TABLE OF CONTENTS -->
