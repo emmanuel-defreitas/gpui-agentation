@@ -32,6 +32,15 @@ pub enum AnnotationShape {
         /// Ely chart color, zero through three.
         color: usize,
     },
+    /// Plain text at a normalized position, rendered at one fixed size.
+    Text {
+        /// Normalized top-left corner.
+        at: (f32, f32),
+        /// Plain text, at most 8,000 characters.
+        text: String,
+        /// Ely chart color, zero through three.
+        color: usize,
+    },
     /// Point marker.
     Pin {
         /// Normalized position.
@@ -81,7 +90,7 @@ impl AnnotationShape {
                 points: points.clone(),
                 color: *color,
             },
-            Self::Pin { at, color } => Mark::Pin {
+            Self::Text { at, color, .. } | Self::Pin { at, color } => Mark::Pin {
                 at: *at,
                 color: *color,
             },
@@ -93,7 +102,8 @@ impl AnnotationShape {
             Self::Box { color, .. }
             | Self::Arrow { color, .. }
             | Self::Pen { color, .. }
-            | Self::Pin { color, .. } => *color,
+            | Self::Pin { color, .. }
+            | Self::Text { color, .. } => *color,
         }
     }
 
@@ -101,13 +111,14 @@ impl AnnotationShape {
         match self {
             Self::Box { from, to, .. } | Self::Arrow { from, to, .. } => vec![*from, *to],
             Self::Pen { points, .. } => points.clone(),
-            Self::Pin { at, .. } => vec![*at],
+            Self::Pin { at, .. } | Self::Text { at, .. } => vec![*at],
         }
     }
 
     pub(crate) fn valid(&self) -> bool {
         let points = self.points();
-        self.color() < 4
+        !matches!(self, Self::Text { text, .. } if text.trim().is_empty() || text.chars().count() > 8000)
+            && self.color() < 4
             && !points.is_empty()
             && points.len() <= 4096
             && points.iter().all(|p| {
@@ -133,6 +144,22 @@ impl AnnotationShape {
 
     pub(crate) fn hit(&self, at: (f32, f32), viewport: (f32, f32), reach: f32) -> bool {
         let scale = |p: (f32, f32)| (p.0 * viewport.0, p.1 * viewport.1);
+        if let Self::Text {
+            at: origin, text, ..
+        } = self
+        {
+            let origin = scale(*origin);
+            let width = text
+                .lines()
+                .map(|line| line.chars().count())
+                .max()
+                .unwrap_or(1) as f32
+                * 9.0;
+            return at.0 >= origin.0 - reach
+                && at.0 <= origin.0 + width + reach
+                && at.1 >= origin.1 - reach
+                && at.1 <= origin.1 + text.lines().count().max(1) as f32 * 22.0 + reach;
+        }
         if let Self::Pin { at: pin, .. } = self {
             let pin = scale(*pin);
             return (pin.0 - at.0).hypot(pin.1 - at.1) <= reach;

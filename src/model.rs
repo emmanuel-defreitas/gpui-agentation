@@ -43,7 +43,7 @@ pub enum AnnotationStatus {
 }
 
 /// Feedback supplied by the UI or an API client. IDs and timestamps are server-owned.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AnnotationInput {
     /// Human feedback, at most 8,000 characters.
@@ -66,7 +66,7 @@ pub struct AnnotationInput {
 }
 
 /// A persisted note attached to a native element and route.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Annotation {
     /// Stable, one-based number within the route; deleted numbers are not reused.
@@ -102,7 +102,7 @@ pub struct AnnotationPatch {
 }
 
 /// A human or agent response to a note.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadMessage {
     /// Unique message ID.
@@ -116,7 +116,7 @@ pub struct ThreadMessage {
 }
 
 /// A window route's feedback collection, reused after a development restart.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     /// Unique session ID.
@@ -130,7 +130,7 @@ pub struct Session {
 }
 
 /// A sequenced event delivered through the REST/SSE API.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Event {
     /// Monotonic event cursor within this server run.

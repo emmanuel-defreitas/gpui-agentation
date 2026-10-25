@@ -156,6 +156,7 @@ pub(super) fn annotation_icon(shape: Option<&AnnotationShape>) -> IconName {
         Some(AnnotationShape::Arrow { .. }) => IconName::ArrowUpRight,
         Some(AnnotationShape::Pen { .. }) => IconName::PenLine,
         Some(AnnotationShape::Pin { .. }) => IconName::MapPin,
+        Some(AnnotationShape::Text { .. }) => IconName::Type,
     }
 }
 
