@@ -11,7 +11,16 @@ use crate::ely::{
 use gpui::{ClipboardItem, RenderOnce};
 
 impl AnnotationOverlay {
-    fn set_mcp_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
+    pub(super) fn toggle_mcp(&mut self, cx: &mut Context<Self>) {
+        let enabled = if self.mcp_starting {
+            self.mcp_requested
+        } else {
+            self._server.as_ref().is_some_and(Server::is_mcp_enabled)
+        };
+        self.set_mcp_enabled(!enabled, cx);
+    }
+
+    pub(super) fn set_mcp_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
         self.mcp_requested = enabled;
         if self.mcp_starting {
             cx.notify();
@@ -156,14 +165,25 @@ fn settings_content(
     let position_owner = owner.clone();
     let position = SegmentedControl::new(
         "feedback-position",
-        if this.banner { "banner" } else { "floating" },
+        if this.toolbar_hidden {
+            "none"
+        } else if this.banner {
+            "banner"
+        } else {
+            "floating"
+        },
     )
     .segment("floating", "Floating", None)
     .segment("banner", "Banner", None)
+    .segment("none", "None (Debug menu)", None)
     .on_change(move |value, window, cx| {
         close(window, cx);
         position_owner.update(cx, |this, cx| {
-            this.set_toolbar_banner(value == "banner", window, cx)
+            if value == "none" {
+                this.set_toolbar_position(crate::ToolbarPosition::None, cx);
+            } else {
+                this.set_toolbar_banner(value == "banner", window, cx);
+            }
         });
     });
     let copy_owner = owner.clone();

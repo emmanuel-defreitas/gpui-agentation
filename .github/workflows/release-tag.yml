@@ -1,4 +1,4 @@
-# Release tagging — conventional-commit semver bump on next → main merge.
+# Release tagging — reviewed version policy on next → main merge.
 #
 # When the next PR is merged into main (production), compute the next semantic version from
 # the conventional-commit subjects since the last tag:
@@ -6,6 +6,7 @@
 #   - feat:                          → minor
 #   - fix:                           → patch
 #   - anything else                  → patch
+# A committed, baseline-bound release-version.json may select an explicit increase.
 # Then create the vX.Y.Z tag on the merge commit and create a GitHub Release. Release documentation
 # and version manifests are finalized in the reviewed promotion PR so protected main is never mutated.
 #
@@ -59,7 +60,7 @@ jobs:
           notes=$(printf '%s\n' \
             "Release ${new_tag} — promoted from ${MERGE_SHA:0:7} via PR #${PR_NUMBER}." \
             "" \
-            "Release metadata and documentation match the reviewed conventional-commit version." \
+            "Release metadata and documentation match the reviewed release policy." \
             "" \
             "PR: ${PR_URL}")
           gh release create "$new_tag" \

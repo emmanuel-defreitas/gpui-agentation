@@ -21,3 +21,11 @@ and process cleanup approach are retained. Cargo target discovery and the
 settings control channel are Agentation adaptations. The original copyright
 notice and full MIT license are preserved in `src/hot_reload/LICENSE`.
 The crate does not depend on Corpora.
+
+## Model Context Protocol mark
+
+`src/assets/mcp.svg` is the official MCP mark from
+https://github.com/modelcontextprotocol/docs/blob/573dc60c2e7aab2605b29d0bf27194aa7b02e4fb/favicon.svg
+(2024-11-21), distributed under that repository's MIT license.
+Copyright (c) 2024–2025 Anthropic, PBC and contributors.
+The original SVG and full license (`src/assets/MCP-LICENSE`) are preserved.

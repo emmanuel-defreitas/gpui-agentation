@@ -7,6 +7,7 @@ import subprocess
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
+RELEASE_PLAN = ".github/release-version.json"
 STABLE = r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
 V = rf"({STABLE})"
 PATTERNS = [
@@ -54,14 +55,42 @@ def next_version(root, revision="HEAD"):
     latest = max(tags, key=lambda tag: tuple(map(int, tag[1:].split("."))))
     major, minor, patch = map(int, latest[1:].split("."))
     subjects = git(root, "log", "--format=%s", f"{latest}..{revision}")
+    # Repository commit subjects may prefix conventional types with an emoji.
+    subjects = "\n".join(re.sub(r"^[^\w\s]+[ \t]+", "", line)
+                         for line in subjects.splitlines())
     bodies = git(root, "log", "--format=%b", f"{latest}..{revision}")
     if re.search(r"BREAKING[\s-]+CHANGE", subjects + "\n" + bodies, re.I) or re.search(
         r"^[a-z]+(?:\([^)]*\))?!:", subjects, re.M
     ):
-        return f"{major + 1}.0.0"
-    if re.search(r"^(feat|feature)(\(|:|!)", subjects, re.M | re.I):
-        return f"{major}.{minor + 1}.0"
-    return f"{major}.{minor}.{patch + 1}"
+        inferred = f"{major + 1}.0.0"
+    elif re.search(r"^(feat|feature)(\(|:|!)", subjects, re.M | re.I):
+        inferred = f"{major}.{minor + 1}.0"
+    else:
+        inferred = f"{major}.{minor}.{patch + 1}"
+    return planned_version(root, revision, latest[1:], inferred)
+
+
+def planned_version(root, revision, baseline, inferred):
+    # Read the reviewed revision, not an uncommitted or unrelated plan on disk.
+    if not git(root, "ls-tree", "--name-only", revision, "--", RELEASE_PLAN):
+        return inferred
+    plan = json.loads(git(root, "show", f"{revision}:{RELEASE_PLAN}"))
+    if not isinstance(plan, dict) or set(plan) != {"from", "to", "reason"}:
+        raise ValueError(f"{RELEASE_PLAN}: expected from, to and reason")
+    if not all(isinstance(plan[key], str) for key in plan) or not plan["reason"].strip():
+        raise ValueError(f"{RELEASE_PLAN}: versions and a nonempty reason must be strings")
+    previous = stable_version(plan["from"])
+    target = stable_version(plan["to"])
+    version_key = lambda version: tuple(map(int, version.split(".")))
+    if version_key(target) <= version_key(previous):
+        raise ValueError(f"{RELEASE_PLAN}: target must increase the baseline version")
+    if version_key(baseline) >= version_key(target):
+        return inferred  # The explicit release has shipped; ordinary bumps resume.
+    if previous != baseline:
+        raise ValueError(f"{RELEASE_PLAN}: expected baseline {previous}, found {baseline}")
+    if version_key(target) < version_key(inferred):
+        raise ValueError(f"{RELEASE_PLAN}: target must be at least {inferred}")
+    return target
 
 
 def reference_updates(root, version):
@@ -138,7 +167,7 @@ def check_release(root, revision="HEAD"):
     expected = next_version(root, revision)
     if current_version(root) != expected:
         raise ValueError(f"Promotion requires {expected}; run make release-prepare, review and commit the changes before promotion")
-    print(f"Release {expected} matches the conventional-commit promotion version")
+    print(f"Release {expected} matches the reviewed release policy")
 
 
 def prepare(root, version=None):

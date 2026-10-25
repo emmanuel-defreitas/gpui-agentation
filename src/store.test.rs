@@ -363,3 +363,123 @@ fn app_feedback_should_include_every_route_and_status_without_other_apps() {
             .contains("Updated from another route")
     );
 }
+
+#[test]
+fn undo_rejects_concurrent_replies_and_restores_deleted_identity() {
+    let store = Store::memory();
+    let session = store.ensure_session("Undo", "gpui://undo").unwrap();
+    let before = store.add(&session.id, feedback()).unwrap();
+    let mut after = before.clone();
+    after.feedback.comment = "Edited".into();
+    store.replace_note(Some(&before), Some(&after)).unwrap();
+    store.reply(&after.id, "agent", "Concurrent reply").unwrap();
+    assert!(store.replace_note(Some(&after), Some(&before)).is_err());
+    let latest = store.annotation(&after.id).unwrap();
+    assert_eq!(latest.thread.len(), 1);
+    store.replace_note(Some(&latest), None).unwrap();
+    store.replace_note(None, Some(&latest)).unwrap();
+    assert_eq!(store.annotation(&latest.id).unwrap(), latest);
+    assert!(store.next_index(&session.id).unwrap() > latest.index);
+}
+
+#[test]
+fn toolbar_preference_survives_restart_and_is_shared_across_routes() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("notes.json");
+    let store = Store::open(&path).unwrap();
+    let preference = ToolbarPreference {
+        position: ToolbarPosition::None,
+        at: Some((123., 456.)),
+        last_position: ToolbarPosition::Floating,
+    };
+    store.set_toolbar_preference("App", preference).unwrap();
+    let other_window = store.clone();
+    other_window
+        .ensure_session("App", "gpui://another-route")
+        .unwrap();
+    assert_eq!(other_window.toolbar_preference("App").unwrap(), preference);
+    assert_eq!(
+        store.toolbar_preference("Other app").unwrap(),
+        ToolbarPreference::default()
+    );
+    drop(store);
+    drop(other_window);
+    assert_eq!(
+        Store::open(path)
+            .unwrap()
+            .toolbar_preference("App")
+            .unwrap(),
+        preference
+    );
+}
+
+#[test]
+fn textbox_validation_and_restart_preserve_plain_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("text.json");
+    let store = Store::open(&path).unwrap();
+    let session = store.ensure_session("Text", "gpui://text").unwrap();
+    let mut input = feedback();
+    input.shape = Some(crate::AnnotationShape::Text {
+        at: (0.2, 0.4),
+        text: "Line 1\nLine 2".into(),
+        color: 3,
+    });
+    let note = store.add(&session.id, input.clone()).unwrap();
+    assert_eq!(
+        Store::open(&path).unwrap().annotation(&note.id).unwrap(),
+        note
+    );
+    input.shape = Some(crate::AnnotationShape::Text {
+        at: (f32::NAN, 0.4),
+        text: "Invalid".into(),
+        color: 0,
+    });
+    assert!(store.add(&session.id, input).is_err());
+}
+
+#[test]
+fn api_comment_updates_change_the_visible_textbox_text() {
+    let store = Store::memory();
+    let session = store.ensure_session("Text", "gpui://text").unwrap();
+    let mut input = feedback();
+    input.comment = "Original".into();
+    input.shape = Some(crate::AnnotationShape::Text {
+        at: (0.2, 0.4),
+        text: "Original".into(),
+        color: 2,
+    });
+    let note = store.add(&session.id, input).unwrap();
+    let updated = store
+        .update(
+            &note.id,
+            AnnotationPatch {
+                comment: Some("Updated via MCP".into()),
+                status: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(updated.feedback.comment, "Updated via MCP");
+    assert!(
+        matches!(&updated.feedback.shape, Some(crate::AnnotationShape::Text {
+        text, at: (0.2, 0.4), color: 2,
+    }) if text == "Updated via MCP")
+    );
+    assert_eq!(store.annotation(&note.id).unwrap(), updated);
+}
+
+#[test]
+fn annotation_color_persists_without_turning_element_feedback_into_a_drawing() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("colors.json");
+    let store = Store::open(&path).unwrap();
+    let session = store.ensure_session("Color", "gpui://color").unwrap();
+    let note = store.add_colored(&session.id, feedback(), Some(3)).unwrap();
+    assert_eq!(note.color, Some(3));
+    assert!(note.feedback.shape.is_none());
+    assert_eq!(
+        Store::open(path).unwrap().annotation(&note.id).unwrap(),
+        note
+    );
+    assert!(store.add_colored(&session.id, feedback(), Some(4)).is_err());
+}

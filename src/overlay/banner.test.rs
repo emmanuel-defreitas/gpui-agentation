@@ -37,6 +37,41 @@ fn settings_trigger_should_open_sheet_and_escape_should_restore_focus(cx: &mut T
 }
 
 #[gpui::test]
+fn mode_switch_toggles_once_and_keycaps_follow_annotation_mode(cx: &mut TestAppContext) {
+    let (overlay, cx) = overlay(cx);
+    draw(cx);
+    assert!(cx.debug_bounds("feedback-shortcut-b").is_none());
+    for active in [true, false] {
+        let pill = cx.debug_bounds("feedback-mode").unwrap();
+        cx.simulate_click(
+            gpui::point(pill.right() - gpui::px(12.), pill.center().y),
+            Modifiers::none(),
+        );
+        draw(cx);
+        cx.update(|_, cx| assert_eq!(overlay.read(cx).active, active));
+        assert!(
+            cx.debug_bounds("feedback-shortcut-b").is_none(),
+            "keycaps are not inside toolbar buttons"
+        );
+        let tool = cx.debug_bounds("banner-box").unwrap();
+        cx.simulate_mouse_move(tool.center(), None, Modifiers::none());
+        cx.executor().advance_clock(Duration::from_millis(800));
+        draw(cx);
+        assert_eq!(
+            cx.debug_bounds("feedback-shortcut-b").is_some(),
+            active,
+            "keycap belongs to the tooltip"
+        );
+        cx.simulate_mouse_move(
+            gpui::point(gpui::px(1.), gpui::px(400.)),
+            None,
+            Modifiers::none(),
+        );
+        draw(cx);
+    }
+}
+
+#[gpui::test]
 fn banner_tools_and_trailing_actions_should_remain_reachable_while_annotating(
     cx: &mut TestAppContext,
 ) {
@@ -167,6 +202,7 @@ fn banner_should_reserve_space_below_custom_titlebar_and_reflow_when_position_ch
 #[gpui::test]
 fn palette_should_open_from_single_swatch_select_color_and_dismiss(cx: &mut TestAppContext) {
     let (overlay, cx) = overlay(cx);
+    cx.simulate_resize(gpui::size(gpui::px(640.), gpui::px(620.)));
     draw(cx);
     assert!(cx.debug_bounds("banner-palette-color-2").is_none());
     let trigger = cx.debug_bounds("banner-palette-trigger").unwrap();

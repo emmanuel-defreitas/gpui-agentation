@@ -1,8 +1,13 @@
 use super::surface_button::SurfaceButton;
 use super::*;
 use crate::ely::{
-    data_display::Presence, forms::ColorSwatch, media::Tool, messaging::OnlineStatus,
-    overlays::Popover, primitives::IconName, theme::ActiveTheme,
+    data_display::Presence,
+    forms::{ColorSwatch, Switch},
+    media::Tool,
+    messaging::OnlineStatus,
+    overlays::Popover,
+    primitives::IconName,
+    theme::ActiveTheme,
 };
 
 impl AnnotationOverlay {
@@ -12,40 +17,152 @@ impl AnnotationOverlay {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.banner = banner;
+        self.set_toolbar_position(
+            if banner {
+                crate::ToolbarPosition::Banner
+            } else {
+                crate::ToolbarPosition::Floating
+            },
+            cx,
+        );
+    }
+
+    pub(super) fn set_toolbar_position(
+        &mut self,
+        position: crate::ToolbarPosition,
+        cx: &mut Context<Self>,
+    ) {
+        let preference = crate::store::ToolbarPreference {
+            position,
+            at: self.toolbar_at,
+            last_position: if position == crate::ToolbarPosition::None {
+                if self.banner {
+                    crate::ToolbarPosition::Banner
+                } else {
+                    crate::ToolbarPosition::Floating
+                }
+            } else {
+                position
+            },
+        };
+        if let Err(error) = self
+            .store
+            .set_toolbar_preference(&self.session.app_name, preference)
+        {
+            self.notice = error.to_string();
+            cx.notify();
+            return;
+        }
+        if position != crate::ToolbarPosition::None {
+            self.banner = position == crate::ToolbarPosition::Banner;
+        }
+        self.toolbar_hidden = position == crate::ToolbarPosition::None;
         self.toolbar_drag = None;
         self.toolbar_width = None;
         cx.notify();
     }
 
+    pub(super) fn persist_toolbar(&mut self, cx: &mut Context<Self>) {
+        let position = if self.toolbar_hidden {
+            crate::ToolbarPosition::None
+        } else if self.banner {
+            crate::ToolbarPosition::Banner
+        } else {
+            crate::ToolbarPosition::Floating
+        };
+        if let Err(error) = self.store.set_toolbar_preference(
+            &self.session.app_name,
+            crate::store::ToolbarPreference {
+                position,
+                at: self.toolbar_at,
+                last_position: if self.banner {
+                    crate::ToolbarPosition::Banner
+                } else {
+                    crate::ToolbarPosition::Floating
+                },
+            },
+        ) {
+            self.notice = error.to_string();
+            cx.notify();
+        }
+    }
+
     pub(super) fn banner_toolbar(
         &self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        let mut tools = div().flex().flex_wrap().items_center().gap_1();
+        let mode_owner = cx.entity().downgrade();
+        let mut tools = div()
+            .flex()
+            .flex_wrap()
+            .max_w(window.viewport_size().width - gpui::px(24.0))
+            .items_center()
+            .gap_1()
+            .child(
+                div()
+                    .id("feedback-mode")
+                    .debug_selector(|| "feedback-mode".into())
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_full()
+                    .bg(cx.theme().colors.surface)
+                    .tooltip(crate::ely::primitives::Tooltip::rich(|_, _| {
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child("Annotation mode")
+                            .child(crate::ely::typography::Kbd::new(
+                                super::commands::shortcut("toggle").unwrap(),
+                            ))
+                            .into_any_element()
+                    }))
+                    .child(
+                        crate::ely::primitives::Icon::new(IconName::Power)
+                            .size(crate::ely::theme::IconSize::Sm),
+                    )
+                    .on_mouse_down(gpui::MouseButton::Left, |_, window, _| {
+                        window.prevent_default()
+                    })
+                    .on_click(cx.listener(|this, _, window, cx| this.toggle(window, cx)))
+                    .child(
+                        Switch::new("feedback-mode-switch", self.active)
+                            .name("Annotation mode")
+                            .on_change(move |_, window, cx| {
+                                let _ = mode_owner.update(cx, |this, cx| this.toggle(window, cx));
+                                cx.stop_propagation();
+                            }),
+                    ),
+            );
         for (id, tool, icon, label) in [
             ("inspect", None, IconName::Crosshair, "Inspect"),
             ("box", Some(Tool::Box), IconName::Square, "Box"),
             ("arrow", Some(Tool::Arrow), IconName::ArrowUpRight, "Arrow"),
             ("pen", Some(Tool::Pen), IconName::PenLine, "Pen"),
+            (
+                "comment",
+                Some(Tool::Pin),
+                IconName::MessageSquare,
+                "Comment",
+            ),
+            ("text", Some(Tool::Select), IconName::Type, "Textbox"),
         ] {
             tools = tools.child(
                 div().debug_selector(move || format!("banner-{id}")).child(
                     SurfaceButton::new(
                         format!("feedback-banner-tool-{id}"),
-                        if tool.is_none() && self.active && self.tool.is_none() {
-                            "Stop"
-                        } else {
-                            label
-                        },
-                        if tool.is_none() && self.active && self.tool.is_none() {
-                            IconName::Square
-                        } else {
-                            icon
-                        },
+                        label,
+                        icon,
                         self.active && self.tool == tool,
                     )
+                    .icon_only()
+                    .when(self.active, |button| {
+                        button.shortcut(super::surface::tool_shortcut(tool).to_ascii_lowercase())
+                    })
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.choose_tool(tool, window, cx);
                     })),
@@ -106,7 +223,26 @@ impl AnnotationOverlay {
                 colors
             },
         );
-        tools = tools.child(colors);
+        if f32::from(window.viewport_size().width) >= 760.0 {
+            for color in 0..4 {
+                let owner = cx.entity().downgrade();
+                tools = tools.child(
+                    ColorSwatch::new(
+                        ("feedback-banner-color", color),
+                        cx.theme().colors.chart[color],
+                    )
+                    .selected(self.color == color)
+                    .on_click(move |_, cx| {
+                        let _ = owner.update(cx, |this, cx| {
+                            this.color = color;
+                            cx.notify();
+                        });
+                    }),
+                );
+            }
+        } else {
+            tools = tools.child(colors);
+        }
         let count = self
             .store
             .app_annotations(&self.session.app_name)
@@ -118,6 +254,8 @@ impl AnnotationOverlay {
             IconName::MessageSquare,
             false,
         )
+        .icon_only()
+        .shortcut(super::commands::shortcut("comments").unwrap())
         .on_click(cx.listener(|this, _, window, cx| {
             this.open_sheet(false, window, cx);
         }));
@@ -131,7 +269,16 @@ impl AnnotationOverlay {
         };
         let status = div()
             .id("feedback-banner-mcp-status")
-            .role(gpui::Role::Status)
+            .role(gpui::Role::Button)
+            .tab_index(0)
+            .cursor_pointer()
+            .on_click(cx.listener(|this, _, _, cx| this.toggle_mcp(cx)))
+            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
+                if matches!(event.keystroke.key.as_str(), "space" | "enter") {
+                    this.toggle_mcp(cx);
+                    cx.stop_propagation();
+                }
+            }))
             .aria_label(format!("MCP {status}"))
             .debug_selector(|| "banner-mcp-status".into())
             .flex()
@@ -145,13 +292,30 @@ impl AnnotationOverlay {
                     .overflow_hidden()
                     .child(OnlineStatus::new(presence)),
             )
-            .child(format!("MCP {status}"));
+            .child(
+                gpui::svg()
+                    .path("agentation/mcp.svg")
+                    .size(gpui::rems(1.0))
+                    .text_color(cx.theme().colors.fg),
+            )
+            .tooltip(crate::ely::primitives::Tooltip::rich(move |_, _| {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(format!("MCP {status}"))
+                    .child(crate::ely::typography::Kbd::new(
+                        super::commands::shortcut("mcp").unwrap(),
+                    ))
+                    .into_any_element()
+            }));
         let trailing = div()
             .flex()
             .items_center()
             .gap_1()
             .ml_auto()
             .flex_none()
+            .child(self.history_controls(cx))
             .child(status)
             .child(
                 div()
@@ -170,6 +334,7 @@ impl AnnotationOverlay {
                             false,
                         )
                         .icon_only()
+                        .shortcut(super::commands::shortcut("settings").unwrap())
                         .on_click(
                             cx.listener(|this, _, window, cx| this.open_sheet(true, window, cx)),
                         ),
@@ -187,9 +352,8 @@ impl AnnotationOverlay {
             .items_center()
             .gap_2()
             .px_3()
-            .py_1()
-            .bg(cx.theme().colors.fg)
-            .text_color(cx.theme().colors.bg)
+            .py_2()
+            .text_color(cx.theme().colors.fg)
             .border_b_1()
             .border_color(cx.theme().colors.border)
             .child(tools)

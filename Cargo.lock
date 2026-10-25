@@ -2422,7 +2422,7 @@ dependencies = [
 
 [[package]]
 name = "gpui-agentation"
-version = "0.5.1"
+version = "6.0.0"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
