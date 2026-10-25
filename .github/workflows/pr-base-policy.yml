@@ -9,7 +9,7 @@ name: PR Base-Branch Policy
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, edited, reopened, synchronize]
 
 permissions:
   pull-requests: write   # comment, reassign base, close
@@ -22,6 +22,8 @@ jobs:
       - name: Enforce base-branch policy
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           BASE_REF: ${{ github.base_ref }}
@@ -77,6 +79,15 @@ jobs:
             gh pr edit "$PR_NUMBER" --base dev
             echo "Reassigned base next → dev on PR #$PR_NUMBER."
             exit 0
+          fi
+
+          # The approved v6 stack may retain its parent within this repository.
+          if [ "$HEAD_REPO" = "$GH_REPO" ]; then
+            case "$HEAD_REF:$BASE_REF" in
+              ai/v6-02-annotation-tools:ai/v6-01-annotation-model|release/v6.0.0:ai/v6-02-annotation-tools)
+                echo "Approved v6 stack parent — allowed."
+                exit 0 ;;
+            esac
           fi
 
           if [ "$BASE_REF" != "dev" ]; then

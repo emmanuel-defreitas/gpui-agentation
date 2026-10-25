@@ -37,9 +37,32 @@ pub enum Error {
 struct Data {
     #[serde(default)]
     next_indexes: HashMap<String, u64>,
+    #[serde(default)]
+    toolbar_preferences: HashMap<String, ToolbarPreference>,
     sessions: Vec<Session>,
     events: VecDeque<Event>,
     revision: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+pub(crate) struct ToolbarPreference {
+    pub position: ToolbarPosition,
+    pub at: Option<(f32, f32)>,
+    #[serde(default)]
+    pub last_position: ToolbarPosition,
+}
+
+/// Where Agentation's controls are displayed.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ToolbarPosition {
+    /// Inline strip above application content.
+    #[default]
+    Banner,
+    /// Draggable floating controls.
+    Floating,
+    /// Use the host's Debug menu without an embedded toolbar.
+    None,
 }
 
 /// Shared feedback storage. Successful mutations are durable before being published.
@@ -164,7 +187,19 @@ impl Store {
 
     /// Add validated feedback to a session.
     pub fn add(&self, session_id: &str, input: AnnotationInput) -> Result<Annotation, Error> {
+        self.add_colored(session_id, input, None)
+    }
+
+    pub(crate) fn add_colored(
+        &self,
+        session_id: &str,
+        input: AnnotationInput,
+        color: Option<usize>,
+    ) -> Result<Annotation, Error> {
         validate(&input)?;
+        if color.is_some_and(|color| color >= 4) {
+            return Err(Error::Invalid("invalid annotation color".into()));
+        }
         self.mutate(|data| {
             let session = data
                 .sessions
@@ -185,6 +220,7 @@ impl Store {
                 timestamp: now(),
                 status: AnnotationStatus::Pending,
                 kind: "feedback".into(),
+                color,
                 feedback: input,
                 thread: vec![],
             };
@@ -216,12 +252,102 @@ impl Store {
         }
         self.change(id, "annotation.updated", |a| {
             if let Some(comment) = patch.comment {
+                if let Some(crate::AnnotationShape::Text { text, .. }) = &mut a.feedback.shape {
+                    *text = comment.clone();
+                }
                 a.feedback.comment = comment;
             }
             if let Some(status) = patch.status {
                 a.status = status;
             }
             Ok(())
+        })
+    }
+
+    pub(crate) fn toolbar_preference(&self, app: &str) -> Result<ToolbarPreference, Error> {
+        Ok(self
+            .data
+            .lock()
+            .map_err(|_| Error::Poisoned)?
+            .toolbar_preferences
+            .get(app)
+            .copied()
+            .unwrap_or_default())
+    }
+
+    pub(crate) fn set_toolbar_preference(
+        &self,
+        app: &str,
+        preference: ToolbarPreference,
+    ) -> Result<(), Error> {
+        if preference
+            .at
+            .is_some_and(|(x, y)| !x.is_finite() || !y.is_finite())
+        {
+            return Err(Error::Invalid("invalid toolbar position".into()));
+        }
+        self.mutate(|data| {
+            data.toolbar_preferences.insert(app.to_string(), preference);
+            Ok((
+                (),
+                Some((
+                    "preferences.updated",
+                    String::new(),
+                    serde_json::to_value(preference)?,
+                )),
+            ))
+        })
+    }
+
+    // Compare-and-swap a single note. Undo must never overwrite concurrent MCP
+    // replies, status changes, or edits made from another window.
+    pub(crate) fn replace_note(
+        &self,
+        expected: Option<&Annotation>,
+        replacement: Option<&Annotation>,
+    ) -> Result<(), Error> {
+        let note = expected.or(replacement).ok_or(Error::NotFound)?;
+        if let Some(next) = replacement {
+            validate(&next.feedback)?;
+            if next.color.is_some_and(|color| color >= 4) {
+                return Err(Error::Invalid("invalid annotation color".into()));
+            }
+            if next.id != note.id || next.session_id != note.session_id || next.index != note.index
+            {
+                return Err(Error::Invalid("annotation identity changed".into()));
+            }
+        }
+        self.mutate(|data| {
+            let session = data
+                .sessions
+                .iter_mut()
+                .find(|s| s.id == note.session_id)
+                .ok_or(Error::NotFound)?;
+            let current = session.annotations.iter().find(|a| a.id == note.id);
+            if current != expected {
+                return Err(Error::Invalid(
+                    "Annotation changed elsewhere; undo/redo was not applied".into(),
+                ));
+            }
+            if current.is_none() && session.annotations.len() >= 2000 {
+                return Err(Error::Invalid("annotation limit reached".into()));
+            }
+            session.annotations.retain(|a| a.id != note.id);
+            let (kind, value) = if let Some(next) = replacement {
+                session.annotations.push(next.clone());
+                session.annotations.sort_by_key(|a| a.index);
+                (
+                    if expected.is_some() {
+                        "annotation.updated"
+                    } else {
+                        "annotation.created"
+                    },
+                    serde_json::to_value(next)?,
+                )
+            } else {
+                ("annotation.deleted", serde_json::json!({"id": note.id}))
+            };
+            Ok(((), Some((kind, session.id.clone(), value))))
         })
     }
 

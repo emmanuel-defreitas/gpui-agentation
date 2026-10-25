@@ -13,6 +13,7 @@ pub(super) struct SurfaceButton {
     colors: Option<(gpui::Hsla, gpui::Hsla)>,
     disabled: bool,
     icon_only: bool,
+    shortcut: Option<gpui::SharedString>,
     size: ControlSize,
     handler: Option<Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App)>>,
 }
@@ -31,6 +32,7 @@ impl SurfaceButton {
             colors: None,
             disabled: false,
             icon_only: false,
+            shortcut: None,
             size: ControlSize::Sm,
             handler: None,
         }
@@ -45,6 +47,10 @@ impl SurfaceButton {
     }
     pub(super) fn icon_only(mut self) -> Self {
         self.icon_only = true;
+        self
+    }
+    pub(super) fn shortcut(mut self, shortcut: impl Into<gpui::SharedString>) -> Self {
+        self.shortcut = Some(shortcut.into());
         self
     }
     pub(super) fn on_click(
@@ -66,9 +72,9 @@ impl RenderOnce for SurfaceButton {
         let theme = cx.theme();
         let (background, foreground) = self.colors.unwrap_or({
             if self.selected {
-                (theme.colors.bg, theme.colors.fg)
+                (theme.colors.accent, theme.colors.on_accent)
             } else {
-                (theme.colors.fg, theme.colors.bg)
+                (theme.colors.surface, theme.colors.fg)
             }
         });
         let (hover, pressed) = if self.colors.is_some() {
@@ -95,7 +101,7 @@ impl RenderOnce for SurfaceButton {
             .flex_none()
             .h(theme.control_height(self.size))
             .px_2()
-            .when(self.icon_only, |root| {
+            .when(self.icon_only || self.shortcut.is_some(), |root| {
                 root.w(theme.control_height(self.size)).px_0()
             })
             .border_1()
@@ -106,7 +112,27 @@ impl RenderOnce for SurfaceButton {
             .bg(background)
             .text_color(foreground)
             .child(Icon::new(self.icon).size(IconSize::Sm).color(foreground))
-            .when(!self.icon_only, |root| root.child(self.label))
+            .when(self.icon_only, |root| {
+                let label = self.label.clone();
+                let shortcut = self.shortcut.clone();
+                root.tooltip(crate::ely::primitives::Tooltip::rich(move |_, _| {
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(label.clone())
+                        .when_some(shortcut.clone(), |tip, keys| {
+                            let selector = format!("feedback-shortcut-{keys}");
+                            tip.child(
+                                div()
+                                    .debug_selector(move || selector.clone())
+                                    .child(crate::ely::typography::Kbd::new(&keys)),
+                            )
+                        })
+                        .into_any_element()
+                }))
+            })
+            .when(!self.icon_only, |root| root.child(self.label.clone()))
             .when(self.disabled, |root| {
                 root.opacity(0.45)
                     .cursor_not_allowed()

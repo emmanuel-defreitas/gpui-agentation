@@ -31,5 +31,6 @@ pub use model::{
     ThreadMessage,
 };
 pub use overlay::AnnotationOverlay;
-pub use store::{Error, Store};
+pub use overlay::commands::{AnnotationCommand, debug_menu};
+pub use store::{Error, Store, ToolbarPosition};
 pub use target::{begin_frame, target};

@@ -1,6 +1,6 @@
 # Development reference
 
-Detailed native integration and API behavior for gpui-agentation 0.5.1.
+Detailed native integration and API behavior for gpui-agentation 6.0.0.
 Start with the [README](../README.md) or [consumer setup guide](consumer-setup.md).
 
 Native feedback for GPUI development builds: select a registered element, write
@@ -24,14 +24,14 @@ Its loopback server exposes both REST/SSE and a Streamable HTTP MCP endpoint.
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "0.5.1", default-features = false, features = ["native"] }
+gpui-agentation = { version = "6.0.0", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 ```
 
 Enable `native` and disable default features for a host app:
 
 ```toml
-gpui-agentation = { version = "0.5.1", default-features = false, features = ["native"] }
+gpui-agentation = { version = "6.0.0", default-features = false, features = ["native"] }
 ```
 
 Keep `gpui-pre =0.3.8`. Source and assets for Ely revision
@@ -126,8 +126,8 @@ saved notes stay with their route. Keep one app process per store file.
 
 ## Settings
 
-**Position** offers **Banner** (the default) and **Floating**. Position is per
-overlay and resets on restart. Banner mode uses the main app's layout and works
+**Position** offers **Banner** (the default), **Floating**, and **None**. Position
+persists per application and notes store across windows and restarts. Banner mode uses the main app's layout and works
 with native or custom titlebars. It does not create an additional native window.
 Comments opens a Sheet in Banner mode and a popover in Floating mode.
 The Comments sheet shares the compact sunken header used by Settings. Its rows
@@ -383,3 +383,82 @@ See [ORIGIN.md](../ORIGIN.md) for the source snapshot and license attribution.
 Run `make dev`, then enable **Settings → Hot reload → Server status**. The bundled
 Python 3 supervisor rebuilds on save and restarts only after a successful build.
 No extra component wrappers are required. See [runner setup and limitations](../demo/README.md#hot-reload).
+
+## Annotation controls
+
+Annotation mode uses an icon-and-switch pill. Tool shortcuts appear as Ely
+keycaps inside tooltips while mode is on; buttons retain accessible names. The
+banner has extra vertical padding. Floating
+comment panels are 16 rem wide, with smaller headers, icon-only actions and a
+subtle theme shadow. Placeholder text uses the smaller theme size; comment text
+uses 50% opacity. Tool keys are I (Inspect),
+B (Box), A (Arrow), P (Pen), C (Comment), and T (Textbox). These keys override
+host bindings while annotation mode owns focus; text entry keeps character
+input and text undo/redo. Ctrl/Cmd+S saves the current annotation draft.
+Ctrl/Cmd+Z undoes annotation operations, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes them,
+and Delete/Backspace removes a selected note outside its text editor. Undo
+history is bounded to 100 local operations per window and resets on navigation.
+An undo that conflicts with an external edit or reply is rejected without
+changing the annotation.
+
+Textboxes store an `AnnotationShape::Text { at, text, color }`, render at 16
+logical pixels, and begin with a numbered pin. A single click selects the
+bounding box; double-click or Enter edits the text. Dragging the body or its pin
+moves both together. Saving does not open a separate comment. Other numbered
+pins move independently of the underlying shape. Position changes preserve note
+identity, update percentage-x/logical-y fields and support undo/redo.
+
+Typing `@` in a floating comment opens up to six matching notes from the current
+session. Search by number or comment text; an exact number ranks first. Hovering
+or navigating suggestions previews the corresponding pin with a short scale
+transition. Typing `#12` also previews note 12. Click, Enter or Tab inserts `@#12 `;
+Escape closes the list while keeping the comment open. Motion respects the
+theme's reduced-motion setting.
+
+Right-click any annotation for Edit…, Delete and a checked Color submenu.
+macOS uses an AppKit system context menu; other platforms use the themed Ely
+context menu. Color and Delete actions participate in local undo/redo. The
+optional persisted `Annotation.color` field retains element-note colors without
+changing their annotation type; older records fall back to their shape color.
+Adding this field and the Text shape variant changes public Rust struct/enum
+construction, which is part of this major release.
+
+Compose the native menu with the host's menus:
+
+```rust
+#[cfg(debug_assertions)]
+cx.set_menus(vec![
+    app_menu, // The host's existing application menu, including its Quit action.
+    gpui_agentation::debug_menu(),
+]);
+```
+
+Include that menu alongside existing menus rather than replacing them.
+Agentation updates only its Debug menu when window state or active window changes.
+`Agentation::root` handles `AnnotationCommand` automatically. Hosts mounting
+`AnnotationOverlay` directly must capture that action on their window root and
+forward it to `AnnotationOverlay::dispatch_command`; see `demo/app.rs`.
+
+Settings offers Banner, Floating, and None. None hides the embedded toolbar,
+so install the Debug menu before choosing it. The selected position and floating
+coordinates are stored per app in the annotations file. Windows mounting the
+same path share a Store and observe preference changes. Independent processes
+should continue to use separate annotation stores.
+
+Debug follows native menu spacing, separators, shortcut columns and checkmarks.
+Undo/Redo reflect each window's history. New and Color are disabled while mode
+is off; Position is disabled while the toolbar is hidden. Show Toolbar restores
+the last visible Banner/Floating position. Settings also exposes a checked
+Annotation Mode command so the tools remain reachable with the toolbar hidden.
+
+Additional menu shortcuts use Command+Option on macOS and Control+Alt elsewhere:
+
+| Keys after those modifiers | Command |
+| --- | --- |
+| A / H | Annotation mode / toolbar visibility |
+| F / B | Floating / Banner |
+| C / S | Comments / Settings |
+| M | Start/stop MCP |
+
+Comments and Settings show/hide with the same command. Report an Issue opens the
+repository's bug-report template; Star on GitHub opens its repository page.

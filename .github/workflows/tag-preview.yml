@@ -1,4 +1,4 @@
-# Tag preview — advisory next-version preview via anothrNick/github-tag-action.
+# Tag preview — read-only preview using the production release calculator.
 #
 # This is a DRY RUN. It computes what the next semver tag *would* be and writes it
 # to the job summary / logs. It never pushes a tag and never creates a release.
@@ -7,14 +7,13 @@
 #   - release-tag.yml          (vX.Y.Z on next → main, validated against Cargo.toml)
 #   - dev-release-candidate.yml / next-preview.yml  (-dev.N / preview tags)
 #
-# github-tag-action bumps from #major/#minor/#patch tokens in commit messages,
-# falling back to DEFAULT_BUMP. It does NOT read conventional-commit subjects, so
-# treat this preview as a rough hint, not the number release-tag.yml will produce.
+# Share conventional-commit and explicit release-plan rules with release-tag.yml.
+# No third-party tagging action or write permission is needed for this preview.
 name: Tag Preview (dry run)
 
 on:
   pull_request:
-    branches: [dev]
+    branches: [dev, ai/v6-01-annotation-model, ai/v6-02-annotation-tools]
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
@@ -29,33 +28,22 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0   # full history + tags are required to compute the bump
-
-      - name: Preview next tag
-        id: tagprev
-        uses: anothrNick/github-tag-action@1.75.0   # pinned; check tags page before bumping
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DRY_RUN: true
-          DEFAULT_BUMP: patch           # matches release-tag.yml's "anything else → patch"
-          DEFAULT_BRANCH: dev           # repo default branch is dev, not main/master
-          RELEASE_BRANCHES: dev         # preview a clean release-style bump
-          TAG_PREFIX: v                 # repo tags use the v prefix (v0.4.2, ...)
-          VERBOSE: true
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Write preview to job summary
         env:
-          NEW_TAG: ${{ steps.tagprev.outputs.new_tag }}
-          PART: ${{ steps.tagprev.outputs.part }}
-          LATEST_TAG: ${{ steps.tagprev.outputs.tag }}
+          PREVIEW_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+          PYTHONDONTWRITEBYTECODE: '1'
         run: |
+          version="$(python3 .github/scripts/release_version.py next --revision "$PREVIEW_REVISION")"
           {
             echo "### 🔖 Next-version preview (dry run)"
             echo ""
             echo "| | |"
             echo "|---|---|"
-            echo "| Predicted next tag | \`${NEW_TAG:-n/a}\` |"
-            echo "| Bumped part | \`${PART:-n/a}\` |"
-            echo "| Latest tag | \`${LATEST_TAG:-n/a}\` |"
+            printf "| Predicted next tag | \`v%s\` |\n" "$version"
+            printf "| Reviewed revision | \`%s\` |\n" "$PREVIEW_REVISION"
             echo ""
             echo "> Advisory only — no tag was pushed. The authoritative \`vX.Y.Z\`"
             echo "> tag and GitHub Release are produced by **release-tag.yml** when"
