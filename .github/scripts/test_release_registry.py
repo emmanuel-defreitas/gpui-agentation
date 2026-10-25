@@ -15,6 +15,7 @@ import publish_mcp_registry as registry
 class RegistryPublishingTests(unittest.TestCase):
     def setUp(self):
         self.enterContext(contextlib.redirect_stdout(io.StringIO()))
+        self.enterContext(patch.dict(registry.os.environ, {"GITHUB_STEP_SUMMARY": ""}))
         folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.manifest = folder / "server.json"
         self.expected = json.loads((Path(__file__).resolve().parents[2] / "server.json").read_text())
