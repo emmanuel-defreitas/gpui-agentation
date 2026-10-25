@@ -126,8 +126,8 @@ saved notes stay with their route. Keep one app process per store file.
 
 ## Settings
 
-**Position** offers **Banner** (the default) and **Floating**. Position is per
-overlay and resets on restart. Banner mode uses the main app's layout and works
+**Position** offers **Banner** (the default), **Floating**, and **None**. Position
+persists per application and notes store across windows and restarts. Banner mode uses the main app's layout and works
 with native or custom titlebars. It does not create an additional native window.
 Comments opens a Sheet in Banner mode and a popover in Floating mode.
 The Comments sheet shares the compact sunken header used by Settings. Its rows
@@ -386,7 +386,10 @@ No extra component wrappers are required. See [runner setup and limitations](../
 
 ## Annotation controls
 
-Annotation mode has an explicit on/off control. Tool keys are I (Inspect),
+Annotation mode uses an icon-and-switch pill. Banner tools show icons with Ely
+keycaps while mode is on, and retain accessible names and tooltips. Floating
+comment panels are 16 rem wide, with smaller headers, icon-only actions and a
+subtle theme shadow. Tool keys are I (Inspect),
 B (Box), A (Arrow), P (Pen), C (Comment), and T (Textbox). These keys override
 host bindings while annotation mode owns focus; text entry keeps character
 input and text undo/redo. Ctrl/Cmd+S saves the current annotation draft.
@@ -406,10 +409,14 @@ Compose the native menu with the host's menus:
 
 ```rust
 #[cfg(debug_assertions)]
-cx.set_menus(vec![gpui_agentation::debug_menu()]);
+cx.set_menus(vec![
+    app_menu, // The host's existing application menu, including its Quit action.
+    gpui_agentation::debug_menu(),
+]);
 ```
 
 Include that menu alongside existing menus rather than replacing them.
+Agentation updates only its Debug menu when window state or active window changes.
 `Agentation::root` handles `AnnotationCommand` automatically. Hosts mounting
 `AnnotationOverlay` directly must capture that action on their window root and
 forward it to `AnnotationOverlay::dispatch_command`; see `demo/app.rs`.
@@ -419,3 +426,21 @@ so install the Debug menu before choosing it. The selected position and floating
 coordinates are stored per app in the annotations file. Windows mounting the
 same path share a Store and observe preference changes. Independent processes
 should continue to use separate annotation stores.
+
+Debug follows native menu spacing, separators, shortcut columns and checkmarks.
+Undo/Redo reflect each window's history. New and Color are disabled while mode
+is off; Position is disabled while the toolbar is hidden. Show Toolbar restores
+the last visible Banner/Floating position. Settings also exposes a checked
+Annotation Mode command so the tools remain reachable with the toolbar hidden.
+
+Additional menu shortcuts use Command+Option on macOS and Control+Alt elsewhere:
+
+| Keys after those modifiers | Command |
+| --- | --- |
+| A / H | Annotation mode / toolbar visibility |
+| F / B | Floating / Banner |
+| C / S | Comments / Settings |
+| M | Start/stop MCP |
+
+Comments and Settings show/hide with the same command. Report an Issue opens the
+repository's bug-report template; Star on GitHub opens its repository page.

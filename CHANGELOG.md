@@ -12,6 +12,10 @@
 - Use a transparent banner, theme-aware buttons, a horizontal palette on wide
   windows, and an MCP toggle prefixed by the official MCP mark.
 - Expose a host-composable Debug menu and route its commands through Agentation.
+- Refine the banner with an icon/switch pill, icon-only controls and Ely keycaps;
+  reduce floating comment width by one third and use quieter headers and shadows.
+- Group native Debug commands with history availability, mode-dependent New/Color,
+  toolbar visibility and checked positions, Comments, Settings and GitHub links.
 - Keep the GPUI/Ely pins, loopback API guards, and debug-only crate boundary.
 
 ## 0.5.1

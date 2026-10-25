@@ -166,7 +166,7 @@ The [consumer example](examples/consumer/README.md) keeps all of this in one
 
 ### Inspect and annotate
 
-Turn **Annotations on**, then choose **Inspect**, **Box**, **Arrow**, **Pen**,
+Turn on the **power switch**, then choose **Inspect**, **Box**, **Arrow**, **Pen**,
 **Comment**, or **Textbox**. Select an element or draw
 on the screen. Inspect surfaces the element's ID, label, bounds, and Rust call
 site.
@@ -179,7 +179,7 @@ the right spot.
 ![Drawing an annotation arrow](docs/assets/annotation-arrow.gif)
 
 While annotation mode is on, use **I / B / A / P / C / T** to select a tool.
-Shortcuts appear on the tool buttons. **Ctrl/Cmd+S** saves the current draft;
+Shortcuts appear as Ely keycaps beside the tool icons. **Ctrl/Cmd+S** saves the current draft;
 **Ctrl/Cmd+Z** and **Ctrl/Cmd+Shift+Z** undo and redo annotation changes.
 **Delete/Backspace** removes a selected annotation when its text field is not
 being edited. Text fields retain their ordinary typing and text undo behavior.
