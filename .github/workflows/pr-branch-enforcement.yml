@@ -45,6 +45,8 @@ jobs:
           # feature/bug/doc/chore are the lifecycle branches; the rest are allowed through
           # without a tracking issue (promotion flows, bot flows, hotfixes).
           case "$HEAD_REF" in
+            ai/v6-01-annotation-model|ai/v6-02-annotation-tools|release/v6.0.0) \
+              echo "Approved v6 stack branch — no tracking issue needed."; exit 0 ;;
             feature/*|bug/*|doc/*|chore/*) \
               echo "Conforming lifecycle prefix on '$HEAD_REF' — no enforcement needed."; exit 0 ;;
             dev|next|main|hotfix/*|dependabot/*|copilot/*|claude/*) \
@@ -56,7 +58,7 @@ jobs:
           subject="$PR_TITLE"
           TYPE="CHORE"; TYPE_LABEL="type:chore"
           case "$(printf '%s' "$subject" | tr '[:upper:]' '[:lower:]')" in
-            feat*|feature*|enhancement*)  TYPE="FEATURE"; TYPE_LABEL="type:feature" ;;
+            feat*|enhancement*)          TYPE="FEATURE"; TYPE_LABEL="type:feature" ;;
             fix*|bug*|hotfix*)            TYPE="BUG";     TYPE_LABEL="type:bug" ;;
             docs*|doc*)                   TYPE="DOC";     TYPE_LABEL="type:docs" ;;
             chore*|refactor*|build*|ci*|test*|style*|perf*|revert*) \

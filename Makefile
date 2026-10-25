@@ -60,7 +60,7 @@ version-check: ## Verify documented crate versions match Cargo.toml and server.j
 	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-bridge-release.py
 
 version-test: ## Test release synchronization and conventional-commit version rules
-	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts -p 'test_release_version.py'
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts -p 'test_release*.py'
 
 release-prepare: ## Synchronize the next release version locally (optional VERSION=x.y.z)
 	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release_version.py prepare "$(VERSION)"

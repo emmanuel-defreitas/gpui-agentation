@@ -10,6 +10,7 @@ This is the source of truth for the template's branch model, PR targeting rules,
 | `bug/<n>-<slug>` | Defect fix | `issue-start-branch.yml` | yes |
 | `doc/<n>-<slug>` | Documentation-only change | `issue-start-branch.yml` | yes |
 | `chore/<n>-<slug>` | CI, build, refactor, tooling | `issue-start-branch.yml` | yes |
+| `ai/v6-01-annotation-model`, `ai/v6-02-annotation-tools`, `release/v6.0.0` | Approved v6 release stack | maintainer | exact-name stack exception |
 | `dev` | Integration and default branch | protected long-lived branch | yes |
 | `next` | Staging / pre-release branch | protected long-lived branch | yes |
 | `main` | Production branch | protected long-lived branch | yes |
@@ -22,6 +23,27 @@ The lifecycle prefix is chosen from the issue's `type:*` label when `status:in-p
 1. **Lifecycle work targets `dev`.** PRs opened against unsupported base branches are reassigned to `dev`.
 2. **Only `dev` promotes into `next`.** Any other head branch targeting `next` is redirected back to `dev`.
 3. **Only `next` releases into `main`.** PRs into `main` from any head other than `next` are closed.
+
+The approved same-repository v6 stack preserves these dependent PR bases:
+
+```text
+ai/v6-01-annotation-model → dev
+ai/v6-02-annotation-tools → ai/v6-01-annotation-model
+release/v6.0.0 → ai/v6-02-annotation-tools
+```
+
+Only those two dependent edges are exceptions to the normal `dev` target.
+Forks with matching branch names receive no exception. Base policy rechecks on
+opening, edits, reopening and new commits. These three exact branch names are
+exempt from automatic tracking-issue creation and require conventional PR titles,
+with stack numbering after the prefix, such as `feat: add textboxes [1/3]`.
+No general `ai/*` or `release/*` exemption is granted.
+
+Review and merge bottom-up. After each parent merges, retarget its dependent PR
+to `dev` and rebase it onto the integrated parent before merging. With squash
+merges, use `git rebase --onto origin/dev <old-parent-tip> <child>` to avoid
+replaying the parent's commits. Never merge a dependent PR into its feature
+parent. Production promotion remains `dev → next → main`.
 
 ## Branch protection and ruleset expectations
 
@@ -83,9 +105,36 @@ Version preparation, promotion checks, and final tagging share
 `.github/scripts/release_version.py`. Only stable tags reachable from the promoted
 commit establish the baseline. With no stable tag, the reviewed Cargo version
 bootstraps the first release. `make release-prepare VERSION=x.y.z` accepts an
-explicit stable version, but promotion still checks it against commit history.
+explicit stable version. Ordinary promotion checks it against commit history.
+Emoji prefixes on commit subjects are accepted; PR titles retain their plain
+conventional prefix for squash merges and title validation.
 Historical versions and dependency pins are preserved. Release candidates use
 `vX.Y.Z-dev.<PR-number>` and do not replace the production tag.
+
+### Explicit release versions
+
+A maintainer-approved version jump is declared in `.github/release-version.json`:
+
+```json
+{
+  "from": "0.5.1",
+  "to": "6.0.0",
+  "reason": "Use the explicitly requested 6.0.0 release numbering"
+}
+```
+
+Commit this declaration on the release preparation branch, alongside the
+`make release-prepare VERSION=6.0.0` diff and changelog. The shared version
+script reads it from the requested Git revision, so uncommitted edits cannot
+authorize a release. `from` must match the latest reachable stable tag; `to`
+must be a stable increase and satisfy at least the conventional-commit bump.
+Metadata consistency, Settings derivation, package checks and the reviewed
+merge-commit tag remain mandatory. Malformed declarations and baseline drift
+fail validation. Once `to` or a later stable version is tagged, the declaration
+is consumed and ordinary version calculation resumes.
+
+This is an input to the existing `release-tag.yml` workflow, not another release
+trigger. It does not create a tag, release, merge, or deployment by itself.
 
 ## Cheat sheet
 

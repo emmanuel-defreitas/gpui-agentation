@@ -47,6 +47,13 @@ class ReleaseVersionTests(unittest.TestCase):
         return {str(path.relative_to(self.root)): path.read_bytes()
                 for path in self.root.rglob("*") if path.is_file() and ".git" not in path.parts}
 
+    def release_plan(self, previous="0.5.1", target="6.0.0", reason="Explicit release numbering"):
+        path = self.root / release.RELEASE_PLAN
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"from": previous, "to": target, "reason": reason}), encoding="utf-8")
+        self.git("add", release.RELEASE_PLAN)
+        self.commit("chore: declare release version")
+
     def test_prepare_syncs_current_references_and_preserves_unrelated_content(self):
         before = self.snapshot()
         manifest = tomllib.loads(before["Cargo.toml"].decode())
@@ -158,6 +165,53 @@ class ReleaseVersionTests(unittest.TestCase):
         self.init_git("v1.2.3")
         self.commit("fix: update protocol", "BREAKING CHANGE: consumers must migrate")
         self.assertEqual(release.next_version(self.root), "2.0.0")
+
+    def test_emoji_prefixed_conventional_subjects_select_minor_and_major(self):
+        self.init_git("v1.2.3")
+        self.commit("✨ feat: add annotations")
+        self.assertEqual(release.next_version(self.root), "1.3.0")
+        self.commit("♻️ refactor(api)!: change protocol")
+        self.assertEqual(release.next_version(self.root), "2.0.0")
+
+    def test_reviewed_plan_accepts_explicit_6_and_resumes_normal_bumps_after_release(self):
+        self.init_git("v0.5.1")
+        self.commit("✨ feat: annotations")
+        previous = self.git("rev-parse", "HEAD")
+        self.release_plan()
+        self.assertEqual(release.next_version(self.root, previous), "0.6.0")
+        self.assertEqual(release.next_version(self.root), "6.0.0")
+        release.prepare(self.root, "6.0.0")
+        release.check_release(self.root)
+        (self.root / release.RELEASE_PLAN).write_text("invalid uncommitted plan", encoding="utf-8")
+        self.assertEqual(release.next_version(self.root), "6.0.0")
+        self.git("tag", "v6.0.0")
+        self.commit("fix: follow-up")
+        self.assertEqual(release.next_version(self.root), "6.0.1")
+        self.commit("✨ feat: next capability")
+        self.assertEqual(release.next_version(self.root), "6.1.0")
+
+    def test_plan_rejects_wrong_baseline_decreases_and_missing_reason(self):
+        self.init_git("v1.2.3")
+        for previous, target, reason, message in [
+            ("0.5.1", "6.0.0", "Explicit release", "expected baseline"),
+            ("1.2.3", "1.2.3", "Explicit release", "must increase"),
+            ("1.2.3", "1.2.2", "Explicit release", "must increase"),
+            ("1.2.3", "6.0.0", " ", "nonempty reason"),
+            ("1.2.3", "6.0.0-dev.1", "Explicit release", "stable version"),
+        ]:
+            self.release_plan(previous, target, reason)
+            with self.subTest(target=target), self.assertRaisesRegex(ValueError, message):
+                release.next_version(self.root)
+
+    def test_plan_cannot_override_the_minimum_conventional_bump_or_metadata_drift(self):
+        self.init_git("v1.2.3")
+        self.commit("feat!: breaking change")
+        self.release_plan("1.2.3", "1.9.0")
+        with self.assertRaisesRegex(ValueError, "at least 2.0.0"):
+            release.next_version(self.root)
+        self.release_plan("1.2.3", "6.0.0")
+        with self.assertRaisesRegex(ValueError, "Promotion requires 6.0.0"):
+            release.check_release(self.root)
 
     def test_unreachable_stable_tag_does_not_set_the_baseline(self):
         self.init_git("v1.2.3")

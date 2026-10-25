@@ -8,7 +8,7 @@ Automation for the `feature/** → dev → next → main` lifecycle, built on pl
 |---|---|---|
 | Issue status | `status:todo` and `status:in-progress` are automated; `status:in-review` and `status:qa` are set by hand | `issue-start-branch.yml`, `issue-status-sync.yml` |
 | Branch → issue | `<prefix>/123-slug` where prefix is one of `feature`, `bug`, `doc`, `chore` | `issue-start-branch.yml` |
-| Base branches | `dev` (default/integration), `next` (preview), `main` (production) | triggers + `pr-base-policy.yml` |
+| Base branches | `dev` (integration), `next` (preview), `main` (production); exact approved v6 stack parents | triggers + `pr-base-policy.yml` |
 | Versioning | Conventional-commit SemVer candidate on `dev` merge; production tag on `next → main` | `dev-release-candidate.yml`, `release-tag.yml` |
 | Release versions | `make release-prepare` synchronizes current references before promotion; release notes remain manual | `release_version.py`, `CHANGELOG.md` |
 
@@ -46,7 +46,7 @@ Manual steps (formerly agentic):
 
 See [`BRANCH-AND-RELEASE-POLICY.md`](./BRANCH-AND-RELEASE-POLICY.md) for the definitive policy. In short:
 
-- lifecycle branches go to `dev`
+- lifecycle branches go to `dev`; the approved v6 stack retains its documented parents until sequential merge
 - only `dev` promotes to `next`
 - only `next` promotes to `main`
 - `main`, `dev`, and `next` should stay protected and non-deletable

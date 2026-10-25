@@ -2,7 +2,7 @@ name: PR Semver
 
 on:
   pull_request:
-    branches: [dev]
+    branches: [dev, ai/v6-01-annotation-model, ai/v6-02-annotation-tools]
     types: [opened, edited, synchronize, reopened, ready_for_review]
 
 permissions:
@@ -15,7 +15,10 @@ jobs:
       startsWith(github.head_ref, 'feature/') ||
       startsWith(github.head_ref, 'bug/') ||
       startsWith(github.head_ref, 'doc/') ||
-      startsWith(github.head_ref, 'chore/')
+      startsWith(github.head_ref, 'chore/') ||
+      github.head_ref == 'ai/v6-01-annotation-model' ||
+      github.head_ref == 'ai/v6-02-annotation-tools' ||
+      github.head_ref == 'release/v6.0.0'
     runs-on: ubuntu-latest
     steps:
       - name: Require a conventional semver title
