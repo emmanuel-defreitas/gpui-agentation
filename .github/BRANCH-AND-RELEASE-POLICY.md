@@ -97,7 +97,7 @@ Type inference uses the same conventional-commit vocabulary as `release-tag.yml`
 
 | Signal | Bump |
 |---|---|
-| `BREAKING CHANGE` in any body, or a `<type>!:` subject | **major** |
+| `BREAKING CHANGE` in any body, or a `<type>!:` subject | **major** at 1.0.0 or later; **minor** during 0.x development |
 | any `feat:` / `feature:` subject | **minor** |
 | any `fix:` subject (or default) | **patch** |
 
@@ -118,13 +118,13 @@ A maintainer-approved version jump is declared in `.github/release-version.json`
 ```json
 {
   "from": "0.5.1",
-  "to": "6.0.0",
-  "reason": "Use the explicitly requested 6.0.0 release numbering"
+  "to": "0.6.0",
+  "reason": "Use the intended pre-1.0 annotation tools release numbering"
 }
 ```
 
 Commit this declaration on the release preparation branch, alongside the
-`make release-prepare VERSION=6.0.0` diff and changelog. The shared version
+`make release-prepare VERSION=0.6.0` diff and changelog. The shared version
 script reads it from the requested Git revision, so uncommitted edits cannot
 authorize a release. `from` must match the latest reachable stable tag; `to`
 must be a stable increase and satisfy at least the conventional-commit bump.
@@ -132,6 +132,12 @@ Metadata consistency, Settings derivation, package checks and the reviewed
 merge-commit tag remain mandatory. Malformed declarations and baseline drift
 fail validation. Once `to` or a later stable version is tagged, the declaration
 is consumed and ordinary version calculation resumes.
+
+Before 1.0.0, a breaking change advances the minor version (for example,
+`0.5.1 → 0.6.0`). Breaking changes at 1.0.0 or later advance the major version.
+The withdrawn `6.0.0` release does not establish a baseline: its stable tag was
+removed and its crate version was yanked. The authorized correction to `0.6.0`
+updates current metadata once; ordinary preparation still refuses downgrades.
 
 This is an input to the existing `release-tag.yml` workflow, not another release
 trigger. It does not create a tag, release, merge, or deployment by itself.
