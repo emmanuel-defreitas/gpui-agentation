@@ -166,6 +166,18 @@ class ReleaseVersionTests(unittest.TestCase):
         self.commit("fix: update protocol", "BREAKING CHANGE: consumers must migrate")
         self.assertEqual(release.next_version(self.root), "2.0.0")
 
+    def test_pre_1_breaking_changes_require_next_minor(self):
+        self.init_git("v0.5.1")
+        self.commit("feat: add annotation fields", "BREAKING CHANGE: struct literals must include color")
+        self.assertEqual(release.next_version(self.root), "0.6.0")
+        self.commit("refactor(api)!: extend shapes")
+        self.assertEqual(release.next_version(self.root), "0.6.0")
+        self.release_plan("0.5.1", "0.5.2")
+        with self.assertRaisesRegex(ValueError, "at least 0.6.0"):
+            release.next_version(self.root)
+        self.release_plan("0.5.1", "0.6.0")
+        self.assertEqual(release.next_version(self.root), "0.6.0")
+
     def test_emoji_prefixed_conventional_subjects_select_minor_and_major(self):
         self.init_git("v1.2.3")
         self.commit("✨ feat: add annotations")
