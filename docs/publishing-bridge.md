@@ -54,7 +54,20 @@ assets, upstream manifest, provenance and license notices. See
 6. Subsequent releases dispatch `Publish MCP Bridge` from `main` with matching
    version and `publish=true`. It publishes this package with the MCP feature;
    there is no static-token fallback. Release-tag events do not publish.
-7. Publish the new matching Registry version only after the crate exists:
+7. The same workflow automatically publishes the matching MCP Registry version
+   after the Cargo publish job succeeds. It checks out the verified release
+   commit, validates `server.json`, downloads a version- and SHA-256-pinned
+   official publisher, and authenticates with GitHub OIDC. It reuses the
+   main-only `crates-io` environment; no Registry token secret is required.
+   Dry runs and failed Cargo publications skip the Registry job.
+8. The Registry job waits for the public, non-yanked Cargo version, publishes
+   the matching metadata, and verifies the public version endpoint is active
+   and exactly matches the reviewed `server.json`. It adds the listing link to
+   the workflow summary. If only Registry publication fails, rerun the failed
+   job rather than republishing the crate. Matching existing metadata is a safe
+   no-op; conflicting or inactive metadata fails without being overwritten.
+
+For an exceptional manual recovery, publish only after the crate exists:
 
 ```sh
 mcp-publisher login github
