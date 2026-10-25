@@ -1,0 +1,5 @@
+{
+  "from": "0.5.1",
+  "to": "6.0.0",
+  "reason": "Use the explicitly requested 6.0.0 numbering for the annotation tools release"
+}
