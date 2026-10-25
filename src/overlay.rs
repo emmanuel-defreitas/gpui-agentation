@@ -198,7 +198,18 @@ impl AnnotationOverlay {
                 let _ = owner.update(cx, |this, cx| this.intercept_shortcut(event, window, cx));
             }
         });
-        let inputs = vec![cx.observe(&input, |_, _, cx| cx.notify()), shortcuts];
+        let menu_updates = cx.observe_self(move |this, cx| this.sync_debug_menu(window_id, cx));
+        let menu_activation = cx.observe_window_activation(window, move |this, window, cx| {
+            if window.is_window_active() {
+                this.sync_debug_menu(window_id, cx);
+            }
+        });
+        let inputs = vec![
+            cx.observe(&input, |_, _, cx| cx.notify()),
+            shortcuts,
+            menu_updates,
+            menu_activation,
+        ];
         let hot_reload_status = hot_reload.status();
         let reload_watch = hot_reload.clone();
         let watch = store.clone();
@@ -228,7 +239,12 @@ impl AnnotationOverlay {
                             if let Ok(preference) =
                                 this.store.toolbar_preference(&this.session.app_name)
                             {
-                                this.banner = preference.position == crate::ToolbarPosition::Banner;
+                                this.banner = if preference.position == crate::ToolbarPosition::None
+                                {
+                                    preference.last_position == crate::ToolbarPosition::Banner
+                                } else {
+                                    preference.position == crate::ToolbarPosition::Banner
+                                };
                                 this.toolbar_hidden =
                                     preference.position == crate::ToolbarPosition::None;
                                 if this.toolbar_drag.is_none() {
@@ -269,7 +285,11 @@ impl AnnotationOverlay {
             toolbar_at: preference.at,
             toolbar_size: (0.0, 0.0),
             toolbar_width: None,
-            banner: preference.position == crate::ToolbarPosition::Banner,
+            banner: if preference.position == crate::ToolbarPosition::None {
+                preference.last_position == crate::ToolbarPosition::Banner
+            } else {
+                preference.position == crate::ToolbarPosition::Banner
+            },
             toolbar_hidden: preference.position == crate::ToolbarPosition::None,
             history: vec![],
             future: vec![],
@@ -605,6 +625,7 @@ impl AnnotationOverlay {
             },
             false,
         )
+        .icon_only()
         .colors(background, cx.theme().colors.bg)
         .disabled(editing && self.input.read(cx).text().trim().is_empty())
         .on_click(cx.listener(|this, _, window, cx| {
@@ -620,6 +641,7 @@ impl AnnotationOverlay {
             crate::ely::primitives::IconName::Trash2,
             false,
         )
+        .icon_only()
         .colors(background, cx.theme().colors.bg)
         .on_click(cx.listener(|this, _, window, cx| {
             if let Some(id) = this.draft.as_ref().and_then(|draft| draft.id.clone()) {
@@ -646,11 +668,16 @@ impl AnnotationOverlay {
                             .size(IconSize::Sm)
                             .color(cx.theme().colors.bg),
                     )
-                    .child(div().flex_1().child(if textbox {
-                        "Textbox".to_string()
-                    } else {
-                        format!("Note {index}")
-                    }))
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_size(cx.theme().text_size(crate::ely::theme::TextSize::Sm))
+                            .child(if textbox {
+                                "Textbox".to_string()
+                            } else {
+                                format!("Note {index}")
+                            }),
+                    )
                     .child(
                         div()
                             .debug_selector(|| "feedback-editor-delete".into())
@@ -732,7 +759,7 @@ impl Render for AnnotationOverlay {
             ))
             .w_full()
             .flex_none()
-            .when(self.banner, |root| {
+            .when(self.banner && !self.toolbar_hidden, |root| {
                 root.child(
                     crate::ely::primitives::Measure::new(
                         "feedback-banner-measure",

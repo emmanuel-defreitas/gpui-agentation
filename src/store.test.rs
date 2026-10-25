@@ -390,6 +390,7 @@ fn toolbar_preference_survives_restart_and_is_shared_across_routes() {
     let preference = ToolbarPreference {
         position: ToolbarPosition::None,
         at: Some((123., 456.)),
+        last_position: ToolbarPosition::Floating,
     };
     store.set_toolbar_preference("App", preference).unwrap();
     let other_window = store.clone();

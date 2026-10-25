@@ -657,6 +657,7 @@ impl AnnotationOverlay {
                             icon,
                             false,
                         )
+                        .icon_only()
                         .disabled(disabled)
                         .on_click(cx.listener(
                             move |this, _, window, cx| {
@@ -912,7 +913,7 @@ impl AnnotationOverlay {
             None
         };
         let width =
-            f32::from(gpui::rems(24.0).to_pixels(window.rem_size())).min((w - 16.0).max(1.0));
+            f32::from(gpui::rems(16.0).to_pixels(window.rem_size())).min((w - 16.0).max(1.0));
         let panel_size = (width, self.editor_size.1.min((h - 16.0).max(1.0)));
         let is_text = self
             .draft
@@ -976,7 +977,7 @@ impl AnnotationOverlay {
                 .border_1()
                 .border_color(theme.colors.bg.opacity(0.25))
                 .rounded(theme.radius(Radius::Lg))
-                .shadow(theme.elevation(Elevation::Floating))
+                .shadow(theme.elevation(Elevation::Raised))
                 .child(
                     div()
                         .id("feedback-editor-scroll")
@@ -1003,7 +1004,11 @@ impl AnnotationOverlay {
                 .id("feedback-picker")
                 .absolute()
                 .w_full()
-                .top(px(if self.banner { self.banner_bottom } else { 0. }))
+                .top(px(if self.banner && !self.toolbar_hidden {
+                    self.banner_bottom
+                } else {
+                    0.
+                }))
                 .bottom_0()
                 .occlude()
                 .cursor(if self.draft.is_some() {

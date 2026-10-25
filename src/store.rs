@@ -48,6 +48,8 @@ struct Data {
 pub(crate) struct ToolbarPreference {
     pub position: ToolbarPosition,
     pub at: Option<(f32, f32)>,
+    #[serde(default)]
+    pub last_position: ToolbarPosition,
 }
 
 /// Where Agentation's controls are displayed.

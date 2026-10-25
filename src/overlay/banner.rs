@@ -1,8 +1,13 @@
 use super::surface_button::SurfaceButton;
 use super::*;
 use crate::ely::{
-    data_display::Presence, forms::ColorSwatch, media::Tool, messaging::OnlineStatus,
-    overlays::Popover, primitives::IconName, theme::ActiveTheme,
+    data_display::Presence,
+    forms::{ColorSwatch, Switch},
+    media::Tool,
+    messaging::OnlineStatus,
+    overlays::Popover,
+    primitives::IconName,
+    theme::ActiveTheme,
 };
 
 impl AnnotationOverlay {
@@ -30,6 +35,15 @@ impl AnnotationOverlay {
         let preference = crate::store::ToolbarPreference {
             position,
             at: self.toolbar_at,
+            last_position: if position == crate::ToolbarPosition::None {
+                if self.banner {
+                    crate::ToolbarPosition::Banner
+                } else {
+                    crate::ToolbarPosition::Floating
+                }
+            } else {
+                position
+            },
         };
         if let Err(error) = self
             .store
@@ -39,7 +53,9 @@ impl AnnotationOverlay {
             cx.notify();
             return;
         }
-        self.banner = position == crate::ToolbarPosition::Banner;
+        if position != crate::ToolbarPosition::None {
+            self.banner = position == crate::ToolbarPosition::Banner;
+        }
         self.toolbar_hidden = position == crate::ToolbarPosition::None;
         self.toolbar_drag = None;
         self.toolbar_width = None;
@@ -59,6 +75,11 @@ impl AnnotationOverlay {
             crate::store::ToolbarPreference {
                 position,
                 at: self.toolbar_at,
+                last_position: if self.banner {
+                    crate::ToolbarPosition::Banner
+                } else {
+                    crate::ToolbarPosition::Floating
+                },
             },
         ) {
             self.notice = error.to_string();
@@ -71,6 +92,7 @@ impl AnnotationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        let mode_owner = cx.entity().downgrade();
         let mut tools = div()
             .flex()
             .flex_wrap()
@@ -78,17 +100,32 @@ impl AnnotationOverlay {
             .items_center()
             .gap_1()
             .child(
-                SurfaceButton::new(
-                    "feedback-mode",
-                    if self.active {
-                        "Annotations on"
-                    } else {
-                        "Annotations off"
-                    },
-                    IconName::Power,
-                    self.active,
-                )
-                .on_click(cx.listener(|this, _, window, cx| this.toggle(window, cx))),
+                div()
+                    .id("feedback-mode")
+                    .debug_selector(|| "feedback-mode".into())
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_full()
+                    .bg(cx.theme().colors.surface)
+                    .child(
+                        crate::ely::primitives::Icon::new(IconName::Power)
+                            .size(crate::ely::theme::IconSize::Sm),
+                    )
+                    .on_mouse_down(gpui::MouseButton::Left, |_, window, _| {
+                        window.prevent_default()
+                    })
+                    .on_click(cx.listener(|this, _, window, cx| this.toggle(window, cx)))
+                    .child(
+                        Switch::new("feedback-mode-switch", self.active)
+                            .name("Annotation mode")
+                            .on_change(move |_, window, cx| {
+                                let _ = mode_owner.update(cx, |this, cx| this.toggle(window, cx));
+                                cx.stop_propagation();
+                            }),
+                    ),
             );
         for (id, tool, icon, label) in [
             ("inspect", None, IconName::Crosshair, "Inspect"),
@@ -107,14 +144,14 @@ impl AnnotationOverlay {
                 div().debug_selector(move || format!("banner-{id}")).child(
                     SurfaceButton::new(
                         format!("feedback-banner-tool-{id}"),
-                        if self.active {
-                            format!("{label} · {}", super::surface::tool_shortcut(tool))
-                        } else {
-                            label.to_string()
-                        },
+                        label,
                         icon,
                         self.active && self.tool == tool,
                     )
+                    .icon_only()
+                    .when(self.active, |button| {
+                        button.shortcut(super::surface::tool_shortcut(tool).to_ascii_lowercase())
+                    })
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.choose_tool(tool, window, cx);
                     })),
@@ -175,7 +212,7 @@ impl AnnotationOverlay {
                 colors
             },
         );
-        if f32::from(window.viewport_size().width) >= 980.0 {
+        if f32::from(window.viewport_size().width) >= 760.0 {
             for color in 0..4 {
                 let owner = cx.entity().downgrade();
                 tools = tools.child(
@@ -206,6 +243,7 @@ impl AnnotationOverlay {
             IconName::MessageSquare,
             false,
         )
+        .icon_only()
         .on_click(cx.listener(|this, _, window, cx| {
             this.open_sheet(false, window, cx);
         }));
@@ -248,7 +286,9 @@ impl AnnotationOverlay {
                     .size(gpui::rems(1.0))
                     .text_color(cx.theme().colors.fg),
             )
-            .child(format!("MCP {status}"));
+            .tooltip(crate::ely::primitives::Tooltip::text(format!(
+                "MCP {status}"
+            )));
         let trailing = div()
             .flex()
             .items_center()

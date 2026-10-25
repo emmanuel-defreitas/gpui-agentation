@@ -37,6 +37,23 @@ fn settings_trigger_should_open_sheet_and_escape_should_restore_focus(cx: &mut T
 }
 
 #[gpui::test]
+fn mode_switch_toggles_once_and_keycaps_follow_annotation_mode(cx: &mut TestAppContext) {
+    let (overlay, cx) = overlay(cx);
+    draw(cx);
+    assert!(cx.debug_bounds("feedback-shortcut-b").is_none());
+    for active in [true, false] {
+        let pill = cx.debug_bounds("feedback-mode").unwrap();
+        cx.simulate_click(
+            gpui::point(pill.right() - gpui::px(12.), pill.center().y),
+            Modifiers::none(),
+        );
+        draw(cx);
+        cx.update(|_, cx| assert_eq!(overlay.read(cx).active, active));
+        assert_eq!(cx.debug_bounds("feedback-shortcut-b").is_some(), active);
+    }
+}
+
+#[gpui::test]
 fn banner_tools_and_trailing_actions_should_remain_reachable_while_annotating(
     cx: &mut TestAppContext,
 ) {

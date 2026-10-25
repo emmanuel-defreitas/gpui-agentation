@@ -10,90 +10,130 @@ pub struct AnnotationCommand {
     pub name: String,
 }
 
-/// Build Agentation's Debug menu. Include this alongside the host's own menus.
-///
-/// Hosts using [`crate::Agentation::root`] receive its actions automatically.
-/// Direct `AnnotationOverlay` hosts should forward actions to
-/// [`AnnotationOverlay::dispatch_command`] from their root element.
-pub fn debug_menu() -> gpui::Menu {
-    let item = |name: &str, command: &str| {
-        gpui::MenuItem::action(
-            name.to_owned(),
-            AnnotationCommand {
-                name: command.into(),
-            },
-        )
-    };
-    gpui::Menu::new("Debug").items([
-        item("Annotation mode on/off", "toggle"),
-        gpui::MenuItem::separator(),
-        item("Inspect · I", "inspect"),
-        item("Box · B", "box"),
-        item("Arrow · A", "arrow"),
-        item("Pen · P", "pen"),
-        item("Comment · C", "comment"),
-        item("Textbox · T", "text"),
-        gpui::MenuItem::submenu(gpui::Menu::new("Annotation color").items([
-            item("Color 1", "color-0"),
-            item("Color 2", "color-1"),
-            item("Color 3", "color-2"),
-            item("Color 4", "color-3"),
-        ])),
-        gpui::MenuItem::separator(),
-        item("Save annotation", "save"),
-        item("Undo annotation", "undo"),
-        item("Redo annotation", "redo"),
-        item("Delete annotation", "delete"),
-        item("Comments", "comments"),
-        item("Copy comments as Markdown", "copy"),
-        item("MCP on/off", "mcp"),
-        item("Settings", "settings"),
-        gpui::MenuItem::submenu(gpui::Menu::new("Annotation toolbar").items([
-            item("Banner", "banner"),
-            item("Floating", "floating"),
-            item("None", "none"),
-        ])),
-    ])
-}
+mod menu;
+pub use menu::debug_menu;
 
 struct Bindings;
 impl gpui::Global for Bindings {}
+
+pub(super) fn shortcut(name: &str) -> Option<&'static str> {
+    let mac = cfg!(target_os = "macos");
+    Some(match name {
+        "inspect" => "i",
+        "box" => "b",
+        "arrow" => "a",
+        "pen" => "p",
+        "comment" => "c",
+        "text" => "t",
+        "delete" => "delete",
+        "undo" => {
+            if mac {
+                "cmd-z"
+            } else {
+                "ctrl-z"
+            }
+        }
+        "redo" => {
+            if mac {
+                "cmd-shift-z"
+            } else {
+                "ctrl-shift-z"
+            }
+        }
+        "save" => {
+            if mac {
+                "cmd-s"
+            } else {
+                "ctrl-s"
+            }
+        }
+        "toggle" => {
+            if mac {
+                "cmd-alt-a"
+            } else {
+                "ctrl-alt-a"
+            }
+        }
+        "toolbar" => {
+            if mac {
+                "cmd-alt-h"
+            } else {
+                "ctrl-alt-h"
+            }
+        }
+        "floating" => {
+            if mac {
+                "cmd-alt-f"
+            } else {
+                "ctrl-alt-f"
+            }
+        }
+        "banner" => {
+            if mac {
+                "cmd-alt-b"
+            } else {
+                "ctrl-alt-b"
+            }
+        }
+        "comments" => {
+            if mac {
+                "cmd-alt-c"
+            } else {
+                "ctrl-alt-c"
+            }
+        }
+        "settings" => {
+            if mac {
+                "cmd-alt-s"
+            } else {
+                "ctrl-alt-s"
+            }
+        }
+        "mcp" => {
+            if mac {
+                "cmd-alt-m"
+            } else {
+                "ctrl-alt-m"
+            }
+        }
+        _ => return None,
+    })
+}
 
 pub(super) fn init(cx: &mut App) {
     if cx.has_global::<Bindings>() {
         return;
     }
     let mut bindings = Vec::new();
-    for (key, name) in [
-        ("i", "inspect"),
-        ("b", "box"),
-        ("a", "arrow"),
-        ("p", "pen"),
-        ("c", "comment"),
-        ("t", "text"),
-        ("delete", "delete"),
-        ("backspace", "delete"),
-        ("ctrl-z", "undo"),
-        ("cmd-z", "undo"),
-        ("ctrl-shift-z", "redo"),
-        ("cmd-shift-z", "redo"),
-        ("ctrl-y", "redo"),
+    for name in [
+        "inspect", "box", "arrow", "pen", "comment", "text", "delete", "undo", "redo", "save",
+        "toggle", "toolbar", "floating", "banner", "comments", "settings", "mcp",
     ] {
+        let key = shortcut(name).expect("command shortcut");
+        let context = match name {
+            "save" => Some("AgentationMode"),
+            "inspect" | "box" | "arrow" | "pen" | "comment" | "text" | "delete" | "undo"
+            | "redo" => Some("AgentationTools"),
+            _ => None,
+        };
         bindings.push(gpui::KeyBinding::new(
             key,
             AnnotationCommand { name: name.into() },
-            Some("AgentationTools"),
+            context,
         ));
-    }
-    for key in ["ctrl-s", "cmd-s"] {
         bindings.push(gpui::KeyBinding::new(
             key,
-            AnnotationCommand {
-                name: "save".into(),
-            },
-            Some("AgentationMode"),
+            menu::UnavailableCommand { name: name.into() },
+            Some("AgentationUnavailable"),
         ));
     }
+    bindings.push(gpui::KeyBinding::new(
+        "backspace",
+        AnnotationCommand {
+            name: "delete".into(),
+        },
+        Some("AgentationTools"),
+    ));
     cx.bind_keys(bindings);
     cx.set_global(Bindings);
 }
@@ -106,6 +146,9 @@ impl AnnotationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.command_enabled(&action.name) {
+            return;
+        }
         match action.name.as_str() {
             "toggle" => self.toggle(window, cx),
             "inspect" => self.choose_tool(None, window, cx),
@@ -131,8 +174,20 @@ impl AnnotationOverlay {
                     self.delete(&id, window, cx);
                 }
             }
-            "comments" => self.open_sheet(false, window, cx),
-            "settings" => self.open_sheet(true, window, cx),
+            "comments" => {
+                if self.review_open {
+                    self.dismiss_sheet(window, cx)
+                } else {
+                    self.open_sheet(false, window, cx)
+                }
+            }
+            "settings" => {
+                if self.settings_open {
+                    self.dismiss_sheet(window, cx)
+                } else {
+                    self.open_sheet(true, window, cx)
+                }
+            }
             "copy" => match self.store.app_markdown(&self.session.app_name) {
                 Ok(text) => cx.write_to_clipboard(gpui::ClipboardItem::new_string(text)),
                 Err(error) => self.notice = error.to_string(),
@@ -141,6 +196,22 @@ impl AnnotationOverlay {
             "banner" => self.set_toolbar_position(ToolbarPosition::Banner, cx),
             "floating" => self.set_toolbar_position(ToolbarPosition::Floating, cx),
             "none" => self.set_toolbar_position(ToolbarPosition::None, cx),
+            "toolbar" => self.set_toolbar_position(
+                if self.toolbar_hidden {
+                    if self.banner {
+                        ToolbarPosition::Banner
+                    } else {
+                        ToolbarPosition::Floating
+                    }
+                } else {
+                    ToolbarPosition::None
+                },
+                cx,
+            ),
+            "report" => cx.open_url(
+                "https://github.com/emmanuel-defreitas/gpui-agentation/issues/new?template=bug_report.yml",
+            ),
+            "star" => cx.open_url("https://github.com/emmanuel-defreitas/gpui-agentation"),
             name => {
                 if let Some(color) = name
                     .strip_prefix("color-")

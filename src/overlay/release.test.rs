@@ -52,6 +52,8 @@ fn text_draft(overlay: &Entity<AnnotationOverlay>, cx: &mut VisualTestContext) {
 fn textbox_saves_inline_and_reopens_for_editing_without_a_comment(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
     text_draft(&overlay, cx);
+    let width = cx.debug_bounds("feedback-editor-panel").unwrap().size.width;
+    cx.update(|window, _| assert_eq!(width, gpui::rems(16.0).to_pixels(window.rem_size())));
     cx.simulate_input("Plain textbox");
     cx.simulate_keystrokes("ctrl-s");
     draw(cx);
@@ -218,7 +220,7 @@ fn none_position_removes_the_toolbar_and_menu_commands_restore_it(cx: &mut TestA
         overlay.update(cx, |this, cx| {
             this.dispatch_command(
                 &commands::AnnotationCommand {
-                    name: "banner".into(),
+                    name: "toolbar".into(),
                 },
                 window,
                 cx,
