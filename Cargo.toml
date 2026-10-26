@@ -154,7 +154,7 @@ similar = { version = "3.2", default-features = false, features = ["wasm32_web_t
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block = { version = "0.1", optional = true }
-cocoa = { version = "0.26", optional = true }
+cocoa = { version = "0.27", optional = true }
 objc = { version = "0.2", optional = true }
 raw-window-handle = { version = "0.6", optional = true }
 wry = { version = "0.57", default-features = false, optional = true }
