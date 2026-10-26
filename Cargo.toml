@@ -129,7 +129,7 @@ qrcode = { version = "0.14", default-features = false, optional = true }
 ratex-layout = { version = "=0.1.14", optional = true }
 ratex-parser = { version = "=0.1.14", optional = true }
 ratex-svg = { version = "=0.1.14", features = ["embed-fonts"], optional = true }
-ratex-types = { version = "=0.1.14", optional = true }
+ratex-types = { version = "=0.1.15", optional = true }
 regex = { version = "1", optional = true }
 rqrr = { version = "0.11", default-features = false, optional = true }
 rust-embed = { version = "8.12", optional = true }
