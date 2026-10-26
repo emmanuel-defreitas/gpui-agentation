@@ -24,7 +24,7 @@ jobs:
       # gh issue develop shells out to git to create/push the branch ref, so the job needs a
       # checkout. fetch-depth: 0 makes the base branch (dev) resolvable locally.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Create and link feature branch

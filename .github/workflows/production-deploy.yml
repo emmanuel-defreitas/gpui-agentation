@@ -20,7 +20,7 @@ jobs:
       RELEASE_TAG: ${{ github.event.release.tag_name }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
       - name: Deploy production

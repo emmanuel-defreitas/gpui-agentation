@@ -28,7 +28,7 @@ jobs:
       CONTAINER_REGISTRY_PASSWORD: ${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Validate release metadata before preview
