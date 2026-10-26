@@ -137,7 +137,7 @@ similar = { version = "3.2", default-features = false, features = ["std", "text"
 smallvec = { version = "1", optional = true }
 unicode-segmentation = { version = "1", optional = true }
 unicode-width = { version = "0.2", optional = true }
-usvg = { version = "0.46", optional = true }
+usvg = { version = "0.48", optional = true }
 vte = { version = "0.15", default-features = false, features = ["std", "ansi"], optional = true }
 web-time = { version = "1.1", optional = true }
 
