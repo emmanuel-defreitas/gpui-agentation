@@ -2429,7 +2429,7 @@ dependencies = [
  "atomic-write-file",
  "axum",
  "barcoders",
- "base64 0.22.1",
+ "base64 0.23.1",
  "block",
  "cocoa 0.26.1",
  "emojis",
