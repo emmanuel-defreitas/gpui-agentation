@@ -101,7 +101,7 @@ unneeded_wildcard_pattern = "allow"
 [dependencies]
 reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "json"], optional = true }
 atomic-write-file = { version = "0.3.0", optional = true }
-axum = { version = "0.7.9", optional = true }
+axum = { version = "0.8.9", optional = true }
 futures-util = { version = "0.3", optional = true }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"], optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
