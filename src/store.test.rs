@@ -1,7 +1,63 @@
 use super::*;
 
+#[test]
+fn inspection_annotation_snapshot_survives_restart_exports_and_shares_numbering() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("notes.json");
+    let store = Store::open(&path).unwrap();
+    let session = store
+        .ensure_session("Inspection", "gpui://inspection")
+        .unwrap();
+    let first = store.add(&session.id, feedback()).unwrap();
+    let mut input = feedback();
+    input.comment.clear();
+    input.inspection = Some(crate::InspectionSnapshot {
+        properties: std::collections::BTreeMap::from([
+            ("Width".into(), "220 px".into()),
+            ("Opacity".into(), "1".into()),
+        ]),
+    });
+    let note = store.add(&session.id, input.clone()).unwrap();
+    assert_eq!(note.index, first.index + 1);
+    assert_eq!(note.kind, "inspection");
+    let updated = store
+        .update(
+            &note.id,
+            AnnotationPatch {
+                comment: Some("Match the mockup".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(updated.feedback.inspection, input.inspection);
+    let markdown = store.markdown(&session.id).unwrap();
+    assert!(markdown.contains("Width: `220 px`"));
+    assert!(markdown.contains("Match the mockup"));
+    store
+        .update(
+            &note.id,
+            AnnotationPatch {
+                comment: Some(String::new()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    drop(store);
+    let store = Store::open(&path).unwrap();
+    let restored = store.annotation(&note.id).unwrap();
+    assert_eq!(restored.feedback.inspection, input.inspection);
+    assert!(restored.feedback.comment.is_empty());
+    let legacy = serde_json::to_value(feedback()).unwrap();
+    assert!(legacy.get("inspection").is_none());
+    let decoded: AnnotationInput = serde_json::from_value(legacy).unwrap();
+    assert!(decoded.inspection.is_none());
+    input.inspection.as_mut().unwrap().properties.clear();
+    assert!(store.add(&session.id, input).is_err());
+}
+
 fn feedback() -> AnnotationInput {
     AnnotationInput {
+        inspection: None,
         comment: "Add vertical padding".into(),
         element_path: "titlebar".into(),
         element: "Title bar".into(),

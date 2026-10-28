@@ -23,6 +23,7 @@ async fn mcp_round_trip_shares_rest_state_and_preserves_security_guards() {
         .add(
             &session.id,
             crate::AnnotationInput {
+                inspection: None,
                 comment: "Test MCP".into(),
                 element_path: "button".into(),
                 element: "Button".into(),

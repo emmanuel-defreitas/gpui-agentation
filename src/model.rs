@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+/// Current properties captured from an element anchored to an inspection note.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InspectionSnapshot {
+    /// All properties exposed by the inspector, including unchanged values.
+    pub properties: std::collections::BTreeMap<String, String>,
+}
+
 /// Window coordinates in logical pixels, independent of display scaling.
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct Rect {
@@ -86,6 +94,9 @@ pub struct AnnotationInput {
     pub bounding_box: Rect,
     /// Rust call-site location, when registered by the application.
     pub source_file: Option<String>,
+    /// Full property snapshot for an element-anchored inspection annotation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inspection: Option<InspectionSnapshot>,
     /// Temporary visual GPUI overrides active when the note was created.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpui_configuration: Option<GpuiConfiguration>,

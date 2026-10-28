@@ -60,6 +60,9 @@ pub struct AnnotationOverlay {
     session: Session,
     selected_note: Option<String>,
     active: bool,
+    inspecting: bool,
+    inspection_note: Option<String>,
+    restore_configuration: Option<crate::GpuiConfiguration>,
     hovered: Option<Target>,
     draft: Option<Draft>,
     input: Entity<TextInput>,
@@ -328,6 +331,9 @@ impl AnnotationOverlay {
             session,
             selected_note: None,
             active: false,
+            inspecting: false,
+            inspection_note: None,
+            restore_configuration: None,
             hovered: None,
             draft: None,
             input,
@@ -335,7 +341,7 @@ impl AnnotationOverlay {
             previous_focus: None,
             notice,
             revision: 0,
-            tool: None,
+            tool: Some(crate::ely::media::Tool::Box),
             color: 0,
             stroke: vec![],
             toolbar_at: preference.at,
@@ -393,6 +399,8 @@ impl AnnotationOverlay {
         match self.store.ensure_session(&self.session.app_name, url) {
             Ok(session) => {
                 inspector::close(window, cx);
+                self.inspecting = false;
+                self.inspection_note = None;
                 self.inspected_id = None;
                 self.inspected_configuration = None;
                 self.session = session;
@@ -416,20 +424,23 @@ impl AnnotationOverlay {
         cx.notify();
     }
 
-    /// Toggle picking mode, returning keyboard focus when leaving it.
+    /// Enable or disable free-form annotation tools independently of inspection.
     pub fn toggle(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.companion_toolbar_failure = None;
-        if self.active || self.draft.is_some() {
-            self.close(window, cx);
-        } else {
-            self.previous_focus = window.focused(cx);
-            self.active = true;
-            self.tool = None;
-            inspector::start(window, cx);
-            self.pointer = None;
-            window.focus(&self.focus, cx);
-            cx.notify();
+        if !self.dismiss_note(window, cx) {
+            return;
         }
+        self.active = !self.active;
+        self.stroke.clear();
+        self.pointer = None;
+        self.hovered = None;
+        if self.active {
+            self.previous_focus = window.focused(cx);
+            window.focus(&self.focus, cx);
+        } else {
+            self.return_focus(window, cx);
+        }
+        self.companion_toolbar_failure = None;
+        cx.notify();
     }
 
     fn choose_tool(
@@ -441,17 +452,21 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
-        if !self.active {
-            self.previous_focus = window.focused(cx);
-        }
-        self.active = true;
-        self.tool = tool;
-        self.inspected_id = None;
-        self.inspected_configuration = None;
         if tool.is_none() {
+            if self.inspecting {
+                self.stop_inspection(window, cx);
+                return;
+            }
+            self.inspecting = true;
+            self.review_open = false;
+            self.inspection_note = None;
             inspector::start(window, cx);
         } else {
-            inspector::close(window, cx);
+            if !self.active {
+                return;
+            }
+            self.stop_inspection(window, cx);
+            self.tool = tool;
         }
         self.stroke.clear();
         self.hovered = None;
@@ -466,6 +481,8 @@ impl AnnotationOverlay {
             return;
         }
         inspector::close(window, cx);
+        self.inspecting = false;
+        self.inspection_note = None;
         self.inspected_id = None;
         self.inspected_configuration = None;
         self.active = false;
@@ -525,6 +542,8 @@ impl AnnotationOverlay {
             return;
         }
         inspector::close(window, cx);
+        self.inspecting = false;
+        self.inspection_note = None;
         self.inspected_id = None;
         self.inspected_configuration = None;
         if !self.active && self.draft.is_none() {
@@ -535,7 +554,8 @@ impl AnnotationOverlay {
                 self.selected_note = Some(a.id.clone());
                 self.draft = Some(Draft {
                     index: Some(a.index),
-                    editing: matches!(a.feedback.shape, Some(crate::AnnotationShape::Text { .. })),
+                    editing: a.feedback.inspection.is_some()
+                        || matches!(a.feedback.shape, Some(crate::AnnotationShape::Text { .. })),
                     original_comment: a.feedback.comment.clone(),
                     color: a.annotation_color(),
                     url: a.url,
@@ -627,6 +647,7 @@ impl AnnotationOverlay {
             self.store.add_colored(
                 &self.session.id,
                 AnnotationInput {
+                    inspection: None,
                     comment,
                     element_path: draft.target.id.clone(),
                     element: draft.target.label.clone(),
@@ -685,6 +706,9 @@ impl AnnotationOverlay {
     }
 
     fn delete(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if self.inspection_note.as_deref() == Some(id) {
+            self.stop_inspection(window, cx);
+        }
         let before = self.store.annotation(id).ok();
         if let Err(error) = self.store.replace_note(before.as_ref(), None) {
             self.notice = error.to_string();
@@ -833,10 +857,15 @@ impl AnnotationOverlay {
 #[cfg(test)]
 use crate::AnnotationPatch;
 
+#[cfg(agentation_external_inspector)]
+mod anchored;
 mod annotation_menu;
 mod banner;
 pub mod commands;
 mod history;
+#[cfg(all(test, agentation_external_inspector))]
+#[path = "overlay/inspection.test.rs"]
+mod inspection_tests;
 pub(crate) mod inspector;
 mod mentions;
 #[cfg(test)]
@@ -851,6 +880,8 @@ mod toolbar_window;
 
 impl Render for AnnotationOverlay {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(agentation_external_inspector)]
+        self.keep_inspection_anchors(window, cx);
         self.sync_toolbar_window(window, cx);
         let surface = self.surface(window, cx);
         div()
