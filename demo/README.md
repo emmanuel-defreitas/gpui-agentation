@@ -10,13 +10,17 @@ This example uses the library's actual `AnnotationOverlay`, the pinned Ely
 components and the same `gpui-pre =0.3.8` source. It intentionally does not add
 `gpui-kit`, which would introduce incompatible GPUI types into this Ely app.
 
-The inline Ely Banner sits below the native titlebar. Click **Inspect** to
-hover over registered components for their dimensions, position, and source location,
-then click to comment. Click **Stop** to exit inspection, or use **Box**, **Arrow**,
-and **Pen** to draw. Save a note
-with **Save**. All tools remain visible; **Escape** exits picking. **Comments**, MCP status,
-and the **Settings** icon sit at the right. Settings opens a Sheet, and Position can switch
-between Banner and the draggable Floating toolbar.
+The separate vertical toolbar docks 14 logical pixels to the consumer window's
+right edge and matches its height. It follows dragging and resizing, hides with
+minimize/fullscreen/fill, and closes with the consumer. Click **Inspect** to pick
+a component and edit its properties or add an optional comment in the sidebar.
+**Stop** exits inspection; **Close** hides the toolbar. Drawing tools return when
+inspection ends. Comments, Settings, and MCP status stay near the bottom.
+Comments opens a sheet inside the consumer. On macOS, Settings opens a rich
+popup from the menu-bar icon; the toolbar's gear and Debug menu open the same
+popup. Restore a hidden toolbar
+with **Debug → Show Toolbar**. Undo, Redo, Save, and Delete remain available in
+the native menu and through shortcuts.
 Use Tab / Shift-Tab to navigate and Escape to dismiss the editor or picker.
 **Switch appearance** changes between the Ely light and dark themes.
 

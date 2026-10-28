@@ -101,6 +101,9 @@ impl Render for Demo {
 }
 
 pub(super) fn run() {
+    // Finder launches GUI examples outside the checkout; use this demo's
+    // project directory so source breadcrumbs have a meaningful working root.
+    let _ = std::env::set_current_dir(env!("CARGO_MANIFEST_DIR"));
     gpui_platform::application()
         .with_assets(gpui_agentation::Assets)
         .run(|cx| {
