@@ -129,7 +129,9 @@ impl Pending {
             effect.0.setWantsLayer(YES);
             let layer: id = msg_send![effect.0, layer];
             let _: () = msg_send![layer, setCornerRadius: self.radius];
-            let _: () = msg_send![layer, setMasksToBounds: YES];
+            // The GPUI panel draws its own rounded content edge. Clipping the
+            // full-size render view here cuts that edge at the material corner.
+            let _: () = msg_send![layer, setMasksToBounds: NO];
             self.parent.0.addSubview_(effect.0);
             let bounds: NSRect = msg_send![effect.0, bounds];
             let _: () = msg_send![self.view.0, setFrame: bounds];

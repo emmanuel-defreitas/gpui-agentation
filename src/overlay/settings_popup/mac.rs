@@ -306,6 +306,12 @@ impl StatusItem {
         unsafe { anchor(self.item.button()) }
     }
 
+    pub(super) fn set_highlighted(&self, highlighted: bool) {
+        unsafe {
+            let _: () = msg_send![self.item.button(), highlight: if highlighted { YES } else { cocoa::base::NO }];
+        }
+    }
+
     pub(super) fn watch(&mut self, window: &Window, generation: u64) {
         self.unwatch();
         let Some(window) = native_window(window) else {

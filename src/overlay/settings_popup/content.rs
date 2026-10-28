@@ -14,7 +14,7 @@ fn card(height: f32, cx: &App) -> gpui::Div {
         .flex()
         .flex_col()
         .rounded(px(12.))
-        .bg(cx.theme().colors.fg.opacity(0.03))
+        .bg(cx.theme().colors.fg.opacity(0.1))
 }
 
 fn detail(text: impl Into<SharedString>, cx: &App) -> gpui::Div {
@@ -59,8 +59,8 @@ fn symbol(path: &'static str, width: f32, height: f32, cx: &App) -> AnyElement {
 
 fn menu_switch(id: &'static str, on: bool) -> Switch {
     Switch::new(id, on)
-        .geometry(size(px(36.), px(16.)), size(px(21.), px(13.)))
-        .tint(gpui::rgb(0x0a99ff).into())
+        .geometry(size(px(36.), px(24.)), size(px(21.), px(21.)))
+        .tint(gpui::rgb(0x0a38ff).into())
         .thumb_color(gpui::rgb(0xffffff).into())
 }
 
@@ -78,12 +78,16 @@ struct MenuButton {
 
 impl RenderOnce for MenuButton {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let mut element = self.button.render(window, cx).into_any_element();
+        let fg = cx.theme().colors.fg;
+        let mut element = self
+            .button
+            .hover_color(fg.opacity(0.10))
+            .render(window, cx)
+            .into_any_element();
         let root = element
             .downcast_mut::<gpui::Stateful<gpui::Div>>()
             .expect("pinned Ely Button root");
         let root = std::mem::replace(root, div().id("unused-menu-button"));
-        let fg = cx.theme().colors.fg;
         root.aria_label(self.label)
             .h(px(self.height))
             .flex_none()
