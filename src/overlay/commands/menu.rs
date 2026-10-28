@@ -172,7 +172,7 @@ impl AnnotationOverlay {
             "undo" => !self.history.is_empty(),
             "redo" => !self.future.is_empty(),
             "color-0" | "color-1" | "color-2" | "color-3" => self.active,
-            "inspect" | "box" | "arrow" | "pen" | "comment" | "text" => self.active,
+            "box" | "arrow" | "pen" | "comment" | "text" => self.active,
             _ => true,
         }
     }
