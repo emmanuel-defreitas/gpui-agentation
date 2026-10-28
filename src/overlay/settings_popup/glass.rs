@@ -8,11 +8,11 @@ use cocoa::{
         NSView, NSViewHeightSizable, NSViewWidthSizable, NSVisualEffectBlendingMode,
         NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView,
     },
-    base::{BOOL, YES, id, nil},
+    base::{BOOL, NO, YES, id, nil},
     foundation::{NSAutoreleasePool, NSRect, NSString},
 };
 use gpui::{App, Window, WindowHandle};
-use objc::{class, msg_send, runtime::Class, sel, sel_impl};
+use objc::{class, msg_send, sel, sel_impl};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 /// Owned Objective-C reference, created and released only on GPUI's foreground.
@@ -101,11 +101,7 @@ impl Pending {
     unsafe fn apply(self, changed: RcBlock<(id,), ()>) -> Option<Surface> {
         unsafe {
             let frame: NSRect = msg_send![self.parent.0, bounds];
-            // Class lookup is the availability check: macOS <26 has no glass
-            // class. Avoid a hard link so older systems can still load the app.
-            let glass = Class::get("NSGlassEffectView");
-            let class = glass.unwrap_or_else(|| class!(NSVisualEffectView));
-            let effect: id = msg_send![class, alloc];
+            let effect: id = msg_send![class!(NSVisualEffectView), alloc];
             let effect: id = msg_send![effect, initWithFrame: frame];
             if effect == nil {
                 return None;
@@ -120,26 +116,20 @@ impl Pending {
             let responder: id = msg_send![self.window.0, firstResponder];
             let responder = Owned(msg_send![responder, retain]);
 
-            if glass.is_some() {
-                // Only contentView is guaranteed to be inside the glass. A
-                // sibling backdrop would miss AppKit's foreground treatment.
-                let _: () = msg_send![effect.0, setCornerRadius: self.radius];
-                let _: () = msg_send![effect.0, setContentView: self.view.0];
-            } else {
-                effect.0.setMaterial_(NSVisualEffectMaterial::Popover);
-                effect
-                    .0
-                    .setBlendingMode_(NSVisualEffectBlendingMode::BehindWindow);
-                effect
-                    .0
-                    .setState_(NSVisualEffectState::FollowsWindowActiveState);
-                effect.0.addSubview_(self.view.0);
-                // Older material views have no cornerRadius property.
-                effect.0.setWantsLayer(YES);
-                let layer: id = msg_send![effect.0, layer];
-                let _: () = msg_send![layer, setCornerRadius: self.radius];
-                let _: () = msg_send![layer, setMasksToBounds: YES];
-            }
+            // The stock popover material supplies the conventional frosted
+            // appearance on all supported macOS versions, including Tahoe.
+            effect.0.setMaterial_(NSVisualEffectMaterial::Popover);
+            effect
+                .0
+                .setBlendingMode_(NSVisualEffectBlendingMode::BehindWindow);
+            effect
+                .0
+                .setState_(NSVisualEffectState::FollowsWindowActiveState);
+            effect.0.addSubview_(self.view.0);
+            effect.0.setWantsLayer(YES);
+            let layer: id = msg_send![effect.0, layer];
+            let _: () = msg_send![layer, setCornerRadius: self.radius];
+            let _: () = msg_send![layer, setMasksToBounds: YES];
             self.parent.0.addSubview_(effect.0);
             let bounds: NSRect = msg_send![effect.0, bounds];
             let _: () = msg_send![self.view.0, setFrame: bounds];
@@ -147,7 +137,9 @@ impl Pending {
             // Reparenting may clear AppKit's first responder. GPUI focus handles
             // and the NSWindow identity are unchanged.
             let _: BOOL = msg_send![self.window.0, makeFirstResponder: responder.0];
-            let _: () = msg_send![self.window.0, setHasShadow: YES];
+            let _: () = msg_send![self.window.0, setHasShadow: NO];
+            let clear: id = msg_send![class!(NSColor), clearColor];
+            let _: () = msg_send![self.window.0, setBackgroundColor: clear];
             let _: () = msg_send![self.window.0, invalidateShadow];
 
             let center: id = msg_send![workspace, notificationCenter];
@@ -186,7 +178,7 @@ pub(super) fn install(popup: WindowHandle<SettingsPopup>, cx: &mut App) {
                 parent: Owned(msg_send![parent, retain]),
                 window: Owned(msg_send![native, retain]),
                 radius: f64::from(f32::from(
-                    cx.theme().radius(Radius::Lg).to_pixels(window.rem_size()),
+                    cx.theme().radius(Radius::Xl).to_pixels(window.rem_size()),
                 )),
                 dark: cx.theme().is_dark(),
             })

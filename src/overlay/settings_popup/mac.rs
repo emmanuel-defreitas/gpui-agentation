@@ -4,7 +4,7 @@ use block::{ConcreteBlock, RcBlock};
 use cocoa::{
     appkit::{NSEvent, NSScreen, NSStatusBar, NSStatusItem, NSVariableStatusItemLength, NSWindow},
     base::{YES, id, nil},
-    foundation::{NSAutoreleasePool, NSPoint, NSRect, NSString},
+    foundation::{NSAutoreleasePool, NSPoint, NSRect, NSSize, NSString},
 };
 use gpui::{AsyncApp, Bounds, Context, DisplayId, WeakEntity, Window, point, px, size};
 use objc::{
@@ -258,9 +258,16 @@ impl StatusItem {
             manager,
         });
         unsafe {
-            let image: id = msg_send![class!(NSImage), imageWithSystemSymbolName: string("scope")
-                accessibilityDescription: string("Agentation Settings")];
+            let bytes = include_bytes!("../../assets/menubar/tray.png");
+            let data: id =
+                msg_send![class!(NSData), dataWithBytes: bytes.as_ptr() length: bytes.len()];
+            let image: id = msg_send![class!(NSImage), alloc];
+            let image: id = msg_send![image, initWithData: data];
             anyhow::ensure!(image != nil, "missing Agentation status image");
+            let image = image.autorelease();
+            let _: () = msg_send![image, setSize: NSSize::new(14., 14.)];
+            let _: () =
+                msg_send![image, setAccessibilityDescription: string("Agentation Settings")];
             let _: () = msg_send![image, setTemplate: YES];
             let item =
                 NSStatusBar::systemStatusBar(nil).statusItemWithLength_(NSVariableStatusItemLength);

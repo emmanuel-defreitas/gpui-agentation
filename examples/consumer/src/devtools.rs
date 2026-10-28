@@ -172,6 +172,7 @@ mod tests {
             presses: 0,
         });
         draw(cx);
+        cx.update(|window, _| window.activate_window());
         let button = cx.debug_bounds("app-button").unwrap();
         cx.simulate_click(button.center(), Modifiers::none());
         draw(cx);
@@ -181,25 +182,29 @@ mod tests {
                 host.tools.set_route("gpui://consumer/details", window, cx)
             });
         });
-        // No host FocusScope or Ely initializer: Agentation owns Tab/Enter.
-        cx.simulate_keystrokes("tab");
+        // Tools live in the host's companion, outside its content focus order.
         draw(cx);
-        cx.simulate_event(gpui::KeyDownEvent {
-            keystroke: gpui::Keystroke::parse("enter").unwrap(),
-            is_held: false,
-            prefer_character_input: false,
-        });
-        cx.simulate_event(gpui::KeyUpEvent {
-            keystroke: gpui::Keystroke::parse("enter").unwrap(),
-        });
+        let host_id = cx.update(|window, _| window.window_handle().window_id());
+        let palette = cx
+            .windows()
+            .into_iter()
+            .find(|window| window.window_id() != host_id)
+            .unwrap();
+        let mut tools = VisualTestContext::from_window(palette, &cx.cx);
+        draw(&mut tools);
+        let inspect = tools.debug_bounds("companion-tool-i").unwrap();
+        tools.simulate_click(inspect.center(), Modifiers::none());
         draw(cx);
         cx.simulate_mouse_move(button.center(), None, Modifiers::none());
         draw(cx);
-        assert!(cx.debug_bounds("feedback-inspector-source").is_some());
+        assert!(cx.debug_bounds("feedback-inspector-overlay").is_none());
         cx.simulate_click(button.center(), Modifiers::none());
         draw(cx);
         cx.update(|_, cx| assert_eq!(host.read(cx).presses, 1));
-        assert!(cx.debug_bounds("feedback-inspector-source").is_none());
+        assert!(cx.debug_bounds("feedback-inspector-sidebar").is_none());
+        assert!(cx.debug_bounds("feedback-editor-panel").is_none());
+        let pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
+        cx.simulate_click(pin.center(), Modifiers::none());
         cx.simulate_input("Consumer feedback");
         draw(cx);
         let save = cx.debug_bounds("feedback-editor-primary").unwrap();
@@ -210,14 +215,27 @@ mod tests {
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].url, "gpui://consumer/details");
         assert_eq!(notes[0].feedback.comment, "Consumer feedback");
-        assert_eq!(notes[0].feedback.element_path, "screen");
-        let comments = cx.debug_bounds("banner-notes").unwrap();
-        cx.simulate_click(comments.center(), Modifiers::none());
+        assert!(notes[0].feedback.element_path.starts_with("gpui:"));
+        assert!(notes[0].feedback.inspection.is_some());
+        let host_id = cx.update(|window, _| window.window_handle().window_id());
+        let palettes: Vec<_> = cx
+            .windows()
+            .into_iter()
+            .filter(|window| window.window_id() != host_id)
+            .collect();
+        assert_eq!(palettes.len(), 1, "host owns one companion toolbar");
+        let mut tools = VisualTestContext::from_window(palettes[0], &cx.cx);
+        draw(&mut tools);
+        let comments = tools.debug_bounds("feedback-floating-comments").unwrap();
+        tools.simulate_click(comments.center(), Modifiers::none());
         draw(cx);
-        assert!(cx.debug_bounds("feedback-sheet-header").is_some());
-        cx.simulate_keystrokes("escape");
-        draw(cx);
+        draw(&mut tools);
+        assert!(tools.debug_bounds("companion-comments-panel").is_some());
         assert!(cx.debug_bounds("feedback-sheet-header").is_none());
+        tools.simulate_keystrokes("escape");
+        draw(&mut tools);
+        draw(cx);
+        assert!(tools.debug_bounds("companion-comments-panel").is_none());
         cx.update(|window, cx| assert!(window.focused(cx).is_some()));
     }
 }
