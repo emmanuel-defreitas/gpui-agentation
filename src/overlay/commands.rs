@@ -162,6 +162,7 @@ impl AnnotationOverlay {
                 if self.inspecting { self.stop_inspection(window, cx); }
                 else { self.close(window, cx); }
             },
+            "resume-inspection" => inspector::resume_picking(window, cx),
             "inspect" => self.choose_tool(None, window, cx),
             "box" => self.choose_tool(Some(Tool::Box), window, cx),
             "arrow" => self.choose_tool(Some(Tool::Arrow), window, cx),
@@ -264,7 +265,11 @@ impl AnnotationOverlay {
             && !self.settings_open
             && !self.review_open
         {
-            self.close(window, cx);
+            if self.inspecting {
+                inspector::resume_picking(window, cx);
+            } else {
+                self.close(window, cx);
+            }
             cx.stop_propagation();
             return;
         }

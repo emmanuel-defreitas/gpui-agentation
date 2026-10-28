@@ -16,6 +16,21 @@ impl AnnotationOverlay {
         self.future.clear();
     }
 
+    pub(super) fn record_inspection_change(
+        &mut self,
+        before: crate::Annotation,
+        after: crate::Annotation,
+    ) {
+        if let Some((_, Some(last))) = self.history.last_mut()
+            && last.id == after.id
+        {
+            *last = after;
+            self.future.clear();
+        } else {
+            self.record_change(Some(before), Some(after));
+        }
+    }
+
     pub(super) fn undo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.inspecting {
             self.stop_inspection(window, cx);

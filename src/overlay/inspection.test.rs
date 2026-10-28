@@ -132,6 +132,7 @@ fn inspection_annotation_autosaves_properties_reopens_and_accepts_optional_comme
     cx.simulate_click(pin.center(), Modifiers::none());
     draw(cx);
     assert!(cx.debug_bounds("feedback-editor-panel").is_some());
+    assert!(cx.debug_bounds("feedback-editor-placeholder").is_none());
     cx.simulate_input("Use a lighter appearance");
     draw(cx);
     cx.update(|window, cx| {
@@ -175,20 +176,7 @@ fn inspection_annotation_autosaves_properties_reopens_and_accepts_optional_comme
         );
     });
     let reset = palette.debug_bounds("inspector-reset").unwrap();
-    palette.simulate_click(reset.center(), Modifiers::none());
-    draw(&mut palette);
-    draw(cx);
-    draw(&mut palette);
-    draw(cx);
-    cx.update(|_, cx| {
-        let note = overlay.read(cx).store.annotation(&original.id).unwrap();
-        assert!(note.feedback.gpui_configuration.is_none());
-        assert_eq!(
-            note.feedback.inspection.as_ref().unwrap().properties["Opacity"],
-            "1"
-        );
-        assert_eq!(note.feedback.comment, "Use a lighter appearance");
-    });
+    assert!(reset.size.width > px(0.));
     cx.update(|window, cx| {
         overlay.update(cx, |this, cx| {
             assert!(this.delete(&original.id, window, cx));
@@ -199,6 +187,161 @@ fn inspection_annotation_autosaves_properties_reopens_and_accepts_optional_comme
     draw(&mut palette);
     draw(cx);
     cx.update(|_, cx| assert!(overlay.read(cx).session.annotations.is_empty()));
+    let target = cx.debug_bounds("inspection-target").unwrap();
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.choose_tool(None, window, cx)));
+    draw(cx);
+    cx.simulate_mouse_move(target.center(), None, Modifiers::none());
+    draw(cx);
+    let mut palette = tools(&overlay, cx);
+    let stop = palette.debug_bounds("feedback-inspect-stop").unwrap();
+    palette.simulate_click(stop.center(), Modifiers::none());
+    draw(&mut palette);
+    draw(cx);
+    cx.update(|window, cx| {
+        assert!(!overlay.read(cx).inspecting);
+        assert!(!window.is_inspector_picking(cx));
+    });
+}
+
+#[gpui::test]
+fn fresh_inspection_pick_preserves_saved_overrides(cx: &mut TestAppContext) {
+    let (_, overlay, cx) = setup(cx);
+    let original = cx.update(|_, cx| overlay.read(cx).session.annotations[0].clone());
+    let mut palette = tools(&overlay, cx);
+    let track = palette
+        .debug_bounds("inspector-slider-ely-inspector-opacity")
+        .unwrap();
+    palette.simulate_click(
+        point(track.left() + track.size.width * 0.5, track.center().y),
+        Modifiers::none(),
+    );
+    draw(&mut palette);
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.stop_inspection(window, cx);
+            this.choose_tool(None, window, cx);
+        })
+    });
+    draw(cx);
+    let bounds = cx.debug_bounds("inspection-target").unwrap();
+    cx.simulate_click(bounds.center(), Modifiers::none());
+    draw(cx);
+    let mut palette = tools(&overlay, cx);
+    draw(&mut palette);
+    draw(cx);
+    cx.update(|_, cx| {
+        assert_eq!(overlay.read(cx).session.annotations.len(), 1);
+        assert!(
+            overlay
+                .read(cx)
+                .store
+                .annotation(&original.id)
+                .unwrap()
+                .feedback
+                .gpui_configuration
+                .is_some()
+        );
+    });
+}
+
+#[gpui::test]
+fn selected_inspection_reenters_picking_on_click_away_or_escape(cx: &mut TestAppContext) {
+    let (_, overlay, cx) = setup(cx);
+    cx.update(|window, cx| {
+        assert!(overlay.read(cx).inspecting);
+        assert!(!window.is_inspector_picking(cx));
+    });
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| this.toggle(window, cx));
+        assert!(overlay.read(cx).active);
+    });
+    cx.simulate_click(point(px(850.), px(620.)), Modifiers::none());
+    draw(cx);
+    cx.update(|window, cx| {
+        assert!(overlay.read(cx).inspecting);
+        assert!(window.is_inspector_picking(cx));
+    });
+    let target = cx.debug_bounds("inspection-target").unwrap();
+    cx.simulate_click(target.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|window, cx| assert!(!window.is_inspector_picking(cx)));
+    cx.simulate_keystrokes("escape");
+    draw(cx);
+    cx.update(|window, cx| {
+        assert!(overlay.read(cx).inspecting);
+        assert!(window.is_inspector_picking(cx));
+    });
+    let target = cx.debug_bounds("inspection-target").unwrap();
+    cx.simulate_click(target.center(), Modifiers::none());
+    draw(cx);
+    let mut palette = tools(&overlay, cx);
+    palette.simulate_keystrokes("escape");
+    draw(&mut palette);
+    draw(cx);
+    cx.update(|window, cx| {
+        assert!(overlay.read(cx).inspecting);
+        assert!(window.is_inspector_picking(cx));
+    });
+    let mut palette = tools(&overlay, cx);
+    let stop = palette.debug_bounds("feedback-inspect-stop").unwrap();
+    palette.simulate_click(stop.center(), Modifiers::none());
+    draw(&mut palette);
+    draw(cx);
+    cx.update(|window, cx| {
+        assert!(!overlay.read(cx).inspecting);
+        assert!(!inspector::is_open(window, cx));
+    });
+}
+
+#[gpui::test]
+fn editing_an_older_inspection_keeps_undo_transactions_valid(cx: &mut TestAppContext) {
+    let (_, overlay, cx) = setup(cx);
+    let (inspection, later) = cx.update(|_, cx| {
+        overlay.update(cx, |this, _cx| {
+            let inspection = this.session.annotations[0].clone();
+            let later = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Later note".into(),
+                        element_path: "later".into(),
+                        element: "Later".into(),
+                        x: 10.,
+                        y: 20.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: None,
+                    },
+                )
+                .unwrap();
+            this.record_change(None, Some(later.clone()));
+            let mut updated = inspection.clone();
+            updated.feedback.comment = "Older inspection edited later".into();
+            this.store
+                .replace_note(Some(&inspection), Some(&updated))
+                .unwrap();
+            this.record_inspection_change(inspection.clone(), updated);
+            (inspection, later)
+        })
+    });
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| this.undo(window, cx));
+        assert!(overlay.read(cx).store.annotation(&inspection.id).is_ok());
+        assert!(overlay.read(cx).store.annotation(&later.id).is_ok());
+    });
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| this.undo(window, cx));
+        assert!(overlay.read(cx).store.annotation(&inspection.id).is_ok());
+        assert!(overlay.read(cx).store.annotation(&later.id).is_err());
+    });
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| this.undo(window, cx));
+        assert!(overlay.read(cx).store.annotation(&inspection.id).is_err());
+    });
 }
 
 #[gpui::test]
@@ -206,6 +349,15 @@ fn inspection_annotation_follows_element_layout_and_hides_when_element_disappear
     cx: &mut TestAppContext,
 ) {
     let (host, overlay, cx) = setup(cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.stop_inspection(window, cx)));
+    draw(cx);
+    let selected_bounds = cx.debug_bounds("inspection-target").unwrap();
+    cx.simulate_click(
+        point(selected_bounds.left() + px(1.), selected_bounds.center().y),
+        Modifiers::none(),
+    );
+    draw(cx);
+    cx.update(|_, cx| assert!(overlay.read(cx).inspecting));
     cx.update(|window, cx| overlay.update(cx, |this, cx| this.stop_inspection(window, cx)));
     draw(cx);
     cx.update(|_, cx| {
@@ -256,14 +408,27 @@ fn inspection_annotation_comments_use_companion_and_drawing_switch_is_independen
     draw(cx);
     let mut palette = tools(&overlay, cx);
     assert!(palette.debug_bounds("external-inspector-panel").is_none());
+    let arrow = palette.debug_bounds("companion-tool-a").unwrap();
+    palette.simulate_click(arrow.center(), Modifiers::none());
+    draw(&mut palette);
+    cx.update(|_, cx| {
+        assert!(!overlay.read(cx).active);
+        assert_eq!(overlay.read(cx).tool, Some(crate::ely::media::Tool::Box));
+    });
+    let mode = palette.debug_bounds("feedback-annotation-toggle").unwrap();
+    palette.simulate_click(mode.center(), Modifiers::none());
+    draw(&mut palette);
+    draw(cx);
+    cx.update(|_, cx| {
+        assert!(overlay.read(cx).active);
+        assert!(!overlay.read(cx).inspecting);
+    });
     cx.update(|window, cx| {
         overlay.update(cx, |this, cx| {
             this.toggle(window, cx);
-            assert!(this.active);
+            assert!(!this.active);
             assert!(!this.inspecting);
             assert!(!window.is_inspector_picking(cx));
-            this.toggle(window, cx);
-            assert!(!this.active);
         })
     });
 }

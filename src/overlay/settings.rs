@@ -67,7 +67,7 @@ impl AnnotationOverlay {
         cx.notify();
     }
 
-    fn set_hot_reload_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
+    pub(super) fn set_hot_reload_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
         if self.hot_reload_pending || !self.hot_reload_status.available {
             return;
         }

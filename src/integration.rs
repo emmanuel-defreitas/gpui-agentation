@@ -27,6 +27,25 @@ impl AssetSource for Assets {
         if path == "agentation/mcp.svg" {
             return Ok(Some(Cow::Borrowed(include_bytes!("assets/mcp.svg"))));
         }
+        if let Some(name) = path.strip_prefix("agentation/menubar/") {
+            let asset: Option<&'static [u8]> = match name {
+                "brand.svg" => Some(include_bytes!("assets/menubar/brand.svg")),
+                "reload.svg" => Some(include_bytes!("assets/menubar/reload.svg")),
+                "crates.png" => Some(include_bytes!("assets/menubar/crates.png")),
+                "github.svg" => Some(include_bytes!("assets/menubar/github.svg")),
+                "mcp.svg" => Some(include_bytes!("assets/menubar/mcp.svg")),
+                "copy.svg" => Some(include_bytes!("assets/menubar/copy.svg")),
+                _ => None,
+            };
+            if let Some(asset) = asset {
+                return Ok(Some(Cow::Borrowed(asset)));
+            }
+        }
+        if path == "agentation/mark.svg" {
+            return Ok(Some(Cow::Borrowed(include_bytes!(
+                "../docs/assets/mark.svg"
+            ))));
+        }
         crate::ely::Assets.load(path)
     }
 
@@ -34,6 +53,22 @@ impl AssetSource for Assets {
         let mut paths = crate::ely::Assets.list(path)?;
         if "agentation/mcp.svg".starts_with(path) {
             paths.push("agentation/mcp.svg".into());
+        }
+        if "agentation/mark.svg".starts_with(path) {
+            paths.push("agentation/mark.svg".into());
+        }
+        for name in [
+            "brand.svg",
+            "reload.svg",
+            "crates.png",
+            "github.svg",
+            "mcp.svg",
+            "copy.svg",
+        ] {
+            let asset = format!("agentation/menubar/{name}");
+            if asset.starts_with(path) {
+                paths.push(asset.into());
+            }
         }
         Ok(paths)
     }

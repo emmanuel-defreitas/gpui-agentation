@@ -71,10 +71,44 @@ fn rich_popup_has_own_input_copies_collapsed_config_and_preserves_consumer(
     cx: &mut TestAppContext,
 ) {
     let (owner, mut host) = host(cx, "First consumer");
+    host.update(|_, cx| {
+        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+    });
     host.update(|window, cx| owner.update(cx, |this, cx| this.choose_tool(None, window, cx)));
     draw(&mut host);
     let mut popup = show(&mut host);
     assert!(popup.debug_bounds("feedback-settings-popup").is_some());
+    for selector in [
+        "feedback-settings-brand",
+        "feedback-settings-hot-reload",
+        "feedback-settings-mcp",
+        "feedback-settings-about",
+    ] {
+        assert!(popup.debug_bounds(selector).is_some(), "missing {selector}");
+    }
+    let panel = popup.debug_bounds("feedback-settings-popup").unwrap();
+    let about = popup.debug_bounds("feedback-settings-about").unwrap();
+    for (selector, height) in [
+        ("feedback-settings-hot-reload", 79.),
+        ("feedback-settings-mcp", 116.),
+        ("feedback-settings-about", 98.),
+    ] {
+        assert_eq!(
+            popup.debug_bounds(selector).unwrap().size.height,
+            px(height)
+        );
+    }
+    assert_eq!(
+        popup
+            .debug_bounds("feedback-mcp-server-toggle")
+            .unwrap()
+            .size,
+        size(px(36.), px(16.)),
+    );
+    assert!(
+        about.bottom() <= panel.bottom(),
+        "About card {about:?} must fit the compact popup {panel:?}"
+    );
     assert!(host.debug_bounds("feedback-sheet-header").is_none());
     host.update(|window, cx| {
         assert!(window.is_inspector_picking(cx));
@@ -96,7 +130,24 @@ fn rich_popup_has_own_input_copies_collapsed_config_and_preserves_consumer(
     popup.update(|_, cx| {
         let text = cx.read_from_clipboard().unwrap().text().unwrap();
         assert_eq!(text, owner.read(cx).mcp_config_input.read(cx).text());
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string("before shortcut".into()));
     });
+    popup.simulate_keystrokes("ctrl-cmd-c");
+    draw(&mut popup);
+    popup.update(|_, cx| {
+        assert_eq!(
+            cx.read_from_clipboard().unwrap().text().unwrap(),
+            owner.read(cx).mcp_config_input.read(cx).text(),
+        );
+    });
+    let disclosure = popup.debug_bounds("feedback-mcp-config-toggle").unwrap();
+    popup.simulate_click(disclosure.center(), Modifiers::none());
+    draw(&mut popup);
+    assert!(popup.debug_bounds("feedback-mcp-config-code").is_some());
+    let disclosure = popup.debug_bounds("feedback-mcp-config-toggle").unwrap();
+    popup.simulate_click(disclosure.center(), Modifiers::none());
+    draw(&mut popup);
+    assert!(popup.debug_bounds("feedback-mcp-config-code").is_none());
     popup.simulate_keystrokes("escape");
     host.run_until_parked();
     host.update(|window, cx| {

@@ -1,10 +1,6 @@
 //! One menu-bar entry per process, targeting the last active consumer window.
 use super::*;
-use crate::ely::{
-    buttons::IconButton,
-    primitives::FocusScope,
-    theme::{Elevation, Radius, TextSize},
-};
+use crate::ely::{primitives::FocusScope, theme::Radius};
 use gpui::{
     AnyWindowHandle, Bounds, DisplayId, Global, Pixels, WeakEntity, WindowBounds, WindowId,
     WindowOptions, point, px, size,
@@ -19,6 +15,9 @@ mod native;
 #[path = "settings_popup/glass.rs"]
 #[allow(deprecated, unexpected_cfgs)]
 mod glass;
+
+#[path = "settings_popup/content.rs"]
+mod content;
 
 #[cfg(target_os = "macos")]
 use native::ClickGuard;
@@ -300,7 +299,7 @@ impl SettingsTray {
                 display: display.map(|(id, _)| id),
             }
         });
-        let bounds = popup_bounds(anchor, size(px(380.), px(620.)));
+        let bounds = popup_bounds(anchor, size(px(261.), px(367.)));
         self.previous_focus = focus;
         self.restore_consumer = was_active;
         self.selected = Some(id);
@@ -424,7 +423,6 @@ struct SettingsPopup {
     #[cfg(target_os = "macos")]
     surface: Option<glass::Surface>,
     owner: WeakEntity<AnnotationOverlay>,
-    name: String,
     manager: WeakEntity<SettingsTray>,
     generation: u64,
     focus: FocusHandle,
@@ -440,7 +438,7 @@ struct SettingsPopup {
 impl SettingsPopup {
     fn new(
         owner: Entity<AnnotationOverlay>,
-        name: String,
+        _name: String,
         manager: WeakEntity<SettingsTray>,
         generation: u64,
         click_guard: Option<ClickGuard>,
@@ -484,7 +482,6 @@ impl SettingsPopup {
             #[cfg(target_os = "macos")]
             surface: None,
             owner: owner.downgrade(),
-            name,
             manager,
             generation,
             focus,
@@ -511,6 +508,13 @@ impl SettingsPopup {
     }
 
     fn copy(&mut self, cx: &mut Context<Self>) {
+        if self
+            .owner
+            .upgrade()
+            .is_none_or(|owner| owner.read(cx)._server.is_none())
+        {
+            return;
+        }
         cx.write_to_clipboard(gpui::ClipboardItem::new_string(
             self.config.read(cx).text().to_string(),
         ));
@@ -531,24 +535,7 @@ impl Render for SettingsPopup {
         let Some(owner) = self.owner.upgrade() else {
             return div().into_any_element();
         };
-        let copy = cx.entity().downgrade();
-        let toggle = copy.clone();
-        let controls = super::settings::ConfigControls {
-            input: self.config.clone(),
-            copied: self.copied,
-            expanded: self.expanded,
-            copy: std::rc::Rc::new(move |cx| {
-                let _ = copy.update(cx, |this, cx| this.copy(cx));
-            }),
-            toggle: std::rc::Rc::new(move |cx| {
-                let _ = toggle.update(cx, |this, cx| {
-                    this.expanded = !this.expanded;
-                    cx.notify();
-                });
-            }),
-        };
-        let content =
-            super::settings::settings_content(owner.read(cx), owner.clone(), controls, cx);
+        let content = content::render(self, &owner, cx);
         #[cfg(target_os = "macos")]
         if let Some(surface) = &mut self.surface {
             surface.sync_appearance(cx.theme().is_dark(), _window, cx);
@@ -570,7 +557,9 @@ impl Render for SettingsPopup {
             .flex()
             .flex_col()
             .text_color(theme.colors.fg)
-            .rounded(theme.radius(Radius::Lg))
+            .rounded(theme.radius(Radius::Xl))
+            .border_1()
+            .border_color(theme.colors.fg.opacity(0.18))
             .when(native_surface && reduce_transparency, |panel| {
                 panel.bg(theme.colors.surface.opacity(1.))
             })
@@ -579,58 +568,24 @@ impl Render for SettingsPopup {
                     .bg(theme.colors.surface)
                     .border_1()
                     .border_color(theme.colors.border)
-                    .shadow(theme.elevation(Elevation::Raised))
             })
             .when(increase_contrast, |panel| {
                 panel.border_1().border_color(theme.colors.fg)
             })
-            .child(
-                div()
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .px_4()
-                    .py_3()
-                    .border_b_1()
-                    .border_color(theme.colors.border)
-                    .child(Icon::new(crate::ely::primitives::IconName::Settings))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap_0p5()
-                            .child(
-                                div()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .child("Settings"),
-                            )
-                            .child(
-                                div()
-                                    .text_size(theme.text_size(TextSize::Xs))
-                                    .text_color(theme.colors.fg_muted)
-                                    .child(self.name.clone()),
-                            ),
-                    )
-                    .child(
-                        IconButton::new(
-                            "feedback-settings-popup-close",
-                            crate::ely::primitives::IconName::X,
-                        )
-                        .variant(crate::ely::buttons::ButtonVariant::Ghost)
-                        .size(ControlSize::Sm)
-                        .tooltip("Close Settings")
-                        .on_click(cx.listener(|this, _, _, cx| this.close(true, cx))),
-                    ),
-            )
-            .child(div().flex_1().min_h_0().w_full().child(content));
+            .child(content);
         div()
             .size_full()
             .key_context("AgentationSettingsPopup")
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
-                if event.keystroke.key == "escape" {
+                if event.keystroke.key.eq_ignore_ascii_case("c")
+                    && event.keystroke.modifiers.platform
+                    && event.keystroke.modifiers.control
+                    && !event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.shift
+                {
+                    this.copy(cx);
+                    cx.stop_propagation();
+                } else if event.keystroke.key == "escape" {
                     this.close(true, cx);
                     cx.stop_propagation();
                 }

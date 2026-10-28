@@ -58,11 +58,12 @@ pub(super) fn comment_input(
 ) -> gpui::AnyElement {
     let mut field = Input::new(input).render(window, cx).into_any_element();
     let colors = &cx.theme().colors;
+    let focused = input.read(cx).focus().is_focused(window);
     if let Some(root) = field.downcast_mut::<gpui::Div>() {
         root.style().refine(
             &gpui::StyleRefinement::default()
                 .bg(background)
-                .text_color(colors.bg.opacity(0.5))
+                .text_color(colors.bg)
                 .border_0()
                 .rounded_none()
                 .p_0(),
@@ -72,14 +73,15 @@ pub(super) fn comment_input(
         .relative()
         .w_full()
         .child(field)
-        .when(input.read(cx).text().is_empty(), |root| {
+        .when(input.read(cx).text().is_empty() && !focused, |root| {
             root.child(
                 div()
+                    .debug_selector(|| "feedback-editor-placeholder".into())
                     .absolute()
                     .top_0()
                     .left_0()
                     .text_size(cx.theme().text_size(TextSize::Sm))
-                    .text_color(colors.bg.opacity(0.5))
+                    .text_color(colors.bg.opacity(0.65))
                     .child(if textbox {
                         "Type text…"
                     } else {
@@ -973,27 +975,51 @@ impl AnnotationOverlay {
                             }
                         },
                     ))
-                    .when(!self.active, |root| {
-                        root.when(self.over_shape, |root| root.cursor_pointer())
-                            .on_mouse_move(cx.listener(
-                                |this, event: &gpui::MouseMoveEvent, window, cx| {
-                                    let over = this.shape_at(event.position, window).is_some();
-                                    if this.over_shape != over {
-                                        this.over_shape = over;
-                                        cx.notify();
-                                    }
-                                },
-                            ))
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
-                                    if let Some(id) = this.shape_at(event.position, window) {
-                                        this.activate_annotation(&id, window, cx);
-                                        cx.stop_propagation();
-                                    }
-                                }),
-                            )
-                    })
+                    .when(
+                        !self.active || (self.inspecting && self.inspected_id.is_some()),
+                        |root| {
+                            root.when(self.over_shape, |root| root.cursor_pointer())
+                                .on_mouse_move(cx.listener(
+                                    |this, event: &gpui::MouseMoveEvent, window, cx| {
+                                        let over = this.shape_at(event.position, window).is_some();
+                                        if this.over_shape != over {
+                                            this.over_shape = over;
+                                            cx.notify();
+                                        }
+                                    },
+                                ))
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(
+                                        |this, event: &gpui::MouseDownEvent, window, cx| {
+                                            if let Some(id) = this.shape_at(event.position, window)
+                                            {
+                                                this.activate_annotation(&id, window, cx);
+                                                cx.stop_propagation();
+                                                return;
+                                            }
+                                            if this.inspecting
+                                                && this.inspected_id.is_some()
+                                                && !super::inspector::is_picking(window, cx)
+                                                && crate::ely::tooling::inspector_selection(
+                                                    window, cx,
+                                                )
+                                                .filter(|selection| {
+                                                    Some(&selection.id)
+                                                        == this.inspected_id.as_ref()
+                                                })
+                                                .is_some_and(|selection| {
+                                                    !selection.bounds.contains(&event.position)
+                                                })
+                                            {
+                                                super::inspector::resume_picking(window, cx);
+                                                cx.stop_propagation();
+                                            }
+                                        },
+                                    ),
+                                )
+                        },
+                    )
                     .on_mouse_up(
                         MouseButton::Left,
                         cx.listener(|this, event: &gpui::MouseUpEvent, window, cx| {
@@ -1009,6 +1035,15 @@ impl AnnotationOverlay {
                     .capture_key_down(cx.listener(
                         |this, event: &gpui::KeyDownEvent, window, cx| {
                             if event.keystroke.key == "escape" && this.take_mention_escape() {
+                                cx.stop_propagation();
+                                return;
+                            }
+                            if event.keystroke.key == "escape"
+                                && this.inspecting
+                                && !this.settings_open
+                                && !this.review_open
+                            {
+                                super::inspector::resume_picking(window, cx);
                                 cx.stop_propagation();
                                 return;
                             }

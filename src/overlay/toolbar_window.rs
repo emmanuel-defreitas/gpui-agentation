@@ -605,14 +605,14 @@ impl Render for ToolbarWindow {
             )
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
                 if event.keystroke.key == "escape" {
-                    this.action(
-                        if this.state.panel == Some(CompanionPanel::Comments) {
-                            "comments"
-                        } else {
-                            "stop"
-                        },
-                        cx,
-                    );
+                    let action = if this.state.panel == Some(CompanionPanel::Comments) {
+                        "comments"
+                    } else if this.state.inspecting {
+                        "resume-inspection"
+                    } else {
+                        "stop"
+                    };
+                    this.action(action, cx);
                 }
             }))
             .child(FocusScope::new(&self.focus).root().size_full().child(body))

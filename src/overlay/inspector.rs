@@ -1,6 +1,9 @@
 //! Native picking and element-anchored inspection annotations.
 use super::*;
-use crate::ely::{forms::Switch, tooling};
+use crate::ely::{
+    buttons::{Button, ButtonVariant},
+    tooling,
+};
 use gpui::{Global, Inspector, WeakEntity, WindowId};
 use std::collections::HashMap;
 
@@ -34,25 +37,29 @@ pub(crate) fn install(cx: &mut App) {
             });
         let toggle_owner = owner.clone();
         let header = div()
-            .debug_selector(|| "feedback-inspect-toggle".into())
             .flex()
             .items_center()
-            .gap_2()
-            .child("Inspect")
+            .justify_between()
+            .child("Inspector")
             .child(
-                Switch::new("feedback-inspect-switch", true)
-                    .name("Inspect")
-                    .on_change(move |_, _, cx| {
-                        let owner = toggle_owner.clone();
-                        cx.defer(move |cx| {
-                            let _ = target.update(cx, |_, host, cx| {
-                                if let Some(owner) = owner {
-                                    let _ =
-                                        owner.update(cx, |this, cx| this.stop_inspection(host, cx));
-                                }
-                            });
-                        });
-                    }),
+                div()
+                    .debug_selector(|| "feedback-inspect-stop".into())
+                    .child(
+                        Button::new("feedback-inspect-stop", "Stop")
+                            .variant(ButtonVariant::Ghost)
+                            .on_click(move |_, _, cx| {
+                                let owner = toggle_owner.clone();
+                                cx.defer(move |cx| {
+                                    let _ = target.update(cx, |_, host, cx| {
+                                        if let Some(owner) = owner {
+                                            let _ = owner.update(cx, |this, cx| {
+                                                this.stop_inspection(host, cx)
+                                            });
+                                        }
+                                    });
+                                });
+                            }),
+                    ),
             )
             .into_any_element();
         tooling::inspector_panel_with_header(
@@ -121,6 +128,20 @@ fn native_inspector(window: &Window, cx: &App) -> Option<Entity<Inspector>> {
         .inspector
         .as_ref()?
         .upgrade()
+}
+
+pub(super) fn is_picking(window: &Window, cx: &App) -> bool {
+    native_inspector(window, cx).is_some_and(|inspector| inspector.read(cx).is_picking())
+}
+
+pub(super) fn resume_picking(window: &mut Window, cx: &mut App) {
+    if let Some(inspector) = native_inspector(window, cx) {
+        inspector.update(cx, |inspector, cx| {
+            inspector.start_picking();
+            cx.notify();
+        });
+        window.refresh();
+    }
 }
 
 fn present(window: &Window, presented: bool, cx: &mut App) {
@@ -317,6 +338,19 @@ impl AnnotationOverlay {
                             && self.inspected_id.as_ref() == Some(&selection.id))
             })
             .cloned();
+        // A fresh pick of an existing inspection must restore its saved style
+        // before capturing the selection again; otherwise the baseline would
+        // overwrite the annotation's last saved configuration.
+        if self.restore_configuration.is_none()
+            && let Some(note) = &existing
+            && let Some(saved) = &note.feedback.gpui_configuration
+            && Some(saved) != config.as_ref()
+        {
+            self.inspected_id = Some(selection.id.clone());
+            self.inspection_note = Some(note.id.clone());
+            self.restore_configuration = Some(saved.clone());
+            return false;
+        }
         let changed = existing.as_ref().is_none_or(|note| {
             note.feedback.inspection.as_ref() != Some(&snapshot)
                 || note.feedback.gpui_configuration != config
@@ -363,10 +397,8 @@ impl AnnotationOverlay {
                 Ok(note) => {
                     if existing.is_none() {
                         self.record_change(None, Some(note.clone()));
-                    } else if let Some((_, Some(last))) = self.history.last_mut() {
-                        if last.id == note.id {
-                            *last = note.clone();
-                        }
+                    } else if let Some(previous) = existing {
+                        self.record_inspection_change(previous, note.clone());
                     }
                     self.inspection_note = Some(note.id.clone());
                     self.selected_note = Some(note.id.clone());

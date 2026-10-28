@@ -47,6 +47,7 @@ impl Render for Comments {
             .border_color(cx.theme().colors.border)
             .child(
                 div()
+                    .debug_selector(|| "feedback-sheet-header".into())
                     .flex()
                     .items_center()
                     .justify_between()
@@ -67,7 +68,13 @@ impl Render for Comments {
                             .on_click(move |_, window, cx| close(window, cx)),
                     ),
             )
-            .child(div().flex_1().min_h_0().child(body))
+            .child(
+                div()
+                    .debug_selector(|| "feedback-sheet-body".into())
+                    .flex_1()
+                    .min_h_0()
+                    .child(body),
+            )
             .into_any_element()
     }
 }

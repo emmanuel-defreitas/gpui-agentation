@@ -166,23 +166,29 @@ The [consumer example](examples/consumer/README.md) keeps all of this in one
 
 ### Inspect and annotate
 
-Choose **Inspect**, **Box**, **Arrow**, **Pen**, **Comment**, or **Textbox**. Select an element or draw
-on the screen. **Inspect** uses one GPUI picker and sidebar: click an element to
-view its source, box model, and editable properties. Drag the sliders or use
-the arrow keys to preview width, height, padding, margin, border, and opacity.
-Add an optional comment below the properties, then choose **Save feedback**.
-Style changes can be saved without a comment and include Rust builder snippets
-in MCP responses and copied Markdown. **Pick** selects another element;
-**Done** or **Esc** closes the sidebar. The toolbar is always a separate vertical
-companion, docked 14 logical pixels to the consumer window's right edge. It matches
-the consumer's height and follows its movement and resizing. It hides with the
-consumer when minimized, fullscreen, or filling the display, and returns when
-restored. Closing the consumer also closes its toolbar.
+Choose **Inspect**, **Box**, **Arrow**, **Pen**, **Comment**, or **Textbox**. Inspect
+uses GPUI's picker; selecting an element creates or updates a numbered inspection
+annotation. Its border follows the element, and clicking the border reopens its
+properties. The inspector shows source, box model, and editable width, height,
+padding, margin, border, and opacity sliders. Property snapshots include
+unchanged values and save to the inspection annotation as you edit. Click its
+numbered pin to add an optional comment; the properties and comment are exported
+together in MCP responses and copied Markdown.
 
-During inspection, drawing controls hide and Inspect becomes **Stop**. Stop exits
-inspection; **Close** hides the toolbar while inspection stays active. The trailing
-group is **Comments**, **Settings**, and **Close**. Undo, Redo, Save, and Delete
-remain available through shortcuts and the native Debug menu.
+The rail's **Annotation mode** switch enables drawing tools. When off, the tools
+stay visible but muted and disabled. **Stop** in the Inspector header exits
+inspection; while an element is selected, Esc or clicking elsewhere on the
+consumer resumes picking.
+Comments opens in the companion and shares the inspector's expand and collapse
+transition. The toolbar is always a separate vertical companion, docked 14
+logical pixels to the consumer window's right edge. It matches the consumer's
+height and follows its movement and resizing. It hides with the consumer when
+minimized, fullscreen, or filling the display, and returns when restored.
+Closing the consumer also closes its toolbar.
+
+The trailing toolbar group is **Comments**, **Settings**, and **Close**. Undo,
+Redo, Save, and Delete remain available through shortcuts and the native Debug
+menu.
 
 On macOS, the **Agentation Settings** menu-bar icon opens a rich popup for the
 last active consumer window. The companion's Settings button, **Debug → Settings**,
