@@ -44,6 +44,7 @@ pub struct InspectorStyleConfiguration {
 pub struct InspectorSelection {
     pub id: InspectorElementId,
     pub bounds: Bounds<Pixels>,
+    pub properties: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Default)]
@@ -53,17 +54,14 @@ struct InspectorConfiguration {
 }
 impl Global for InspectorConfiguration {}
 
-#[cfg(agentation_external_inspector)]
 #[derive(Default)]
 struct InspectorTargets {
     windows: HashMap<WindowId, gpui::AnyWindowHandle>,
     controllers: HashMap<WindowId, gpui::EntityId>,
 }
-#[cfg(agentation_external_inspector)]
 impl Global for InspectorTargets {}
 
 /// Route a detached inspector's controls to the consumer's native picker.
-#[cfg(agentation_external_inspector)]
 pub fn set_inspector_target(view: WindowId, target: Option<gpui::AnyWindowHandle>, cx: &mut App) {
     let targets = cx.default_global::<InspectorTargets>();
     if let Some(target) = target {
@@ -75,7 +73,6 @@ pub fn set_inspector_target(view: WindowId, target: Option<gpui::AnyWindowHandle
 }
 
 pub fn inspector_target(window: &Window, _cx: &App) -> gpui::AnyWindowHandle {
-    #[cfg(agentation_external_inspector)]
     if let Some(target) = _cx
         .try_global::<InspectorTargets>()
         .and_then(|targets| targets.windows.get(&window.window_handle().window_id()))
@@ -395,18 +392,21 @@ fn box_model(state: &DivInspectorState, window: &mut Window, cx: &mut App) -> An
         .gap_3()
         .text_size(theme.text_size(TextSize::Xs))
         // Captured bounds belong to the consumer, never to its detached panel.
-        .when(inspector_target(window, cx) == window.window_handle(), |body| {
-            body.child(raise(
-                "ely-inspector-overlay",
-                canvas(
-                    |_, _, _| {},
-                    move |_, _, window, cx| paint_layers(bounds, layers, window, cx),
-                )
-                .absolute()
-                .top_0()
-                .left_0(),
-            ))
-        })
+        .when(
+            inspector_target(window, cx) == window.window_handle(),
+            |body| {
+                body.child(raise(
+                    "ely-inspector-overlay",
+                    canvas(
+                        |_, _, _| {},
+                        move |_, _, window, cx| paint_layers(bounds, layers, window, cx),
+                    )
+                    .absolute()
+                    .top_0()
+                    .left_0(),
+                ))
+            },
+        )
         .child(model)
         .child(
             div()
@@ -627,6 +627,29 @@ fn apply_edit(
     });
     if let Some(current) = current {
         publish_configuration(id, &current, edits, rem, window, cx);
+        window.refresh();
+    }
+}
+
+/// Restore a saved note's overrides after its live element has captured a baseline.
+pub fn restore_inspector_configuration(id: &InspectorElementId, configuration: InspectorStyleConfiguration, window: &mut Window, cx: &mut App) {
+    let mut applied = false;
+    let _ = window.with_inspector_state::<DivInspectorState, _>(Some(id), cx, |state, _| {
+        let Some(state) = state else { return; };
+        for change in &configuration.changes {
+            let edit = match change.property.as_str() {
+                "Width" => EditableStyle::Width, "Height" => EditableStyle::Height,
+                "Padding" => EditableStyle::Padding, "Margin" => EditableStyle::Margin,
+                "Border" => EditableStyle::Border, "Opacity" => EditableStyle::Opacity,
+                _ => continue,
+            };
+            let Some(value) = change.after.split('/').next().and_then(|part| part.trim().trim_end_matches("px").parse::<f32>().ok()).filter(|value| value.is_finite()) else { continue; };
+            set_edit(&mut state.base_style, edit, value);
+            applied = true;
+        }
+    });
+    if applied {
+        cx.global_mut::<InspectorConfiguration>().configurations.insert(window.window_handle().window_id(), configuration);
         window.refresh();
     }
 }
@@ -865,6 +888,16 @@ pub fn inspector_panel(
     cx: &mut Context<Inspector>,
     footer: impl FnOnce(&Inspector, &mut Window, &mut Context<Inspector>) -> Option<AnyElement>,
 ) -> AnyElement {
+    inspector_panel_with_header(inspector, window, cx, None, footer)
+}
+
+pub fn inspector_panel_with_header(
+    inspector: &mut Inspector,
+    window: &mut Window,
+    cx: &mut Context<Inspector>,
+    header: Option<AnyElement>,
+    footer: impl FnOnce(&Inspector, &mut Window, &mut Context<Inspector>) -> Option<AnyElement>,
+) -> AnyElement {
     let picking = inspector.is_picking();
     if picking {
         // gpui holds a pick on a press without a redraw, so the panel draws each frame while picking.
@@ -916,6 +949,7 @@ pub fn inspector_panel(
         true => {
             "Click an element to edit it. Scroll to select a parent. Press Esc to exit picking."
         }
+        false if header.is_some() => "Selected · Properties save to this inspection annotation.",
         false => "Selected · Changes preview live. Pick selects another element.",
     };
     let body = div()
@@ -947,24 +981,27 @@ pub fn inspector_panel(
                         .justify_between()
                         .gap_2()
                         .child(div().font_weight(FontWeight::SEMIBOLD).child("Inspector"))
-                        .children((!picking).then(|| {
-                            div().debug_selector(|| "inspector-pick".into()).child(
-                                Button::new("ely-inspector-pick", "Pick")
-                                    .variant(ButtonVariant::Ghost)
-                                    .size(ControlSize::Sm)
-                                    .on_click(move |_, window, cx| {
-                                        owner.update(cx, |inspector, cx| {
-                                            inspector.start_picking();
-                                            cx.notify();
-                                        });
-                                        let target = inspector_target(window, cx);
-                                        if target != window.window_handle() {
-                                            let _ = target.update(cx, |_, host, _| host.refresh());
-                                        }
-                                        log::info!("inspector: picking");
-                                        window.refresh();
-                                    }),
-                            )
+                        .children(header.or_else(|| {
+                            (!picking).then(|| {
+                                div().debug_selector(|| "inspector-pick".into()).child(
+                                    Button::new("ely-inspector-pick", "Pick")
+                                        .variant(ButtonVariant::Ghost)
+                                        .size(ControlSize::Sm)
+                                        .on_click(move |_, window, cx| {
+                                            owner.update(cx, |inspector, cx| {
+                                                inspector.start_picking();
+                                                cx.notify();
+                                            });
+                                            let target = inspector_target(window, cx);
+                                            if target != window.window_handle() {
+                                                let _ =
+                                                    target.update(cx, |_, host, _| host.refresh());
+                                            }
+                                            log::info!("inspector: picking");
+                                            window.refresh();
+                                        }),
+                                )
+                            }).map(IntoElement::into_any_element)
                         })),
                 )
                 .child(
@@ -1049,6 +1086,44 @@ pub fn install_inspector(cx: &mut App) {
                     InspectorSelection {
                         id: id.clone(),
                         bounds: state.bounds,
+                        properties: {
+                            let rem = window.rem_size();
+                            let written = layers(&state.base_style, rem);
+                            let sides = |values: [Side; 4]| {
+                                values.map(|value| value.to_string()).join(" / ")
+                            };
+                            std::collections::BTreeMap::from([
+                                (
+                                    "Width".into(),
+                                    format!(
+                                        "{} px",
+                                        number(length_pixels(
+                                            state.base_style.size.width,
+                                            state.bounds.size.width,
+                                            rem
+                                        ))
+                                    ),
+                                ),
+                                (
+                                    "Height".into(),
+                                    format!(
+                                        "{} px",
+                                        number(length_pixels(
+                                            state.base_style.size.height,
+                                            state.bounds.size.height,
+                                            rem
+                                        ))
+                                    ),
+                                ),
+                                ("Padding".into(), sides(written.padding)),
+                                ("Margin".into(), sides(written.margin)),
+                                ("Border".into(), sides(written.border)),
+                                (
+                                    "Opacity".into(),
+                                    number(state.base_style.opacity.unwrap_or(1.)),
+                                ),
+                            ])
+                        },
                     },
                 );
             }
