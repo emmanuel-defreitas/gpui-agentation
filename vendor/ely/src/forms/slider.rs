@@ -3,7 +3,7 @@ use std::rc::Rc;
 use gpui::{
     AnyElement, App, Bounds, DragMoveEvent, ElementId, EmptyView, EntityId, InteractiveElement,
     IntoElement, MouseButton, Orientation, ParentElement, Pixels, Point, RenderOnce, Role,
-    StatefulInteractiveElement, Styled, Window, canvas, div, prelude::*, relative,
+    SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, prelude::*, relative,
 };
 
 use super::options::OnNumber;
@@ -63,6 +63,7 @@ struct Track {
     range: (f64, f64, f64),
     vertical: bool,
     disabled: bool,
+    label: Option<SharedString>,
     commit: Commit,
 }
 
@@ -159,6 +160,7 @@ impl Track {
                 div()
                     .id(("thumb", k))
                     .role(Role::Slider)
+                    .when_some(self.label.clone(), |thumb, label| thumb.aria_label(label))
                     .aria_numeric_value(value)
                     .aria_min_numeric_value(floor)
                     .aria_max_numeric_value(ceiling)
@@ -252,6 +254,7 @@ impl Track {
                         drag(index, next, window, cx);
                     })
                     .on_mouse_down(MouseButton::Left, move |event, window, cx| {
+                        window.prevent_default();
                         let bounds = *measured.read(cx);
                         let next =
                             value_at(along(bounds, event.position, vertical), min, max, step);
@@ -289,6 +292,7 @@ pub struct Slider {
     range: (f64, f64, f64),
     vertical: bool,
     disabled: bool,
+    label: Option<SharedString>,
     on_change: Option<OnNumber>,
 }
 
@@ -300,8 +304,15 @@ impl Slider {
             range: (0.0, 100.0, 1.0),
             vertical: false,
             disabled: false,
+            label: None,
             on_change: None,
         }
+    }
+
+    /// The name of the value for assistive technology.
+    pub fn label(mut self, label: impl Into<SharedString>) -> Self {
+        self.label = Some(label.into());
+        self
     }
 
     pub fn range(mut self, min: f64, max: f64) -> Self {
@@ -352,6 +363,7 @@ impl RenderOnce for Slider {
             range: self.range,
             vertical: self.vertical,
             disabled: self.disabled,
+            label: self.label,
             commit,
         }
         .render(window, cx)
@@ -438,6 +450,7 @@ impl RenderOnce for RangeSlider {
             range: self.range,
             vertical: self.vertical,
             disabled: self.disabled,
+            label: None,
             commit,
         }
         .render(window, cx)
