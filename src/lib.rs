@@ -27,8 +27,8 @@ pub use http::Server;
 pub use integration::init_for_tests;
 pub use integration::{Agentation, Assets, init};
 pub use model::{
-    Annotation, AnnotationInput, AnnotationPatch, AnnotationStatus, Event, Rect, Session,
-    ThreadMessage,
+    Annotation, AnnotationInput, AnnotationPatch, AnnotationStatus, Event, GpuiConfiguration,
+    GpuiStyleChange, Rect, Session, ThreadMessage,
 };
 pub use overlay::AnnotationOverlay;
 pub use overlay::commands::{AnnotationCommand, debug_menu};

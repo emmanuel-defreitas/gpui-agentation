@@ -205,7 +205,7 @@ fn textbox_pin_selection_pointer_drag_and_context_actions_preserve_identity(
 }
 
 #[gpui::test]
-fn toolbar_delete_keeps_the_selected_note_after_editor_outside_click(cx: &mut TestAppContext) {
+fn delete_shortcut_keeps_the_selected_note_after_editor_outside_click(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
     text_draft(&overlay, cx);
     cx.simulate_input("Delete from toolbar");
@@ -215,8 +215,7 @@ fn toolbar_delete_keeps_the_selected_note_after_editor_outside_click(cx: &mut Te
     let text = cx.debug_bounds("feedback-textbox").unwrap();
     cx.simulate_click(text.center(), Modifiers::none());
     draw(cx);
-    let delete = cx.debug_bounds("feedback-history-delete").unwrap();
-    cx.simulate_click(delete.center(), Modifiers::none());
+    cx.simulate_keystrokes("delete");
     draw(cx);
     cx.update(|_, cx| assert!(overlay.read(cx).store.annotation(&note.id).is_err()));
     cx.simulate_keystrokes("ctrl-z");
@@ -284,6 +283,7 @@ fn pin_drag_moves_only_the_pin_and_can_be_undone(cx: &mut TestAppContext) {
 #[gpui::test]
 fn none_position_removes_the_toolbar_and_menu_commands_restore_it(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
+    cx.update(|window, _| window.activate_window());
     cx.update(|_, cx| {
         overlay.update(cx, |this, cx| {
             this.set_toolbar_position(ToolbarPosition::None, cx)
@@ -304,7 +304,7 @@ fn none_position_removes_the_toolbar_and_menu_commands_restore_it(cx: &mut TestA
         })
     });
     draw(cx);
-    assert!(cx.debug_bounds("banner-inspect").is_some());
+    cx.update(|_, cx| assert!(overlay.read(cx).companion_toolbar.is_some()));
 }
 
 gpui::actions!(release_test, [HostBox]);

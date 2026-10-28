@@ -16,21 +16,26 @@ fn native_menu_groups_use_real_disabled_states_and_checkmarks() {
     let off = build_menu(MenuState::default());
     assert!(off.items[0].is_disabled());
     assert!(off.items[1].is_disabled());
+    assert!(matches!(
+        &off.items[2],
+        MenuItem::Action { name, action, .. }
+            if name.as_ref() == "Inspect element"
+                && action
+                    .as_any()
+                    .downcast_ref::<AnnotationCommand>()
+                    .is_some_and(|command| command.name == "devtools")
+    ));
     assert!(menu(&off, "New").disabled);
     assert!(menu(&off, "Color").disabled);
-    assert!(menu(&off, "Position").items[1].is_checked());
     let on = build_menu(MenuState {
         active: true,
         undo: true,
-        floating: true,
         hidden: true,
         ..Default::default()
     });
     assert!(!on.items[0].is_disabled());
     assert!(on.items[1].is_disabled());
     assert!(!menu(&on, "New").disabled);
-    assert!(menu(&on, "Position").disabled);
-    assert!(menu(&on, "Position").items[0].is_checked());
     assert!(
         matches!(&off.items[0], MenuItem::Action { action, .. } if action.as_any().is::<UnavailableCommand>())
     );
@@ -96,9 +101,18 @@ fn menu_tracks_window_state_and_preserves_host_menus(cx: &mut TestAppContext) {
                 cx,
             );
             assert!(
-                this.toolbar_hidden,
-                "disabled position command does not execute"
+                !this.toolbar_hidden,
+                "position commands remain available when hidden"
             );
+            assert!(this.banner);
+            this.dispatch_command(
+                &AnnotationCommand {
+                    name: "close-toolbar".into(),
+                },
+                window,
+                cx,
+            );
+            assert!(this.toolbar_hidden);
             this.dispatch_command(
                 &AnnotationCommand {
                     name: "toolbar".into(),
@@ -107,7 +121,7 @@ fn menu_tracks_window_state_and_preserves_host_menus(cx: &mut TestAppContext) {
                 cx,
             );
             assert!(!this.toolbar_hidden);
-            assert!(!this.banner, "show restores floating position");
+            assert!(this.banner, "show restores the last position");
         });
     });
     let other = cx.update(|_, cx| {

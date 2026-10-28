@@ -14,6 +14,7 @@ fn feedback() -> AnnotationInput {
             height: 54.0,
         },
         source_file: Some("src/shell.rs:12:3".into()),
+        gpui_configuration: None,
         shape: None,
     }
 }
@@ -482,4 +483,35 @@ fn annotation_color_persists_without_turning_element_feedback_into_a_drawing() {
         note
     );
     assert!(store.add_colored(&session.id, feedback(), Some(4)).is_err());
+}
+
+#[test]
+fn style_only_feedback_should_require_valid_configuration() {
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Style feedback", "gpui://test")
+        .unwrap();
+    let mut input = feedback();
+    input.comment.clear();
+    assert!(store.add(&session.id, input.clone()).is_err());
+    input.gpui_configuration = Some(crate::GpuiConfiguration {
+        source: "src/app.rs:12:3".into(),
+        element_path: "sample".into(),
+        changes: vec![crate::GpuiStyleChange {
+            property: "Width".into(),
+            before: "100px".into(),
+            after: "120px".into(),
+        }],
+        rust: "div().w(px(120.0))".into(),
+    });
+    let note = store.add(&session.id, input.clone()).unwrap();
+    assert!(note.feedback.comment.is_empty());
+    assert!(
+        store
+            .markdown(&session.id)
+            .unwrap()
+            .contains("div().w(px(120.0))")
+    );
+    input.gpui_configuration.as_mut().unwrap().changes.clear();
+    assert!(store.add(&session.id, input).is_err());
 }

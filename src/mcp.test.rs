@@ -30,6 +30,16 @@ async fn mcp_round_trip_shares_rest_state_and_preserves_security_guards() {
                 y: 10.,
                 bounding_box: crate::Rect::default(),
                 source_file: None,
+                gpui_configuration: Some(crate::GpuiConfiguration {
+                    source: "src/button.rs:42:9".into(),
+                    element_path: "button.primary".into(),
+                    changes: vec![crate::GpuiStyleChange {
+                        property: "Padding".into(),
+                        before: "8px".into(),
+                        after: "12px".into(),
+                    }],
+                    rust: "div()\n  .p(px(12.0))".into(),
+                }),
                 shape: None,
             },
         )
@@ -57,12 +67,10 @@ async fn mcp_round_trip_shares_rest_state_and_preserves_security_guards() {
         json!({"name":"annotation_pending"}),
     )
     .await;
-    assert!(
-        pending["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains(&note.id)
-    );
+    let pending_text = pending["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(pending_text.contains(&note.id));
+    assert!(pending_text.contains("gpuiConfiguration"));
+    assert!(pending_text.contains(".p(px(12.0))"));
     let updated = rpc(
         &client,
         &url,
@@ -95,6 +103,12 @@ async fn mcp_round_trip_shares_rest_state_and_preserves_security_guards() {
             .as_str()
             .unwrap()
             .contains("Working on it")
+    );
+    assert!(
+        markdown["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("GPUI configuration")
     );
     let invalid = rpc(
         &client,

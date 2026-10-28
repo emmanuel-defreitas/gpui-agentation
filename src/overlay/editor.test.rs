@@ -7,6 +7,29 @@ fn draw(cx: &mut VisualTestContext) {
     cx.run_until_parked();
 }
 
+fn click_toolbar(
+    overlay: &Entity<AnnotationOverlay>,
+    selector: &'static str,
+    cx: &mut VisualTestContext,
+) {
+    cx.update(|window, cx| {
+        window.activate_window();
+        overlay.update(cx, |this, cx| this.sync_toolbar_window(window, cx));
+    });
+    draw(cx);
+    let handle = cx.update(|_, cx| overlay.read(cx).companion_toolbar.unwrap());
+    let mut tools = VisualTestContext::from_window(handle.into(), &cx.cx);
+    draw(&mut tools);
+    let selector = if selector == "banner-notes" {
+        "feedback-floating-comments"
+    } else {
+        selector
+    };
+    let target = tools.debug_bounds(selector).unwrap();
+    tools.simulate_click(target.center(), Modifiers::none());
+    draw(cx);
+}
+
 fn setup(cx: &mut TestAppContext) -> (Entity<AnnotationOverlay>, &mut VisualTestContext) {
     cx.update(crate::ely::init_for_tests);
     let store = Store::memory();
@@ -45,6 +68,7 @@ fn saved(overlay: &Entity<AnnotationOverlay>, cx: &mut VisualTestContext) -> Str
                         x: 20.,
                         y: 120.,
                         source_file: None,
+                        gpui_configuration: None,
                         shape: None,
                     },
                 )
@@ -219,8 +243,7 @@ fn comments_and_settings_should_save_and_open_in_one_click_and_block_invalid_cha
             })
         });
         draw(cx);
-        let target = cx.debug_bounds(selector).unwrap();
-        cx.simulate_click(target.center(), Modifiers::none());
+        click_toolbar(&overlay, selector, cx);
         draw(cx);
         cx.update(|window, cx| {
             overlay.update(cx, |this, cx| {
@@ -238,8 +261,7 @@ fn comments_and_settings_should_save_and_open_in_one_click_and_block_invalid_cha
             })
         });
         draw(cx);
-        let target = cx.debug_bounds(selector).unwrap();
-        cx.simulate_click(target.center(), Modifiers::none());
+        click_toolbar(&overlay, selector, cx);
         draw(cx);
         cx.update(|_, cx| {
             let this = overlay.read(cx);
@@ -283,6 +305,7 @@ fn another_canvas_pin_should_save_current_note_and_open_clicked_note_in_one_clic
                                 x: at.0 * 100.,
                                 y: at.1,
                                 source_file: None,
+                                gpui_configuration: None,
                                 shape: Some(crate::AnnotationShape::Pin { at, color: 0 }),
                             },
                         )
@@ -354,8 +377,7 @@ fn floating_comments_should_save_and_open_in_one_click(cx: &mut TestAppContext) 
         });
     });
     draw(cx);
-    let comments = cx.debug_bounds("feedback-floating-comments").unwrap();
-    cx.simulate_click(comments.center(), Modifiers::none());
+    click_toolbar(&overlay, "feedback-floating-comments", cx);
     draw(cx);
     assert!(cx.debug_bounds("feedback-comments-list").is_some());
     cx.update(|_, cx| {
@@ -399,8 +421,7 @@ fn saved_multiline_note_should_render_without_mutating_or_dropping_line_breaks(
         assert!(!overlay.read(cx).draft.as_ref().unwrap().editing);
         assert_eq!(overlay.read(cx).input.read(cx).text(), text);
     });
-    let comments = cx.debug_bounds("banner-notes").unwrap();
-    cx.simulate_click(comments.center(), Modifiers::none());
+    click_toolbar(&overlay, "banner-notes", cx);
     draw(cx);
     cx.update(|_, cx| {
         assert!(overlay.read(cx).review_open);

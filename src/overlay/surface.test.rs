@@ -72,18 +72,6 @@ fn trailing_actions_should_keep_mouse_and_keyboard_activation_out_of_the_row(
 }
 
 #[test]
-fn floating_toolbar_should_preserve_its_saved_location_and_clamp_to_the_viewport() {
-    assert_eq!(
-        super::toolbar_anchor((900.0, 620.0), (180.0, 48.0), Some((120.0, 80.0))),
-        (120.0, 80.0)
-    );
-    assert_eq!(
-        super::toolbar_anchor((100.0, 100.0), (48.0, 48.0), Some((120.0, 80.0))),
-        (44.0, 44.0)
-    );
-}
-
-#[test]
 fn inspect_should_use_normal_cursor_and_arrow_drawing_should_use_crosshair() {
     assert_eq!(super::tool_cursor(None), gpui::CursorStyle::Arrow);
     assert_eq!(

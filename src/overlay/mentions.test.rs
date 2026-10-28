@@ -41,6 +41,7 @@ fn mention_dropdown_previews_hovered_and_typed_notes_and_inserts_reference(
                         y: 100.0,
                         bounding_box: crate::Rect::default(),
                         source_file: None,
+                        gpui_configuration: None,
                         shape: Some(crate::AnnotationShape::Pin {
                             at: (0.05 * index as f32, 0.2),
                             color: 0,

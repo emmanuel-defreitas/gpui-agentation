@@ -1,14 +1,10 @@
 use super::*;
 use crate::ely::{
-    buttons::{ActionBar, Button, IconButton},
-    forms::ColorSwatch,
+    buttons::{Button, IconButton},
     lists::{ListItem, SelectableList},
     media::Tool,
-    motion,
-    overlays::Popover,
     primitives::{FocusRing, FocusScope, Icon, IconName, Measure, raise},
     theme::{ActiveTheme, ControlSize, Elevation, Radius, TextSize},
-    typography::{Caption, Label, Overline},
 };
 use crate::{
     AnnotationShape, Rect,
@@ -24,15 +20,6 @@ pub(super) struct FeedbackDrag {
     pub owner: EntityId,
 }
 
-const TOOLS: [(Option<Tool>, IconName, &str); 6] = [
-    (None, IconName::Crosshair, "Inspect element"),
-    (Some(Tool::Box), IconName::Square, "Box"),
-    (Some(Tool::Arrow), IconName::ArrowUpRight, "Arrow"),
-    (Some(Tool::Pen), IconName::PenLine, "Pen"),
-    (Some(Tool::Pin), IconName::MessageSquare, "Comment"),
-    (Some(Tool::Select), IconName::Type, "Textbox"),
-];
-
 pub(super) fn tool_shortcut(tool: Option<Tool>) -> &'static str {
     match tool {
         None => "I",
@@ -44,121 +31,10 @@ pub(super) fn tool_shortcut(tool: Option<Tool>) -> &'static str {
     }
 }
 
-pub(super) struct WidthMotion {
-    from: f32,
-    to: f32,
-    since: Instant,
-}
-
-impl WidthMotion {
-    fn value(&self, length: Duration) -> (f32, bool) {
-        let t = (self.since.elapsed().as_secs_f32() / length.as_secs_f32()).min(1.0);
-        (
-            motion::lerp(self.from, self.to, motion::ease_out_cubic(t)),
-            t < 1.0,
-        )
-    }
-}
-
 fn tool_cursor(tool: Option<Tool>) -> CursorStyle {
     match tool {
         None => CursorStyle::Arrow,
         Some(_) => CursorStyle::Crosshair,
-    }
-}
-
-// Match Ely's editor references: file identity first, location separate, path
-// secondary. Unlike ReferencesPanel, this hover footer must remain click-through.
-fn inspector_source(source: &str, cx: &App) -> gpui::Div {
-    let theme = cx.theme();
-    let parsed = source.rsplit_once(':').and_then(|(rest, column)| {
-        let (path, line) = rest.rsplit_once(':')?;
-        line.parse::<u32>().ok()?;
-        column.parse::<u32>().ok()?;
-        Some((path, format!("Ln {line}, Col {column}")))
-    });
-    let (path, location) = parsed.unwrap_or((source, String::new()));
-    let (directory, filename) = path.rsplit_once('/').unwrap_or(("", path));
-    div()
-        .w_full()
-        .flex_none()
-        .pt_2()
-        .border_t_1()
-        .border_color(theme.colors.border)
-        .flex()
-        .flex_col()
-        .gap_1()
-        .debug_selector(|| "feedback-inspector-source".into())
-        .child(
-            div()
-                .w_full()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(
-                    Icon::new(IconName::FileCode)
-                        .size(IconSize::Sm)
-                        .color(theme.colors.fg_muted),
-                )
-                .child(
-                    Label::new(filename.to_owned())
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_size(theme.text_size(TextSize::Sm)),
-                )
-                .when(!location.is_empty(), |row| {
-                    row.child(
-                        div()
-                            .flex_none()
-                            .px_1p5()
-                            .py_0p5()
-                            .rounded(theme.radius(Radius::Sm))
-                            .bg(theme.colors.sunken)
-                            .font_family(theme.mono_family.clone())
-                            .text_size(theme.text_size(TextSize::Xs))
-                            .text_color(theme.colors.fg_muted)
-                            .debug_selector(|| "feedback-inspector-location".into())
-                            .child(location),
-                    )
-                }),
-        )
-        .when(!directory.is_empty(), |footer| {
-            footer.child(
-                Caption::new(directory.to_owned())
-                    .w_full()
-                    .truncate()
-                    .text_ellipsis_start()
-                    .font_family(theme.mono_family.clone())
-                    .text_size(theme.text_size(TextSize::Xs))
-                    .text_color(theme.colors.fg_subtle),
-            )
-        })
-}
-
-#[derive(IntoElement)]
-struct NotesTrigger {
-    count: usize,
-    toggle: std::rc::Rc<dyn Fn(&mut Window, &mut App)>,
-    owner: gpui::WeakEntity<AnnotationOverlay>,
-}
-
-impl RenderOnce for NotesTrigger {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let notes = IconButton::new("feedback-review", IconName::MessageSquare)
-            .tooltip(format!("Comments ({})", self.count))
-            .variant(ButtonVariant::Ghost)
-            .on_click(move |_, window, cx| {
-                let dismissed = self
-                    .owner
-                    .update(cx, |this, cx| this.dismiss_note(window, cx))
-                    .unwrap_or(false);
-                if dismissed {
-                    (self.toggle)(window, cx);
-                }
-            });
-        annotation_count(self.count, round_icon(notes, window, cx), cx)
-            .debug_selector(|| "feedback-floating-comments".into())
     }
 }
 
@@ -238,22 +114,9 @@ fn row_action(button: impl IntoElement) -> gpui::Div {
         .child(button)
 }
 
-fn viewport(window: &Window) -> (f32, f32) {
+pub(super) fn viewport(window: &Window) -> (f32, f32) {
     let size = window.viewport_size();
     (size.width.into(), size.height.into())
-}
-
-pub(super) fn round_icon(
-    button: IconButton,
-    window: &mut Window,
-    cx: &mut App,
-) -> gpui::AnyElement {
-    let mut button = button.render(window, cx).into_any_element();
-    if let Some(root) = button.downcast_mut::<gpui::Stateful<gpui::Div>>() {
-        root.style()
-            .refine(&gpui::StyleRefinement::default().rounded_full());
-    }
-    button
 }
 
 fn normalized(at: gpui::Point<gpui::Pixels>, window: &Window) -> (f32, f32) {
@@ -262,30 +125,6 @@ fn normalized(at: gpui::Point<gpui::Pixels>, window: &Window) -> (f32, f32) {
         (f32::from(at.x) / w.max(1.0)).clamp(0.0, 1.0),
         (f32::from(at.y) / h.max(1.0)).clamp(0.0, 1.0),
     )
-}
-
-fn toolbar_anchor(
-    viewport: (f32, f32),
-    size: (f32, f32),
-    floating_at: Option<(f32, f32)>,
-) -> (f32, f32) {
-    let at = floating_at.unwrap_or(((viewport.0 - size.0) / 2.0, viewport.1 - size.1 - 48.0));
-    (
-        at.0.clamp(8.0, (viewport.0 - size.0 - 8.0).max(8.0)),
-        at.1.clamp(8.0, (viewport.1 - size.1 - 8.0).max(8.0)),
-    )
-}
-
-pub(super) fn notes_content(
-    owner: gpui::WeakEntity<AnnotationOverlay>,
-    close: std::rc::Rc<dyn Fn(&mut Window, &mut App)>,
-    window: &mut Window,
-    cx: &mut App,
-) -> gpui::Div {
-    let Some(owner) = owner.upgrade() else {
-        return div();
-    };
-    notes_body(owner.read(cx), owner.clone(), close, false, window, cx)
 }
 
 pub(super) fn notes_body(
@@ -521,9 +360,6 @@ impl AnnotationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.toolbar_drag.take().is_some() {
-            self.persist_toolbar(cx);
-        }
         if let Some((before, offset)) = self.textbox_drag.take() {
             let p = normalized(at, window);
             let after = super::textbox::moved_textbox(
@@ -660,11 +496,6 @@ impl AnnotationOverlay {
                 }
             }
             cx.notify();
-        } else if let Some(offset) = self.toolbar_drag {
-            let (w, h) = viewport(window);
-            self.toolbar_at = Some((f32::from(at.x) - offset.0, f32::from(at.y) - offset.1));
-            self.toolbar_at = Some(self.toolbar_position((w, h)));
-            cx.notify();
         } else if !self.stroke.is_empty() && self.stroke.len() < 4096 {
             self.pointer = Some((at.x.into(), at.y.into()));
             let next = normalized(at, window);
@@ -673,250 +504,6 @@ impl AnnotationOverlay {
                 cx.notify();
             }
         }
-    }
-
-    pub(super) fn history_controls(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let mut controls = div().flex().items_center().gap_1();
-        for (name, label, icon, disabled) in [
-            ("undo", "Undo", IconName::Undo2, self.history.is_empty()),
-            ("redo", "Redo", IconName::Redo2, self.future.is_empty()),
-            ("save", "Save", IconName::Save, self.draft.is_none()),
-            (
-                "delete",
-                "Delete",
-                IconName::Trash2,
-                self.draft.as_ref().and_then(|d| d.id.as_ref()).is_none()
-                    && self.selected_note.is_none(),
-            ),
-        ] {
-            controls = controls.child(
-                div()
-                    .debug_selector(move || format!("feedback-history-{name}"))
-                    .child(
-                        super::surface_button::SurfaceButton::new(
-                            format!("feedback-history-{name}"),
-                            label,
-                            icon,
-                            false,
-                        )
-                        .icon_only()
-                        .when(self.active, |button| {
-                            button.when_some(super::commands::shortcut(name), |button, keys| {
-                                button.shortcut(keys)
-                            })
-                        })
-                        .disabled(disabled)
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| {
-                                this.dispatch_command(
-                                    &super::commands::AnnotationCommand { name: name.into() },
-                                    window,
-                                    cx,
-                                )
-                            },
-                        )),
-                    ),
-            );
-        }
-        controls
-    }
-
-    fn toolbar_position(&self, viewport: (f32, f32)) -> (f32, f32) {
-        toolbar_anchor(viewport, self.toolbar_size, self.toolbar_at)
-    }
-
-    fn toolbar(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let owner = cx.entity_id();
-        let start_drag = cx.entity().downgrade();
-        let handle = div()
-            .id("feedback-drag-handle")
-            .role(Role::Button)
-            .aria_label("Move annotation toolbar; drag or use arrow keys")
-            .tab_index(0)
-            .focus_ring(cx)
-            .cursor_move()
-            .p_1()
-            .child(Icon::new(IconName::GripVertical))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
-                    let at = this.toolbar_position(viewport(window));
-                    this.toolbar_drag = Some((
-                        f32::from(event.position.x) - at.0,
-                        f32::from(event.position.y) - at.1,
-                    ));
-                    cx.stop_propagation();
-                }),
-            )
-            .on_drag(FeedbackDrag { owner }, move |_, _, window, cx| {
-                let _ = start_drag.update(cx, |this, cx| {
-                    this.advance_drag(window.mouse_position(), window, cx)
-                });
-                cx.new(|_| EmptyView)
-            })
-            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-                let delta = match event.keystroke.key.as_str() {
-                    "left" => (-8.0, 0.0),
-                    "right" => (8.0, 0.0),
-                    "up" => (0.0, -8.0),
-                    "down" => (0.0, 8.0),
-                    _ => return,
-                };
-                let at = this.toolbar_position(viewport(window));
-                this.toolbar_at = Some((at.0 + delta.0, at.1 + delta.1));
-                this.persist_toolbar(cx);
-                cx.stop_propagation();
-                cx.notify();
-            }));
-        let mut content = div()
-            .flex()
-            .flex_wrap()
-            .max_w(window.viewport_size().width - px(32.0))
-            .items_center()
-            .gap_2()
-            .flex_none()
-            .child(handle);
-        if self.active {
-            for (index, (tool, icon, name)) in TOOLS.into_iter().enumerate() {
-                content = content.child(
-                    super::surface_button::SurfaceButton::new(
-                        ("feedback-tool", index),
-                        name,
-                        icon,
-                        self.tool == tool,
-                    )
-                    .shortcut(tool_shortcut(tool).to_ascii_lowercase())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.choose_tool(tool, window, cx);
-                    })),
-                );
-            }
-            if self.tool.is_some() {
-                for color in 0..4 {
-                    let owner = cx.entity().downgrade();
-                    content = content.child(
-                        ColorSwatch::new(("feedback-color", color), cx.theme().colors.chart[color])
-                            .selected(color == self.color)
-                            .on_click(move |_, cx| {
-                                let _ = owner.update(cx, |this, cx| {
-                                    this.color = color;
-                                    cx.notify();
-                                });
-                            }),
-                    );
-                }
-            }
-            content = content
-                .child(self.notes(window, cx))
-                .child(self.settings(cx));
-            let done = IconButton::new("feedback-done", IconName::Power)
-                .tooltip("Done · Esc")
-                .on_click(cx.listener(|this, _, window, cx| this.close(window, cx)));
-            content = content.child(round_icon(done, window, cx));
-        } else {
-            let add = IconButton::new("feedback-toggle", IconName::Power)
-                .tooltip("Add annotation")
-                .variant(ButtonVariant::Ghost)
-                .on_click(cx.listener(|this, _, window, cx| {
-                    if this.draft.is_none() {
-                        this.previous_focus = window.focused(cx);
-                    }
-                    this.active = true;
-                    this.tool = None;
-                    this.draft = None;
-                    this.stroke.clear();
-                    this.over_shape = false;
-                    window.focus(&this.focus, cx);
-                    cx.notify();
-                }));
-            content = content
-                .child(round_icon(add, window, cx))
-                .child(self.notes(window, cx))
-                .child(self.settings(cx));
-        }
-        content = content.child(self.history_controls(cx));
-        let length = motion::duration(motion::BASE, cx);
-        // Floating ActionBar uses p_1p5 and a one-pixel border on each side.
-        let padding = f32::from(gpui::rems(0.75).to_pixels(window.rem_size())) + 2.0;
-        let owner = cx.entity().downgrade();
-        let mut bar = ActionBar::new().floating().overflow_x_hidden().child(
-            Measure::new("feedback-toolbar-content", move |bounds, _, cx| {
-                let width = f32::from(bounds.size.width) + padding;
-                let _ = owner.update(cx, |this, cx| {
-                    if this
-                        .toolbar_width
-                        .as_ref()
-                        .is_none_or(|motion| motion.to != width)
-                    {
-                        let from = this
-                            .toolbar_width
-                            .as_ref()
-                            .map(|motion| motion.value(length).0)
-                            .unwrap_or(width);
-                        this.toolbar_width = Some(WidthMotion {
-                            from,
-                            to: width,
-                            since: Instant::now(),
-                        });
-                        cx.notify();
-                    }
-                });
-            })
-            .flex_none()
-            .child(div().id("feedback-toolbar-scroll").child(content)),
-        );
-        if let Some(motion) = &self.toolbar_width {
-            let (width, moving) = motion.value(length);
-            bar = bar.w(px(width));
-            if moving {
-                window.request_animation_frame();
-            }
-        }
-        let at = self.toolbar_position(viewport(window));
-        let this = cx.entity().downgrade();
-        div()
-            .absolute()
-            .left(px(at.0))
-            .top(px(at.1))
-            .occlude()
-            .cursor_default()
-            .on_mouse_move(cx.listener(|this, _: &gpui::MouseMoveEvent, _, cx| {
-                if this.pointer.take().is_some() {
-                    cx.notify();
-                }
-            }))
-            .child(
-                Measure::new("feedback-toolbar-measure", move |bounds, _, cx| {
-                    let size = (f32::from(bounds.size.width), f32::from(bounds.size.height));
-                    let _ = this.update(cx, |this, cx| {
-                        if this.toolbar_size != size {
-                            this.toolbar_size = size;
-                            cx.notify();
-                        }
-                    });
-                })
-                .max_w(window.viewport_size().width - px(16.0))
-                .child(bar),
-            )
-    }
-
-    fn notes(&self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let count = self
-            .store
-            .app_annotations(&self.session.app_name)
-            .map(|notes| notes.len())
-            .unwrap_or(0);
-        let owner = cx.entity().downgrade();
-        let trigger_owner = owner.clone();
-        Popover::with_opener(
-            "feedback-notes",
-            move |toggle| NotesTrigger {
-                count,
-                toggle,
-                owner: trigger_owner,
-            },
-            move |close, window, cx| notes_content(owner, close, window, cx),
-        )
     }
 
     fn shape_at(&self, at: gpui::Point<gpui::Pixels>, window: &Window) -> Option<String> {
@@ -1051,23 +638,29 @@ impl AnnotationOverlay {
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
+    ) -> gpui::AnyElement {
+        // Full-window annotation divs are inspectable hitboxes in GPUI. Omit
+        // them while inspecting so the picker reaches the host's real elements.
+        if self.active
+            && self.tool.is_none()
+            && inspector::is_open(window, cx)
+            && !self.settings_open
+            && !self.review_open
+        {
+            return div().into_any_element();
+        }
         let active = self.active || self.draft.is_some();
         let (w, h) = viewport(window);
         let owner = cx.entity_id();
         let start_drag = cx.entity().downgrade();
         let mut layer = div().absolute().size_full();
-        if self.active {
+        if self.active && self.tool.is_some() {
             let drawing = self.active && self.tool.is_some() && self.draft.is_none();
             let picker = div()
                 .id("feedback-picker")
                 .absolute()
                 .w_full()
-                .top(px(if self.banner && !self.toolbar_hidden {
-                    self.banner_bottom
-                } else {
-                    0.
-                }))
+                .top_0()
                 .bottom_0()
                 .occlude()
                 .cursor(if self.draft.is_some() {
@@ -1152,100 +745,13 @@ impl AnnotationOverlay {
                     })
                 });
             layer = layer.child(picker);
-            if self.tool.is_none() {
-                if let Some(selected) = self
-                    .draft
-                    .as_ref()
-                    .filter(|d| d.shape.is_none())
-                    .map(|d| &d.target)
-                    .or(self.hovered.as_ref())
-                {
-                    if let Some(target) = target::targets(window, cx)
-                        .iter()
-                        .find(|t| t.id == selected.id)
-                    {
-                        let b = target.bounds;
-                        layer = layer.child(
-                            div()
-                                .absolute()
-                                .left(px(b.x))
-                                .top(px(b.y))
-                                .w(px(b.width))
-                                .h(px(b.height))
-                                .border_2()
-                                .border_color(cx.theme().colors.chart[0]),
-                        );
-                        if self.draft.is_none() && !self.settings_open && !self.review_open {
-                            let theme = cx.theme();
-                            let width = (w - 16.0).clamp(1.0, 360.0);
-                            let at =
-                                note_panel_position(b, (width, self.inspector_height), (w, h), 8.0);
-                            let owner = cx.entity().downgrade();
-                            // This card deliberately has no occlusion or mouse
-                            // handlers: picking continues through its surface.
-                            layer = layer.child(
-                                div()
-                                    .absolute()
-                                    .left(px(at.0))
-                                    .top(px(at.1))
-                                    .w(px(width))
-                                    .debug_selector(|| "feedback-inspector-overlay".into())
-                                    .child(
-                                        Measure::new(
-                                            "feedback-inspector-measure",
-                                            move |bounds, _, cx| {
-                                                let height = f32::from(bounds.size.height);
-                                                let _ = owner.update(cx, |this, cx| {
-                                                    if this.inspector_height != height {
-                                                        this.inspector_height = height;
-                                                        cx.notify();
-                                                    }
-                                                });
-                                            },
-                                        )
-                                        .w_full()
-                                        .p_3()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_1()
-                                        .overflow_hidden()
-                                        .bg(theme.colors.overlay)
-                                        .text_color(theme.colors.fg)
-                                        .border_1()
-                                        .border_color(theme.colors.border)
-                                        .rounded(theme.radius(Radius::Md))
-                                        .shadow(theme.elevation(Elevation::Floating))
-                                        .child(Overline::new("Inspect").flex_none())
-                                        .child(
-                                            Label::new(
-                                                target
-                                                    .label
-                                                    .split_whitespace()
-                                                    .collect::<Vec<_>>()
-                                                    .join(" "),
-                                            )
-                                            .w_full()
-                                            .truncate()
-                                            .flex_none(),
-                                        )
-                                        .child(
-                                            Caption::new(format!(
-                                                "{:.0} × {:.0} px · x {:.0}, y {:.0}",
-                                                b.width, b.height, b.x, b.y
-                                            ))
-                                            .flex_none(),
-                                        )
-                                        .child(inspector_source(&target.source, cx)),
-                                    ),
-                            );
-                        }
-                    }
-                }
-            }
         }
         if self.active && self.draft.is_none() && self.tool.is_some() {
             if let Some(at) = self.pointer {
-                if let Some((_, icon, _)) = TOOLS.iter().find(|(tool, _, _)| *tool == self.tool) {
+                if let Some((_, icon, _, _)) = super::toolbar_window::TOOLS
+                    .iter()
+                    .find(|(tool, _, _, _)| *tool == self.tool)
+                {
                     layer = layer.child(
                         div()
                             .absolute()
@@ -1306,6 +812,7 @@ impl AnnotationOverlay {
             ) || Some(a.id.as_str()) == selected_id
         }) {
             if a.feedback.shape.is_none()
+                && !a.feedback.element_path.starts_with("gpui:")
                 && !target::targets(window, cx)
                     .iter()
                     .any(|t| t.id == a.feedback.element_path)
@@ -1325,14 +832,11 @@ impl AnnotationOverlay {
                 layer = layer.child(self.marker(&a.id, a.index, bounds, window, cx));
             }
         }
-        if self.draft.is_some() {
+        if self.draft.is_some() && self.inspected_id.is_none() {
             layer = layer.child(self.panel(window, cx));
         }
         if let Some(popup) = self.mention_popup(window, cx) {
             layer = layer.child(popup);
-        }
-        if !self.banner && !self.toolbar_hidden {
-            layer = layer.child(self.toolbar(window, cx));
         }
         if self.settings_open || self.review_open {
             layer = layer.child(self.sheet(window, cx));
@@ -1429,7 +933,6 @@ impl AnnotationOverlay {
                                 && (this.active || this.draft.is_some())
                             {
                                 this.stroke.clear();
-                                this.toolbar_drag = None;
                                 if this.pin_drag.take().is_some()
                                     | this.textbox_drag.take().is_some()
                                 {
@@ -1450,6 +953,7 @@ impl AnnotationOverlay {
                     .child(scope),
             ),
         )
+        .into_any_element()
     }
 
     pub(super) fn marker(

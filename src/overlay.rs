@@ -71,10 +71,13 @@ pub struct AnnotationOverlay {
     color: usize,
     stroke: Vec<(f32, f32)>,
     toolbar_at: Option<(f32, f32)>,
-    toolbar_size: (f32, f32),
-    toolbar_width: Option<surface::WidthMotion>,
     banner: bool,
     toolbar_hidden: bool,
+    companion_toolbar: Option<gpui::WindowHandle<toolbar_window::ToolbarWindow>>,
+    companion_toolbar_spec: Option<toolbar_window::ToolbarSpec>,
+    toolbar_sync_pending: bool,
+    companion_toolbar_active: bool,
+    companion_toolbar_failure: Option<toolbar_window::ToolbarSpec>,
     history: Vec<(Option<crate::Annotation>, Option<crate::Annotation>)>,
     future: Vec<(Option<crate::Annotation>, Option<crate::Annotation>)>,
     pin_drag: Option<(crate::Annotation, (f32, f32))>,
@@ -85,7 +88,6 @@ pub struct AnnotationOverlay {
     context_request: Option<(u64, gpui::Point<gpui::Pixels>)>,
     context_note: Option<String>,
     context_number: u64,
-    banner_bottom: f32,
     settings_open: bool,
     review_open: bool,
     sheet_focus: FocusHandle,
@@ -99,9 +101,9 @@ pub struct AnnotationOverlay {
     _copy_feedback: Option<Task<()>>,
     pointer: Option<(f32, f32)>,
     over_shape: bool,
-    toolbar_drag: Option<(f32, f32)>,
     editor_size: (f32, f32),
-    inspector_height: f32,
+    inspected_id: Option<gpui::InspectorElementId>,
+    inspected_configuration: Option<crate::GpuiConfiguration>,
     hot_reload: crate::hot_reload::HotReload,
     hot_reload_status: crate::hot_reload::Status,
     hot_reload_pending: bool,
@@ -169,6 +171,7 @@ impl AnnotationOverlay {
         hot_reload: crate::hot_reload::HotReload,
     ) -> Self {
         commands::init(cx);
+        inspector::register(cx.entity().downgrade(), window, cx);
         let (server, notice) = match Server::start(store.clone(), port) {
             Ok(server) => (Some(server), String::new()),
             Err(error) => (
@@ -200,6 +203,12 @@ impl AnnotationOverlay {
         });
         let owner = cx.entity().downgrade();
         let window_id = window.window_handle().window_id();
+        settings_popup::register(
+            cx.entity().downgrade(),
+            session.app_name.clone(),
+            window,
+            cx,
+        );
         let shortcuts = cx.intercept_keystrokes(move |event, window, cx| {
             if window.window_handle().window_id() == window_id {
                 let _ = owner.update(cx, |this, cx| this.intercept_shortcut(event, window, cx));
@@ -211,10 +220,46 @@ impl AnnotationOverlay {
         });
         let menu_activation = cx.observe_window_activation(window, move |this, window, cx| {
             if window.is_window_active() {
+                settings_popup::activate(window_id, cx);
                 this.sync_debug_menu(window_id, cx);
+            }
+            this.sync_toolbar_window(window, cx);
+            cx.notify();
+        });
+        let bounds_updates = cx.observe_window_bounds(window, |this, window, cx| {
+            this.sync_toolbar_window(window, cx);
+            cx.notify();
+        });
+        let overlay_id = cx.entity_id();
+        let toolbar_cleanup = cx.on_release(move |this, cx| {
+            settings_popup::unregister(window_id, overlay_id, cx);
+            if let Some(handle) = this.companion_toolbar.take() {
+                let _ = handle.update(cx, |_, window, _| window.remove_window());
+            }
+        });
+        let visibility_owner = cx.entity().downgrade();
+        let toolbar_visibility = window.observe_window_visibility(move |_, window, cx| {
+            let _ = visibility_owner.update(cx, |this, cx| {
+                this.sync_toolbar_window(window, cx);
+                cx.notify();
+            });
+        });
+        let closed_owner = cx.entity().downgrade();
+        let host_cleanup = cx.on_window_closed(move |cx, closed| {
+            if closed == window_id {
+                let _ = closed_owner.update(cx, |this, cx| {
+                    if let Some(handle) = this.companion_toolbar.take() {
+                        let _ = handle.update(cx, |_, window, _| window.remove_window());
+                    }
+                    this.companion_toolbar_spec = None;
+                });
             }
         });
         let inputs = vec![
+            bounds_updates,
+            toolbar_cleanup,
+            host_cleanup,
+            toolbar_visibility,
             cx.observe(&input, |this, _, cx| {
                 this.sync_mentions(cx);
                 cx.notify();
@@ -260,9 +305,7 @@ impl AnnotationOverlay {
                                 };
                                 this.toolbar_hidden =
                                     preference.position == crate::ToolbarPosition::None;
-                                if this.toolbar_drag.is_none() {
-                                    this.toolbar_at = preference.at;
-                                }
+                                this.toolbar_at = preference.at;
                             }
                             this.revision = revision;
                             match this.store.session(&this.session.id) {
@@ -296,14 +339,17 @@ impl AnnotationOverlay {
             color: 0,
             stroke: vec![],
             toolbar_at: preference.at,
-            toolbar_size: (0.0, 0.0),
-            toolbar_width: None,
             banner: if preference.position == crate::ToolbarPosition::None {
                 preference.last_position == crate::ToolbarPosition::Banner
             } else {
                 preference.position == crate::ToolbarPosition::Banner
             },
             toolbar_hidden: preference.position == crate::ToolbarPosition::None,
+            companion_toolbar: None,
+            companion_toolbar_spec: None,
+            toolbar_sync_pending: false,
+            companion_toolbar_active: false,
+            companion_toolbar_failure: None,
             history: vec![],
             future: vec![],
             pin_drag: None,
@@ -314,7 +360,6 @@ impl AnnotationOverlay {
             context_request: None,
             context_note: None,
             context_number: 0,
-            banner_bottom: 0.,
             settings_open: false,
             review_open: false,
             sheet_focus: cx.focus_handle(),
@@ -328,9 +373,9 @@ impl AnnotationOverlay {
             _copy_feedback: None,
             pointer: None,
             over_shape: false,
-            toolbar_drag: None,
             editor_size: (384.0, 240.0),
-            inspector_height: 144.0,
+            inspected_id: None,
+            inspected_configuration: None,
             hot_reload,
             hot_reload_status,
             hot_reload_pending: false,
@@ -347,6 +392,9 @@ impl AnnotationOverlay {
         }
         match self.store.ensure_session(&self.session.app_name, url) {
             Ok(session) => {
+                inspector::close(window, cx);
+                self.inspected_id = None;
+                self.inspected_configuration = None;
                 self.session = session;
                 self.history.clear();
                 self.future.clear();
@@ -370,12 +418,14 @@ impl AnnotationOverlay {
 
     /// Toggle picking mode, returning keyboard focus when leaving it.
     pub fn toggle(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.companion_toolbar_failure = None;
         if self.active || self.draft.is_some() {
             self.close(window, cx);
         } else {
             self.previous_focus = window.focused(cx);
             self.active = true;
             self.tool = None;
+            inspector::start(window, cx);
             self.pointer = None;
             window.focus(&self.focus, cx);
             cx.notify();
@@ -391,15 +441,18 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
-        if tool.is_none() && self.active && self.tool.is_none() {
-            self.close(window, cx);
-            return;
-        }
         if !self.active {
             self.previous_focus = window.focused(cx);
         }
         self.active = true;
         self.tool = tool;
+        self.inspected_id = None;
+        self.inspected_configuration = None;
+        if tool.is_none() {
+            inspector::start(window, cx);
+        } else {
+            inspector::close(window, cx);
+        }
         self.stroke.clear();
         self.hovered = None;
         self.pointer = None;
@@ -412,6 +465,9 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
+        inspector::close(window, cx);
+        self.inspected_id = None;
+        self.inspected_configuration = None;
         self.active = false;
         self.draft = None;
         self.pin_drag = None;
@@ -468,6 +524,9 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
+        inspector::close(window, cx);
+        self.inspected_id = None;
+        self.inspected_configuration = None;
         if !self.active && self.draft.is_none() {
             self.previous_focus = window.focused(cx);
         }
@@ -518,8 +577,11 @@ impl AnnotationOverlay {
             return true;
         };
         let comment = self.input.read(cx).text().trim();
-        let changed = draft.editing && comment != draft.original_comment.trim();
-        if changed && (!comment.is_empty() || draft.id.is_some()) {
+        let changed = (draft.editing || self.inspected_id.is_some())
+            && comment != draft.original_comment.trim();
+        if changed
+            && (!comment.is_empty() || draft.id.is_some() || self.inspected_configuration.is_some())
+        {
             if !self.save(window, cx) {
                 return false;
             }
@@ -555,6 +617,9 @@ impl AnnotationOverlay {
             let mut note = previous.clone();
             note.feedback.comment = comment;
             note.feedback.shape = shape;
+            if self.inspected_id.is_some() {
+                note.feedback.gpui_configuration = self.inspected_configuration.clone();
+            }
             self.store
                 .replace_note(Some(previous), Some(&note))
                 .map(|_| note)
@@ -566,6 +631,10 @@ impl AnnotationOverlay {
                     element_path: draft.target.id.clone(),
                     element: draft.target.label.clone(),
                     source_file: Some(draft.target.source.clone()).filter(|s| !s.is_empty()),
+                    gpui_configuration: self
+                        .inspected_id
+                        .as_ref()
+                        .and(self.inspected_configuration.clone()),
                     bounding_box: draft.target.bounds,
                     x: draft.x,
                     y: draft.y,
@@ -581,7 +650,7 @@ impl AnnotationOverlay {
                 if let Some(draft) = &mut self.draft {
                     draft.id = Some(note.id.clone());
                     draft.index = Some(note.index);
-                    draft.editing = false;
+                    draft.editing = self.inspected_id.is_some();
                     draft.original_comment = note.feedback.comment.clone();
                     draft.shape = note.feedback.shape.clone();
                 }
@@ -768,19 +837,22 @@ mod annotation_menu;
 mod banner;
 pub mod commands;
 mod history;
+pub(crate) mod inspector;
 mod mentions;
 #[cfg(test)]
 #[path = "overlay/release.test.rs"]
 mod release_tests;
 mod settings;
+mod settings_popup;
 mod surface;
 mod surface_button;
 mod textbox;
+mod toolbar_window;
 
 impl Render for AnnotationOverlay {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_toolbar_window(window, cx);
         let surface = self.surface(window, cx);
-        let owner = cx.entity().downgrade();
         div()
             .debug_selector(|| "feedback-inline-root".into())
             .when(
@@ -795,24 +867,6 @@ impl Render for AnnotationOverlay {
             ))
             .w_full()
             .flex_none()
-            .when(self.banner && !self.toolbar_hidden, |root| {
-                root.child(
-                    crate::ely::primitives::Measure::new(
-                        "feedback-banner-measure",
-                        move |bounds, _, cx| {
-                            let bottom = f32::from(bounds.bottom());
-                            let _ = owner.update(cx, |this, cx| {
-                                if this.banner_bottom != bottom {
-                                    this.banner_bottom = bottom;
-                                    cx.notify();
-                                }
-                            });
-                        },
-                    )
-                    .w_full()
-                    .child(self.banner_toolbar(window, cx)),
-                )
-            })
             .child(surface)
     }
 }

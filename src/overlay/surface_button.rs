@@ -13,6 +13,7 @@ pub(super) struct SurfaceButton {
     colors: Option<(gpui::Hsla, gpui::Hsla)>,
     disabled: bool,
     icon_only: bool,
+    stacked: bool,
     shortcut: Option<gpui::SharedString>,
     size: ControlSize,
     handler: Option<Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App)>>,
@@ -32,6 +33,7 @@ impl SurfaceButton {
             colors: None,
             disabled: false,
             icon_only: false,
+            stacked: false,
             shortcut: None,
             size: ControlSize::Sm,
             handler: None,
@@ -47,6 +49,10 @@ impl SurfaceButton {
     }
     pub(super) fn icon_only(mut self) -> Self {
         self.icon_only = true;
+        self
+    }
+    pub(super) fn stacked(mut self) -> Self {
+        self.stacked = true;
         self
     }
     pub(super) fn shortcut(mut self, shortcut: impl Into<gpui::SharedString>) -> Self {
@@ -101,13 +107,24 @@ impl RenderOnce for SurfaceButton {
             .flex_none()
             .h(theme.control_height(self.size))
             .px_2()
-            .when(self.icon_only || self.shortcut.is_some(), |root| {
+            .text_size(theme.text_size(TextSize::Sm))
+            .when(self.icon_only, |root| {
                 root.w(theme.control_height(self.size)).px_0()
+            })
+            .when(self.stacked, |root| {
+                root.flex_col()
+                    .gap_0()
+                    .h_auto()
+                    .py_1()
+                    .px_0()
+                    .w(theme.control_height(self.size))
+                    .min_w(theme.switch_track().width)
+                    .whitespace_nowrap()
+                    .text_size(theme.text_size(TextSize::Xs))
             })
             .border_1()
             .border_color(gpui::transparent_black())
             .rounded(theme.radius(Radius::Md))
-            .text_size(theme.text_size(TextSize::Sm))
             .font_weight(gpui::FontWeight::MEDIUM)
             .bg(background)
             .text_color(foreground)

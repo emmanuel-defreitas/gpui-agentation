@@ -74,6 +74,7 @@ pub fn init(cx: &mut App) -> gpui::Result<()> {
                 ))
             })?;
         }
+        crate::overlay::inspector::install(cx);
         cx.set_global(Initialized);
     }
     Ok(())
@@ -88,6 +89,7 @@ pub fn init_for_tests(cx: &mut App) {
         if !cx.has_global::<Theme>() {
             crate::ely::init_for_tests(cx);
         }
+        crate::overlay::inspector::install(cx);
         cx.set_global(Initialized);
     }
 }
@@ -128,7 +130,7 @@ impl Agentation {
         Ok(Self { overlay, focus })
     }
 
-    /// Render one screen below the toolbar and own its root focus handling.
+    /// Render one screen and own its root focus handling; the toolbar is a companion window.
     ///
     /// Call once per window render, below custom chrome and outside content
     /// padding/scrolling. The content should fill the remaining column space.

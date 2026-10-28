@@ -42,6 +42,32 @@ pub enum AnnotationStatus {
     Dismissed,
 }
 
+/// One temporary GPUI style override made in the native inspector.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GpuiStyleChange {
+    /// Styled property, such as width or padding.
+    pub property: String,
+    /// Value before the inspector override.
+    pub before: String,
+    /// Value after the inspector override.
+    pub after: String,
+}
+
+/// Inspector configuration attached to a feedback note for an agent to implement.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GpuiConfiguration {
+    /// Source location of the GPUI element selected in the inspector.
+    pub source: String,
+    /// GPUI global element path selected in the inspector.
+    pub element_path: String,
+    /// Only the properties changed through the visual inspector.
+    pub changes: Vec<GpuiStyleChange>,
+    /// Suggested GPUI builder calls representing the overrides.
+    pub rust: String,
+}
+
 /// Feedback supplied by the UI or an API client. IDs and timestamps are server-owned.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -60,6 +86,9 @@ pub struct AnnotationInput {
     pub bounding_box: Rect,
     /// Rust call-site location, when registered by the application.
     pub source_file: Option<String>,
+    /// Temporary visual GPUI overrides active when the note was created.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpui_configuration: Option<GpuiConfiguration>,
     /// Optional live-window drawing, using normalized viewport coordinates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shape: Option<crate::AnnotationShape>,
