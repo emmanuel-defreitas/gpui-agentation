@@ -166,10 +166,35 @@ The [consumer example](examples/consumer/README.md) keeps all of this in one
 
 ### Inspect and annotate
 
-Turn on the **power switch**, then choose **Inspect**, **Box**, **Arrow**, **Pen**,
-**Comment**, or **Textbox**. Select an element or draw
-on the screen. Inspect surfaces the element's ID, label, bounds, and Rust call
-site.
+Choose **Inspect**, **Box**, **Arrow**, **Pen**, **Comment**, or **Textbox**. Select an element or draw
+on the screen. **Inspect** uses one GPUI picker and sidebar: click an element to
+view its source, box model, and editable properties. Drag the sliders or use
+the arrow keys to preview width, height, padding, margin, border, and opacity.
+Add an optional comment below the properties, then choose **Save feedback**.
+Style changes can be saved without a comment and include Rust builder snippets
+in MCP responses and copied Markdown. **Pick** selects another element;
+**Done** or **Esc** closes the sidebar. The toolbar is always a separate vertical
+companion, docked 14 logical pixels to the consumer window's right edge. It matches
+the consumer's height and follows its movement and resizing. It hides with the
+consumer when minimized, fullscreen, or filling the display, and returns when
+restored. Closing the consumer also closes its toolbar.
+
+During inspection, drawing controls hide and Inspect becomes **Stop**. Stop exits
+inspection; **Close** hides the toolbar while inspection stays active. The trailing
+group is **Comments**, **Settings**, and **Close**. Undo, Redo, Save, and Delete
+remain available through shortcuts and the native Debug menu.
+
+On macOS, the **Agentation Settings** menu-bar icon opens a rich popup for the
+last active consumer window. The companion's Settings button, **Debug → Settings**,
+and **⌘⌥S** open the same popup. Hot reload, MCP status, configuration preview,
+and Copy remain available there. Esc, clicking outside, or clicking the icon
+again closes it. Opening Settings preserves inspection and unfinished feedback.
+Other platforms retain the consumer's Settings sheet.
+
+The source breadcrumb starts at the working directory. Click its final segment
+to open that file and line using `$EDITOR` (Zed by default). Supported Zed,
+VS Code, Cursor, and VSCodium commands open the source location; unsupported or
+unavailable editors copy the relative path and show inline feedback instead.
 
 ![Inspecting a registered element](docs/assets/inspector.gif)
 
@@ -197,8 +222,9 @@ Right-click an annotation for Edit, Delete and Color actions, with undo support.
 
 Include `gpui_agentation::debug_menu()` in your host's `cx.set_menus(...)` list
 to expose the controls in the native **Debug** menu. `Agentation::root` routes
-those menu commands to the active window. **Settings → Toolbar → None** hides
-the embedded toolbar. Toolbar placement persists per application in its notes
+those menu commands to the active window. **Close** hides the toolbar;
+**Debug → Show Toolbar** restores it. There are no embedded toolbar placements
+or Position settings. Toolbar visibility persists per application in its notes
 file and is shared by windows mounted against that file.
 
 ### Capture feedback

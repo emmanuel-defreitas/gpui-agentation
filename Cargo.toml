@@ -54,6 +54,7 @@ native = [
     "dep:rust-embed",
     "dep:similar",
     "dep:smallvec",
+    "dep:shlex",
     "dep:unicode-segmentation",
     "dep:unicode-width",
     "dep:usvg",
@@ -135,6 +136,7 @@ rqrr = { version = "0.11", default-features = false, optional = true }
 rust-embed = { version = "8.12", optional = true }
 similar = { version = "3.2", default-features = false, features = ["std", "text", "inline", "unicode"], optional = true }
 smallvec = { version = "1", optional = true }
+shlex = { version = "2", optional = true }
 unicode-segmentation = { version = "1", optional = true }
 unicode-width = { version = "0.2", optional = true }
 usvg = { version = "0.46", optional = true }

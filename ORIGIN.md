@@ -22,6 +22,15 @@ settings control channel are Agentation adaptations. The original copyright
 notice and full MIT license are preserved in `src/hot_reload/LICENSE`.
 The crate does not depend on Corpora.
 
+## GPUI inspector configuration
+
+`vendor/ely/src/tooling/inspector.rs` adapts the temporary style editing and
+style-export approach from
+[`joris-gallot/gpui-devtools`](https://github.com/joris-gallot/gpui-devtools)
+at commit `e967606d18709e89cad002db49f7d3b6eae19646` (MIT). The controls and
+published configuration model are rewritten against the bundled Ely components
+and Agentation note pipeline.
+
 ## Model Context Protocol mark
 
 `src/assets/mcp.svg` is the official MCP mark from
