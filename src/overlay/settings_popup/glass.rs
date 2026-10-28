@@ -11,7 +11,7 @@ use cocoa::{
     base::{BOOL, YES, id, nil},
     foundation::{NSAutoreleasePool, NSRect, NSString},
 };
-use gpui::{App, WindowHandle};
+use gpui::{App, Window, WindowHandle};
 use objc::{class, msg_send, runtime::Class, sel, sel_impl};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
@@ -44,17 +44,23 @@ impl Surface {
         }
     }
 
-    pub(super) fn sync_appearance(&mut self, dark: bool, cx: &App) {
+    pub(super) fn sync_appearance(&mut self, dark: bool, window: &Window, cx: &App) {
         let appearance = (dark, self.accessibility().1);
         if self.appearance == appearance {
             return;
         }
         self.appearance = appearance;
         let effect = Owned(unsafe { msg_send![self._effect.0, retain] });
+        let popup = window.window_handle();
+        let app = cx.to_async();
         // GPUIView's appearance callback enters GPUI. As with installation,
         // change the native appearance after leaving the App update borrow.
         cx.foreground_executor()
-            .spawn(async move { unsafe { set_appearance(effect.0, appearance) } })
+            .spawn(async move {
+                if app.update(|cx| cx.windows().contains(&popup)) {
+                    unsafe { set_appearance(effect.0, appearance) }
+                }
+            })
             .detach();
     }
 }

@@ -527,7 +527,7 @@ impl SettingsPopup {
 }
 
 impl Render for SettingsPopup {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(owner) = self.owner.upgrade() else {
             return div().into_any_element();
         };
@@ -551,7 +551,7 @@ impl Render for SettingsPopup {
             super::settings::settings_content(owner.read(cx), owner.clone(), controls, cx);
         #[cfg(target_os = "macos")]
         if let Some(surface) = &mut self.surface {
-            surface.sync_appearance(cx.theme().is_dark(), cx);
+            surface.sync_appearance(cx.theme().is_dark(), _window, cx);
         }
         let theme = cx.theme();
         #[cfg(target_os = "macos")]
