@@ -56,21 +56,23 @@ fn companion_is_permanent_vertical_and_changes_mode_in_the_host(cx: &mut TestApp
     let settings = tools
         .debug_bounds("feedback-settings-trigger-target")
         .unwrap();
-    let close = tools.debug_bounds("feedback-toolbar-close").unwrap();
+    assert!(tools.debug_bounds("feedback-toolbar-close").is_none());
     assert!(inspect.bottom() <= box_tool.top());
     assert!(comments.bottom() <= settings.top());
-    assert!(settings.bottom() <= close.top());
-    tools.update(|window, _| assert!(close.bottom() <= window.viewport_size().height));
+    // Disabled drawing tools must not enable annotation mode.
+    tools.simulate_click(box_tool.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| assert!(!overlay.read(cx).active));
     tools.simulate_click(inspect.center(), Modifiers::none());
     draw(cx);
-    cx.update(|window, cx| assert!(window.is_inspector_picking(cx)));
-    let mut tools = toolbar(&overlay, cx);
-    assert!(tools.debug_bounds("companion-tool-b").is_none());
-    let stop = tools.debug_bounds("companion-tool-i").unwrap();
-    tools.update(|window, cx| {
-        assert!(stop.size.width >= cx.theme().switch_track().width.to_pixels(window.rem_size()));
+    cx.update(|window, cx| {
+        assert!(window.is_inspector_picking(cx));
+        assert!(!overlay.read(cx).active);
     });
-    tools.simulate_click(stop.center(), Modifiers::none());
+    let mut tools = toolbar(&overlay, cx);
+    assert!(tools.debug_bounds("companion-tool-i").is_none());
+    assert!(tools.debug_bounds("companion-tool-b").is_some());
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.stop_inspection(window, cx)));
     draw(cx);
     cx.update(|window, cx| {
         assert!(!window.is_inspector_picking(cx));
@@ -296,7 +298,7 @@ fn external_inspector_content_waits_for_native_resize_and_stable_frame(cx: &mut 
             .debug_bounds("feedback-companion-window-surface")
             .is_some()
     );
-    let hidden_stop = tools.debug_bounds("companion-tool-i").unwrap();
+    let hidden_stop = tools.debug_bounds("inspector-header").unwrap();
     tools.simulate_click(hidden_stop.center(), Modifiers::none());
     cx.update(|window, cx| {
         assert!(

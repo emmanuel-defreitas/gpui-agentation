@@ -15,8 +15,15 @@ use gpui::{
 #[allow(deprecated, unexpected_cfgs)]
 mod native;
 
-#[cfg(agentation_external_inspector)]
+mod comments;
 mod width;
+
+#[derive(Clone, PartialEq)]
+pub(super) enum CompanionPanel {
+    #[cfg(agentation_external_inspector)]
+    Inspector(Entity<gpui::Inspector>),
+    Comments,
+}
 
 const GAP: f32 = 14.0;
 pub(super) const TOOLS: [(Option<Tool>, IconName, &str, &str); 6] = [
@@ -40,9 +47,8 @@ struct ToolbarState {
     color: usize,
     count: usize,
     mcp: bool,
-    #[cfg(agentation_external_inspector)]
-    inspector: Option<Entity<gpui::Inspector>>,
-    #[cfg(agentation_external_inspector)]
+    inspecting: bool,
+    panel: Option<CompanionPanel>,
     rail_width: Pixels,
 }
 
@@ -59,13 +65,9 @@ pub(super) struct ToolbarWindow {
     focus: FocusHandle,
     state: ToolbarState,
     _activation: Subscription,
-    #[cfg(agentation_external_inspector)]
-    _feedback: Entity<inspector::external::ExternalFeedback>,
-    #[cfg(agentation_external_inspector)]
+    comments: Entity<comments::Comments>,
     _external_release: Subscription,
-    #[cfg(agentation_external_inspector)]
     width: width::WidthAnimation,
-    #[cfg(agentation_external_inspector)]
     _content_resize: Subscription,
 }
 
@@ -94,17 +96,14 @@ impl AnnotationOverlay {
             window.is_fullscreen() || window.is_simple_fullscreen() || window.is_maximized();
         #[cfg(target_os = "macos")]
         let fullscreen = fullscreen || native::fills_screen(window);
+        let panel = self.review_open.then_some(CompanionPanel::Comments);
         #[cfg(agentation_external_inspector)]
-        let inspector = window.inspector_entity();
-        #[cfg(agentation_external_inspector)]
-        let total_width = width
-            + if inspector.is_some() {
-                px(420.)
-            } else {
-                px(0.)
-            };
-        #[cfg(not(agentation_external_inspector))]
-        let total_width = width;
+        let panel = if self.inspecting && !self.review_open {
+            window.inspector_entity().map(CompanionPanel::Inspector)
+        } else {
+            panel
+        };
+        let total_width = width + if panel.is_some() { px(420.) } else { px(0.) };
         ToolbarSpec {
             bounds: dock_bounds(window.bounds(), total_width),
             visible: !self.toolbar_hidden
@@ -122,9 +121,8 @@ impl AnnotationOverlay {
                     .app_annotations(&self.session.app_name)
                     .map_or(0, |notes| notes.len()),
                 mcp: self._server.as_ref().is_some_and(Server::is_mcp_enabled),
-                #[cfg(agentation_external_inspector)]
-                inspector,
-                #[cfg(agentation_external_inspector)]
+                inspecting: self.inspecting,
+                panel,
                 rail_width: width,
             },
         }
@@ -179,12 +177,8 @@ impl AnnotationOverlay {
                         toolbar.state = spec.state.clone();
                         cx.notify();
                     }
-                    #[cfg(agentation_external_inspector)]
                     toolbar.retarget_width(spec.bounds.size.width, spec.visible, window, cx);
-                    #[cfg(agentation_external_inspector)]
                     let width = toolbar.width.current;
-                    #[cfg(not(agentation_external_inspector))]
-                    let width = spec.bounds.size.width;
                     #[cfg(target_os = "macos")]
                     if native::place(host, window, width, spec.visible, cx) {
                         return true;
@@ -242,16 +236,18 @@ impl AnnotationOverlay {
                     });
                 let focus = cx.focus_handle();
                 window.focus(&focus, cx);
-                #[cfg(agentation_external_inspector)]
-                let feedback = inspector::external::mount(owner.clone(), host_handle, window, cx);
-                #[cfg(agentation_external_inspector)]
+                crate::ely::tooling::set_inspector_target(
+                    window.window_handle().window_id(),
+                    Some(host_handle),
+                    cx,
+                );
+                let comments = comments::mount(owner.clone(), host_handle, cx);
                 let external_release = {
                     let id = window.window_handle().window_id();
                     cx.on_release(move |_, cx| {
                         crate::ely::tooling::set_inspector_target(id, None, cx)
                     })
                 };
-                #[cfg(agentation_external_inspector)]
                 let content_resize =
                     cx.observe_window_bounds(window, |this: &mut ToolbarWindow, window, cx| {
                         this.confirm_content_reveal(window, cx);
@@ -262,17 +258,13 @@ impl AnnotationOverlay {
                     focus,
                     state: spec.state.clone(),
                     _activation: activation,
-                    #[cfg(agentation_external_inspector)]
-                    _feedback: feedback,
-                    #[cfg(agentation_external_inspector)]
+                    comments,
                     _external_release: external_release,
-                    #[cfg(agentation_external_inspector)]
                     width: width::WidthAnimation::new(
                         spec.bounds.size.width,
                         spec.visible,
-                        spec.state.inspector.clone(),
+                        spec.state.panel.clone(),
                     ),
-                    #[cfg(agentation_external_inspector)]
                     _content_resize: content_resize,
                 }
             })
@@ -329,14 +321,18 @@ impl ToolbarWindow {
                         if this.settings_open || this.review_open {
                             this.dismiss_sheet(window, cx);
                         }
-                        this.choose_tool(*tool, window, cx);
+                        if tool.is_none() || this.active {
+                            this.choose_tool(*tool, window, cx);
+                        }
                     } else if let Some(color) = name
                         .strip_prefix("color-")
                         .and_then(|color| color.parse::<usize>().ok())
                         .filter(|color| *color < 4)
                     {
-                        this.color = color;
-                        cx.notify();
+                        if this.active {
+                            this.color = color;
+                            cx.notify();
+                        }
                     } else {
                         this.dispatch_command(&commands::AnnotationCommand { name }, window, cx);
                     }
@@ -358,10 +354,11 @@ impl ToolbarWindow {
         cx: &Context<Self>,
     ) -> super::surface_button::SurfaceButton {
         super::surface_button::SurfaceButton::new(id, label, icon, selected)
-            .when(command != "stop", |button| button.icon_only())
-            .when(command == "stop", |button| {
-                button.stacked().shortcut("escape")
-            })
+            .icon_only()
+            .disabled(
+                !self.state.active
+                    && matches!(command, "box" | "arrow" | "pen" | "comment" | "text"),
+            )
             .when_some(commands::shortcut(command), |button, key| {
                 button.shortcut(key)
             })
@@ -371,55 +368,58 @@ impl ToolbarWindow {
 
 impl Render for ToolbarWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        #[cfg(agentation_external_inspector)]
         self.confirm_content_reveal(_window, cx);
-        let inspecting = self.state.active && self.state.tool.is_none();
+        let inspecting = self.state.inspecting;
         let mode_owner = cx.entity().downgrade();
-        let mut tools = div()
-            .id("feedback-companion-tools-scroll")
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
-            .w_full()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        Switch::new("feedback-mode-switch", self.state.active)
-                            .name("Annotation mode")
-                            .on_change(move |_, _, cx| {
-                                let _ = mode_owner.update(cx, |this, cx| this.action("toggle", cx));
-                            }),
-                    )
-                    .children(TOOLS.into_iter().enumerate().filter_map(
-                        |(index, (tool, icon, label, command))| {
-                            if inspecting && tool.is_some() {
-                                return None;
-                            }
-                            let stop = inspecting && tool.is_none();
-                            let selector = format!(
-                                "companion-tool-{}",
-                                surface::tool_shortcut(tool).to_ascii_lowercase()
-                            );
-                            Some(
-                                div()
-                                    .debug_selector(move || selector.clone())
-                                    .child(self.button(
+        let mut tools =
+            div()
+                .id("feedback-companion-tools-scroll")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .w_full()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            div()
+                                .debug_selector(|| "feedback-annotation-toggle".into())
+                                .child(
+                                    Switch::new("feedback-mode-switch", self.state.active)
+                                        .name("Annotation mode")
+                                        .on_change(move |_, _, cx| {
+                                            let _ = mode_owner
+                                                .update(cx, |this, cx| this.action("toggle", cx));
+                                        }),
+                                ),
+                        )
+                        .children(TOOLS.into_iter().enumerate().filter_map(
+                            |(index, (tool, icon, label, command))| {
+                                if inspecting && tool.is_none() {
+                                    return None;
+                                }
+
+                                let selector = format!(
+                                    "companion-tool-{}",
+                                    surface::tool_shortcut(tool).to_ascii_lowercase()
+                                );
+                                Some(div().debug_selector(move || selector.clone()).child(
+                                    self.button(
                                         ("feedback-tool", index),
-                                        if stop { "Stop" } else { label },
+                                        label,
                                         icon,
-                                        if stop { "stop" } else { command },
-                                        self.state.active && self.state.tool == tool,
+                                        command,
+                                        self.state.active && !inspecting && self.state.tool == tool,
                                         cx,
-                                    )),
-                            )
-                        },
-                    )),
-            );
-        if !inspecting {
+                                    ),
+                                ))
+                            },
+                        )),
+                );
+        {
             tools = tools.child(
                 div()
                     .flex()
@@ -429,13 +429,25 @@ impl Render for ToolbarWindow {
                     .pt_1()
                     .children((0..4).map(|color| {
                         let owner = cx.entity().downgrade();
-                        ColorSwatch::new(("feedback-color", color), cx.theme().colors.chart[color])
-                            .selected(color == self.state.color)
-                            .on_click(move |_, cx| {
-                                let _ = owner.update(cx, |this, cx| {
-                                    this.action(format!("color-{color}"), cx)
-                                });
-                            })
+                        div()
+                            .opacity(if self.state.active { 1. } else { 0.4 })
+                            .child(
+                                ColorSwatch::new(
+                                    ("feedback-color", color),
+                                    cx.theme().colors.chart[color],
+                                )
+                                .selected(color == self.state.color)
+                                .when(
+                                    self.state.active,
+                                    |swatch| {
+                                        swatch.on_click(move |_, cx| {
+                                            let _ = owner.update(cx, |this, cx| {
+                                                this.action(format!("color-{color}"), cx)
+                                            });
+                                        })
+                                    },
+                                ),
+                            )
                     })),
             );
         }
@@ -459,12 +471,8 @@ impl Render for ToolbarWindow {
                 .role(gpui::Role::Toolbar)
                 .aria_label("Annotation tools")
                 .size_full()
-                .when(cfg!(agentation_external_inspector), |rail| {
-                    #[cfg(agentation_external_inspector)]
-                    // The shared window surface supplies the two outer border pixels.
-                    let rail = rail.w(self.state.rail_width - px(2.)).flex_none();
-                    rail
-                })
+                .w(self.state.rail_width - px(2.))
+                .flex_none()
                 .flex()
                 .flex_col()
                 .items_center()
@@ -472,13 +480,6 @@ impl Render for ToolbarWindow {
                 .py_2()
                 .px_1()
                 .text_color(theme.colors.fg)
-                .when(!cfg!(agentation_external_inspector), |rail| {
-                    rail.rounded_xl()
-                        .border_1()
-                        .border_color(theme.colors.border)
-                        .bg(theme.colors.surface)
-                        .shadow(theme.elevation(Elevation::Raised))
-                })
                 .child(tools)
                 .child(
                     div()
@@ -536,25 +537,17 @@ impl Render for ToolbarWindow {
                             false,
                             cx,
                         )),
-                )
-                .child(
-                    div()
-                        .debug_selector(|| "feedback-toolbar-close".into())
-                        .child(self.button(
-                            "feedback-toolbar-close",
-                            "Hide toolbar",
-                            IconName::X,
-                            "close-toolbar",
-                            false,
-                            cx,
-                        )),
                 );
         let body = div().flex().size_full().child(rail);
-        #[cfg(agentation_external_inspector)]
         let contents = body
             .debug_selector(|| "feedback-companion-contents".into())
             .opacity(self.width.opacity)
-            .children(self.width.inspector.clone().map(|inspector| {
+            .children(self.width.panel.clone().map(|panel| {
+                let content = match panel {
+                    #[cfg(agentation_external_inspector)]
+                    CompanionPanel::Inspector(inspector) => inspector.into_any_element(),
+                    CompanionPanel::Comments => self.comments.clone().into_any_element(),
+                };
                 div()
                     .debug_selector(|| "external-inspector-panel".into())
                     .flex_1()
@@ -562,9 +555,8 @@ impl Render for ToolbarWindow {
                     .h_full()
                     .overflow_hidden()
                     .relative()
-                    .child(div().w(px(420.)).min_w(px(420.)).h_full().child(inspector))
-                    .when(self.state.inspector.is_none(), |panel| {
-                        // Retained exit content is visual only; the native picker has stopped.
+                    .child(div().w(px(420.)).min_w(px(420.)).h_full().child(content))
+                    .when(self.state.panel.is_none(), |panel| {
                         panel.child(
                             div()
                                 .absolute()
@@ -577,7 +569,6 @@ impl Render for ToolbarWindow {
                         )
                     })
             }));
-        #[cfg(agentation_external_inspector)]
         let body = div()
             .debug_selector(|| "feedback-companion-window-surface".into())
             .size_full()
@@ -601,7 +592,7 @@ impl Render for ToolbarWindow {
             });
         div()
             .size_full()
-            .key_context(if cfg!(agentation_external_inspector) && inspecting {
+            .key_context(if inspecting || !self.state.active {
                 "AgentationMode"
             } else {
                 "AgentationMode AgentationTools"
@@ -614,7 +605,14 @@ impl Render for ToolbarWindow {
             )
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
                 if event.keystroke.key == "escape" {
-                    this.action("stop", cx);
+                    this.action(
+                        if this.state.panel == Some(CompanionPanel::Comments) {
+                            "comments"
+                        } else {
+                            "stop"
+                        },
+                        cx,
+                    );
                 }
             }))
             .child(FocusScope::new(&self.focus).root().size_full().child(body))

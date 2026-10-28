@@ -34,6 +34,7 @@ fn mention_dropdown_previews_hovered_and_typed_notes_and_inserts_reference(
                 .add(
                     &session.id,
                     AnnotationInput {
+                        inspection: None,
                         comment: format!("Existing note {index}, see 12"),
                         element_path: format!("note-{index}"),
                         element: "Pin".into(),

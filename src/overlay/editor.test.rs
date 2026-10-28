@@ -56,6 +56,7 @@ fn saved(overlay: &Entity<AnnotationOverlay>, cx: &mut VisualTestContext) -> Str
                 .add(
                     &this.session.id,
                     AnnotationInput {
+                        inspection: None,
                         comment: "Original".into(),
                         element_path: "counter".into(),
                         element: "Counter".into(),
@@ -298,6 +299,7 @@ fn another_canvas_pin_should_save_current_note_and_open_clicked_note_in_one_clic
                         .add(
                             &this.session.id,
                             AnnotationInput {
+                                inspection: None,
                                 comment: "Original".into(),
                                 element_path: format!("pin:{at:?}"),
                                 element: "Pin".into(),

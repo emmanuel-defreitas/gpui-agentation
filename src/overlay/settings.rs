@@ -106,7 +106,7 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
-        inspector::close(window, cx);
+        self.stop_inspection(window, cx);
         self.inspected_id = None;
         self.inspected_configuration = None;
         if !self.settings_open && !self.review_open {
@@ -121,9 +121,6 @@ impl AnnotationOverlay {
     pub(super) fn dismiss_sheet(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.settings_open = false;
         self.review_open = false;
-        if self.active && self.tool.is_none() {
-            inspector::start(window, cx);
-        }
         if let Some(focus) = self.sheet_previous_focus.take() {
             window.focus(&focus, cx);
         }

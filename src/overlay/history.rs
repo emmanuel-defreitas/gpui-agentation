@@ -17,6 +17,9 @@ impl AnnotationOverlay {
     }
 
     pub(super) fn undo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.inspecting {
+            self.stop_inspection(window, cx);
+        }
         if !self.dismiss_note(window, cx) {
             return;
         }

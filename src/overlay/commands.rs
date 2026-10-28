@@ -158,7 +158,10 @@ impl AnnotationOverlay {
         }
         match action.name.as_str() {
             "toggle" => self.toggle(window, cx),
-            "stop" => self.close(window, cx),
+            "stop" => {
+                if self.inspecting { self.stop_inspection(window, cx); }
+                else { self.close(window, cx); }
+            },
             "inspect" => self.choose_tool(None, window, cx),
             "box" => self.choose_tool(Some(Tool::Box), window, cx),
             "arrow" => self.choose_tool(Some(Tool::Arrow), window, cx),

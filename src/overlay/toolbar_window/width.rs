@@ -6,7 +6,7 @@ pub(super) struct WidthAnimation {
     pub current: Pixels,
     target: Pixels,
     visible: bool,
-    pub inspector: Option<Entity<gpui::Inspector>>,
+    pub panel: Option<CompanionPanel>,
     pub opacity: f32,
     generation: u64,
     reveal_pending: bool,
@@ -15,12 +15,12 @@ pub(super) struct WidthAnimation {
 }
 
 impl WidthAnimation {
-    pub fn new(width: Pixels, visible: bool, inspector: Option<Entity<gpui::Inspector>>) -> Self {
+    pub fn new(width: Pixels, visible: bool, panel: Option<CompanionPanel>) -> Self {
         Self {
             current: width,
             target: width,
             visible,
-            inspector,
+            panel,
             opacity: 1.,
             generation: 0,
             reveal_pending: false,
@@ -46,8 +46,8 @@ impl ToolbarWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(inspector) = &self.state.inspector {
-            self.width.inspector = Some(inspector.clone());
+        if let Some(panel) = &self.state.panel {
+            self.width.panel = Some(panel.clone());
         }
         let animate =
             visible && self.width.visible && !cx.theme().reduced_motion && !cx.reduce_motion();
@@ -60,7 +60,7 @@ impl ToolbarWindow {
             self.width.opacity = 1.;
             self.width.current = target;
             self.width.target = target;
-            self.width.inspector = self.state.inspector.clone();
+            self.width.panel = self.state.panel.clone();
             return;
         }
         if self.width.target == target {
@@ -75,7 +75,7 @@ impl ToolbarWindow {
         self.width.opacity = 0.;
         self.width.target = target;
         if self.width.current == target {
-            self.width.inspector = self.state.inspector.clone();
+            self.width.panel = self.state.panel.clone();
             self.confirm_content_reveal(window, cx);
             return;
         }
@@ -109,7 +109,7 @@ impl ToolbarWindow {
                                     };
                                 this.width.current = width;
                                 if !running {
-                                    this.width.inspector = this.state.inspector.clone();
+                                    this.width.panel = this.state.panel.clone();
                                 }
                                 #[cfg(target_os = "macos")]
                                 let placed =

@@ -1,18 +1,16 @@
-//! One GPUI picker, property editor and feedback sidebar per window.
+//! Native picking and element-anchored inspection annotations.
 use super::*;
-use crate::ely::{primitives::IconName, theme::TextSize, tooling};
-use gpui::{AnyElement, Global, Inspector, WeakEntity, WindowId, px};
+use crate::ely::{forms::Switch, tooling};
+use gpui::{Global, Inspector, WeakEntity, WindowId};
 use std::collections::HashMap;
 
 #[derive(Default)]
 struct Sidebars(HashMap<WindowId, Sidebar>);
 impl Global for Sidebars {}
-
 struct Sidebar {
     overlay: WeakEntity<AnnotationOverlay>,
     inspector: Option<WeakEntity<Inspector>>,
-    #[cfg(agentation_external_inspector)]
-    footer: Option<WeakEntity<external::ExternalFeedback>>,
+    presented: bool,
 }
 
 pub(crate) fn install(cx: &mut App) {
@@ -24,8 +22,8 @@ pub(crate) fn install(cx: &mut App) {
     cx.set_inspector_renderer(Box::new(|inspector, window, cx| {
         #[cfg(agentation_external_inspector)]
         let rendered_id = cx.entity_id();
-        let native_owner = cx.entity().downgrade();
         let target = tooling::inspector_target(window, cx);
+        let native_owner = cx.entity().downgrade();
         let owner = cx
             .global_mut::<Sidebars>()
             .0
@@ -34,51 +32,61 @@ pub(crate) fn install(cx: &mut App) {
                 sidebar.inspector = Some(native_owner);
                 sidebar.overlay.clone()
             });
-        tooling::inspector_panel(inspector, window, cx, |inspector, window, cx| {
-            #[cfg(agentation_external_inspector)]
-            if target != window.window_handle() {
-                let ready = owner
-                    .as_ref()
-                    .and_then(|owner| {
-                        target
-                            .update(cx, |_, host, cx| {
-                                // Exit animation retains the old view, never its model effects.
-                                if host
-                                    .inspector_entity()
-                                    .is_none_or(|active| active.entity_id() != rendered_id)
-                                {
-                                    return Some(true);
+        let toggle_owner = owner.clone();
+        let header = div()
+            .debug_selector(|| "feedback-inspect-toggle".into())
+            .flex()
+            .items_center()
+            .gap_2()
+            .child("Inspect")
+            .child(
+                Switch::new("feedback-inspect-switch", true)
+                    .name("Inspect")
+                    .on_change(move |_, _, cx| {
+                        let owner = toggle_owner.clone();
+                        cx.defer(move |cx| {
+                            let _ = target.update(cx, |_, host, cx| {
+                                if let Some(owner) = owner {
+                                    let _ =
+                                        owner.update(cx, |this, cx| this.stop_inspection(host, cx));
                                 }
-                                owner
-                                    .update(cx, |this, cx| {
-                                        this.sync_inspector_selection(inspector, host, cx)
-                                    })
-                                    .ok()
-                            })
-                            .ok()
-                            .flatten()
-                    })
-                    .unwrap_or(false);
-                return ready
-                    .then(|| {
-                        cx.global::<Sidebars>()
-                            .0
-                            .get(&target.window_id())?
-                            .footer
-                            .as_ref()?
-                            .upgrade()
-                            .map(IntoElement::into_any_element)
-                    })
-                    .flatten();
-            }
-            owner
-                .and_then(|owner| {
-                    owner
-                        .update(cx, |this, cx| this.inspector_footer(inspector, window, cx))
-                        .ok()
-                })
-                .flatten()
-        })
+                            });
+                        });
+                    }),
+            )
+            .into_any_element();
+        tooling::inspector_panel_with_header(
+            inspector,
+            window,
+            cx,
+            Some(header),
+            |inspector, window, cx| {
+                #[cfg(agentation_external_inspector)]
+                if target != window.window_handle() {
+                    let _ = target.update(cx, |_, host, cx| {
+                        if host
+                            .inspector_entity()
+                            .is_none_or(|active| active.entity_id() != rendered_id)
+                            || !is_open(host, cx)
+                        {
+                            return;
+                        }
+                        if let Some(owner) = owner {
+                            let _ = owner.update(cx, |this, cx| {
+                                this.sync_inspector_selection(inspector, host, cx)
+                            });
+                        }
+                    });
+                    return None;
+                }
+                if let Some(owner) = owner {
+                    let _ = owner.update(cx, |this, cx| {
+                        this.sync_inspector_selection(inspector, window, cx)
+                    });
+                }
+                None
+            },
+        )
     }));
 }
 
@@ -89,14 +97,15 @@ pub(super) fn register(owner: WeakEntity<AnnotationOverlay>, window: &Window, cx
         Sidebar {
             overlay: owner,
             inspector: None,
-            #[cfg(agentation_external_inspector)]
-            footer: None,
+            presented: false,
         },
     );
 }
 
 pub(super) fn is_open(window: &Window, cx: &App) -> bool {
-    native_inspector(window, cx).is_some() || window.is_inspector_picking(cx)
+    cx.try_global::<Sidebars>()
+        .and_then(|sidebars| sidebars.0.get(&window.window_handle().window_id()))
+        .is_some_and(|sidebar| sidebar.presented)
 }
 
 fn native_inspector(window: &Window, cx: &App) -> Option<Entity<Inspector>> {
@@ -114,7 +123,18 @@ fn native_inspector(window: &Window, cx: &App) -> Option<Entity<Inspector>> {
         .upgrade()
 }
 
+fn present(window: &Window, presented: bool, cx: &mut App) {
+    if let Some(sidebar) = cx
+        .global_mut::<Sidebars>()
+        .0
+        .get_mut(&window.window_handle().window_id())
+    {
+        sidebar.presented = presented;
+    }
+}
+
 pub(super) fn start(window: &mut Window, cx: &mut App) {
+    present(window, true, cx);
     #[cfg(agentation_external_inspector)]
     window.set_inspector_external(true);
     if let Some(inspector) = native_inspector(window, cx) {
@@ -123,14 +143,15 @@ pub(super) fn start(window: &mut Window, cx: &mut App) {
             cx.notify();
         });
         window.refresh();
-    } else if !window.is_inspector_picking(cx) {
+    } else {
         tooling::clear_inspector_selection(window, cx);
         window.toggle_inspector(cx);
     }
 }
 
 pub(super) fn close(window: &mut Window, cx: &mut App) {
-    if is_open(window, cx) {
+    present(window, false, cx);
+    if native_inspector(window, cx).is_some() || window.is_inspector_picking(cx) {
         window.toggle_inspector(cx);
     }
     tooling::clear_inspector_selection(window, cx);
@@ -156,213 +177,220 @@ fn configuration(window: &Window, cx: &App) -> Option<crate::GpuiConfiguration> 
 }
 
 impl AnnotationOverlay {
+    pub(super) fn stop_inspection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        inspector::close(window, cx);
+        self.inspecting = false;
+        self.inspected_id = None;
+        self.inspection_note = None;
+        self.restore_configuration = None;
+        self.inspected_configuration = None;
+        self.stroke.clear();
+        cx.notify();
+    }
+
+    #[cfg(agentation_external_inspector)]
+    pub(super) fn keep_inspection_anchors(&self, window: &mut Window, cx: &mut App) {
+        if window.inspector_entity().is_none()
+            && self
+                .session
+                .annotations
+                .iter()
+                .any(|note| note.feedback.inspection.is_some())
+        {
+            window.set_inspector_external(true);
+            window.toggle_inspector(cx);
+            if let Some(inspector) = window.inspector_entity() {
+                inspector.update(cx, |inspector, _| inspector.stop_picking());
+            }
+        }
+    }
+
+    pub(super) fn open_inspection(
+        &mut self,
+        id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Ok(note) = self.store.annotation(id) else {
+            return;
+        };
+        if note.url != self.session.url || note.feedback.inspection.is_none() {
+            return;
+        }
+        if !self.dismiss_note(window, cx) {
+            return;
+        }
+        #[cfg(agentation_external_inspector)]
+        {
+            self.keep_inspection_anchors(window, cx);
+            if !window.select_inspection_anchor(&note.feedback.element_path, cx) {
+                self.notice = "This element is not available in the current view.".into();
+                cx.notify();
+                return;
+            }
+            present(window, true, cx);
+            self.inspecting = true;
+            self.inspected_id = window
+                .inspector_entity()
+                .and_then(|inspector| inspector.read(cx).active_element_id().cloned());
+            self.restore_configuration = note.feedback.gpui_configuration.clone();
+            self.review_open = false;
+            self.inspection_note = Some(note.id.clone());
+            self.selected_note = Some(note.id);
+            self.notice.clear();
+            cx.notify();
+        }
+        #[cfg(not(agentation_external_inspector))]
+        {
+            self.notice =
+                "Reopening an anchored element requires the external inspector build.".into();
+            cx.notify();
+        }
+    }
+
     fn sync_inspector_selection(
         &mut self,
         inspector: &Inspector,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if inspector.is_picking() {
-            // Keep the previous draft's cached edits until its feedback is saved.
-            if self.inspected_id.is_some() && self.dismiss_note(window, cx) {
-                self.inspected_id = None;
-                self.inspected_configuration = None;
-            }
+        if inspector.is_picking() || !self.inspecting {
             return false;
         }
-        let selection = tooling::inspector_selection(window, cx)
-            .filter(|selection| Some(&selection.id) == inspector.active_element_id());
-        let Some(selection) = selection else {
+        let Some(selection) = tooling::inspector_selection(window, cx)
+            .filter(|selection| Some(&selection.id) == inspector.active_element_id())
+        else {
             return false;
         };
-        if self.inspected_id.as_ref() != Some(&selection.id) || self.draft.is_none() {
-            if !self.dismiss_note(window, cx) {
-                return false;
-            }
-            let location = selection.id.path.source_location;
-            let source = format!(
-                "{}:{}:{}",
-                location.file(),
-                location.line(),
-                location.column()
-            );
-            let path = selection.id.path.global_id.to_string();
-            let bounds = selection.bounds;
-            let target = Target {
-                id: format!("gpui:{path}@{source}#{}", selection.id.instance_id),
-                label: if path.is_empty() {
+        if let Some(configuration) = self.restore_configuration.take() {
+            let id = selection.id.clone();
+            let owner = cx.entity().downgrade();
+            let host = window.window_handle();
+            cx.defer(move |cx| {
+                let _ = host.update(cx, |_, window, cx| {
+                    let _ = owner.update(cx, |this, cx| {
+                        if !this.inspecting || this.inspected_id.as_ref() != Some(&id) {
+                            return;
+                        }
+                        let configuration = tooling::InspectorStyleConfiguration {
+                            source: configuration.source,
+                            element_path: configuration.element_path,
+                            rust: configuration.rust,
+                            changes: configuration
+                                .changes
+                                .into_iter()
+                                .map(|change| tooling::InspectorStyleChange {
+                                    property: change.property,
+                                    before: change.before,
+                                    after: change.after,
+                                })
+                                .collect(),
+                        };
+                        tooling::restore_inspector_configuration(&id, configuration, window, cx);
+                    });
+                });
+            });
+            return false;
+        }
+        let location = selection.id.path.source_location;
+        let source = format!(
+            "{}:{}:{}",
+            location.file(),
+            location.line(),
+            location.column()
+        );
+        let path = selection.id.path.global_id.to_string();
+        let key = format!("gpui:{path}@{source}#{}", selection.id.instance_id);
+        let bounds = selection.bounds;
+        let snapshot = crate::InspectionSnapshot {
+            properties: selection.properties,
+        };
+        let config = configuration(window, cx);
+        let existing = self
+            .session
+            .annotations
+            .iter()
+            .find(|note| {
+                note.feedback.inspection.is_some()
+                    && (note.feedback.element_path == key
+                        || self.inspection_note.as_deref() == Some(&note.id)
+                            && self.inspected_id.as_ref() == Some(&selection.id))
+            })
+            .cloned();
+        let changed = existing.as_ref().is_none_or(|note| {
+            note.feedback.inspection.as_ref() != Some(&snapshot)
+                || note.feedback.gpui_configuration != config
+        });
+        self.inspected_id = Some(selection.id);
+        self.inspected_configuration = config.clone();
+        if changed {
+            let rect = crate::Rect {
+                x: bounds.origin.x.into(),
+                y: bounds.origin.y.into(),
+                width: bounds.size.width.into(),
+                height: bounds.size.height.into(),
+            };
+            let (w, _) = surface::viewport(window);
+            let feedback = AnnotationInput {
+                inspection: Some(snapshot),
+                comment: existing
+                    .as_ref()
+                    .map_or_else(String::new, |note| note.feedback.comment.clone()),
+                element_path: key,
+                element: if path.is_empty() {
                     "GPUI element".into()
                 } else {
                     path
                 },
-                source,
-                bounds: crate::Rect {
-                    x: bounds.origin.x.into(),
-                    y: bounds.origin.y.into(),
-                    width: bounds.size.width.into(),
-                    height: bounds.size.height.into(),
-                },
+                x: ((rect.x + rect.width / 2.) / w.max(1.) * 100.).clamp(0., 100.),
+                y: rect.y + rect.height / 2.,
+                bounding_box: rect,
+                source_file: Some(source),
+                gpui_configuration: config,
+                shape: None,
             };
-            let (w, _) = surface::viewport(window);
-            let x = (target.bounds.x + target.bounds.width / 2.0) / w.max(1.0) * 100.0;
-            let y = target.bounds.y + target.bounds.height / 2.0;
-            self.select(target, x.clamp(0.0, 100.0), y, window, cx);
-            self.inspected_id = Some(selection.id);
-            // Comments are optional. Picking leaves keyboard focus on the tools.
-            window.focus(&self.focus, cx);
-        }
-        let configuration = configuration(window, cx);
-        if self.inspected_configuration != configuration {
-            self.inspected_configuration = configuration;
-            cx.notify();
+            let result = if let Some(previous) = &existing {
+                let mut next = previous.clone();
+                next.feedback = feedback;
+                self.store
+                    .replace_note(Some(previous), Some(&next))
+                    .map(|_| next)
+            } else {
+                self.store
+                    .add_colored(&self.session.id, feedback, Some(self.color))
+            };
+            match result {
+                Ok(note) => {
+                    if existing.is_none() {
+                        self.record_change(None, Some(note.clone()));
+                    } else if let Some((_, Some(last))) = self.history.last_mut() {
+                        if last.id == note.id {
+                            *last = note.clone();
+                        }
+                    }
+                    self.inspection_note = Some(note.id.clone());
+                    self.selected_note = Some(note.id.clone());
+                    if let Some(old) = self
+                        .session
+                        .annotations
+                        .iter_mut()
+                        .find(|old| old.id == note.id)
+                    {
+                        *old = note;
+                    } else {
+                        self.session.annotations.push(note);
+                    }
+                    self.notice.clear();
+                    cx.notify();
+                }
+                Err(error) => {
+                    self.notice = error.to_string();
+                    cx.notify();
+                }
+            }
+        } else if let Some(note) = existing {
+            self.inspection_note = Some(note.id);
         }
         true
     }
-
-    fn inspector_footer(
-        &mut self,
-        inspector: &Inspector,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        if !self.sync_inspector_selection(inspector, window, cx) {
-            if !inspector.is_picking() && !self.notice.is_empty() {
-                return Some(
-                    div()
-                        .text_color(cx.theme().colors.danger)
-                        .child(self.notice.clone())
-                        .into_any_element(),
-                );
-            }
-            return None;
-        }
-        let mut comment = Input::new(&self.input)
-            .render(window, cx)
-            .into_any_element();
-        if let Some(frame) = comment.downcast_mut::<gpui::Div>() {
-            frame
-                .style()
-                .refine(&gpui::StyleRefinement::default().min_h(px(96.0)));
-        }
-        let theme = cx.theme();
-        let can_save =
-            !self.input.read(cx).text().trim().is_empty() || self.inspected_configuration.is_some();
-        let saved = self
-            .draft
-            .as_ref()
-            .and_then(|draft| draft.id.as_ref())
-            .is_some();
-        Some(
-            div()
-                .debug_selector(|| "feedback-inspector-sidebar".into())
-                .flex()
-                .flex_col()
-                .flex_none()
-                .gap_2()
-                .px_3()
-                .pt_3()
-                .border_t_1()
-                .border_color(theme.colors.border)
-                .child(
-                    div()
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .child("Feedback"),
-                )
-                .child(
-                    div()
-                        .text_size(theme.text_size(TextSize::Xs))
-                        .text_color(theme.colors.fg_muted)
-                        .child(
-                            "Add an optional comment. Saved feedback includes your style changes.",
-                        ),
-                )
-                .child(
-                    div()
-                        .id("feedback-inspector-comment-scroll")
-                        .max_h(px(160.0))
-                        .overflow_y_scroll()
-                        .debug_selector(|| "feedback-inspector-comment".into())
-                        .on_mouse_down(
-                            gpui::MouseButton::Left,
-                            cx.listener(|this, _, window, cx| {
-                                window.prevent_default();
-                                window.focus(&this.input.focus_handle(cx), cx);
-                            }),
-                        )
-                        .child(comment),
-                )
-                .when(!self.notice.is_empty(), |body| {
-                    body.child(self.notice.clone())
-                })
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .flex_wrap()
-                        .gap_2()
-                        .child(
-                            div()
-                                .debug_selector(|| "feedback-inspector-save".into())
-                                .child(
-                                    Button::new(
-                                        "feedback-inspector-save",
-                                        if saved {
-                                            "Update feedback"
-                                        } else {
-                                            "Save feedback"
-                                        },
-                                    )
-                                    .icon(IconName::Save)
-                                    .disabled(!can_save)
-                                    .on_click(cx.listener(
-                                        |this, _, window, cx| {
-                                            this.save(window, cx);
-                                        },
-                                    )),
-                                ),
-                        )
-                        .when(saved, |row| {
-                            row.child(
-                                div()
-                                    .debug_selector(|| "feedback-inspector-delete".into())
-                                    .child(
-                                        Button::new("feedback-inspector-delete", "Delete feedback")
-                                            .variant(ButtonVariant::Ghost)
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                if let Some(id) = this
-                                                    .draft
-                                                    .as_ref()
-                                                    .and_then(|draft| draft.id.clone())
-                                                {
-                                                    this.delete(&id, window, cx);
-                                                }
-                                            })),
-                                    ),
-                            )
-                        })
-                        .child(
-                            Button::new("feedback-inspector-done", "Done")
-                                .variant(ButtonVariant::Ghost)
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.close(window, cx)),
-                                ),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_size(theme.text_size(TextSize::Xs))
-                        .text_color(theme.colors.fg_muted)
-                        .child(if saved && !can_save {
-                            "Saved feedback remains after Reset. Delete feedback to remove it."
-                        } else {
-                            "Preview only · Pick another element to discard its temporary styles."
-                        }),
-                )
-                .pb(px(8.0))
-                .into_any_element(),
-        )
-    }
 }
-
-#[cfg(agentation_external_inspector)]
-pub(super) mod external;
