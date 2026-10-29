@@ -42,7 +42,7 @@ impl AssetSource for Assets {
         }
         if path == "agentation/mark.svg" {
             return Ok(Some(Cow::Borrowed(include_bytes!(
-                "../docs/assets/mark.svg"
+                "../site/docs/assets/mark.svg"
             ))));
         }
         crate::ely::Assets.load(path)

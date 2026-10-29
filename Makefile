@@ -3,7 +3,7 @@
 
 CARGO ?= cargo
 
-.PHONY: help fetch consumer bridge bridge-check build check fmt fmt-check lint test test-doc doc release-check version-check version-test release-prepare release-version-check ci
+.PHONY: help fetch example bridge bridge-check build check fmt fmt-check lint test test-doc doc release-check version-check version-test release-prepare release-version-check ci
 
 help: ## Show available commands
 	@awk 'BEGIN { FS = ":.*## "; print "Usage: make <target>\n" } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -11,7 +11,7 @@ help: ## Show available commands
 fetch: ## Fetch locked registry dependencies
 	$(CARGO) fetch --locked
 
-consumer: ## Run the complete consumer app with minimal integration
+example: ## Run the example app with minimal integration
 	$(CARGO) run -p agentation-consumer --locked
 
 bridge: ## Build the portable stdio MCP executable without native UI

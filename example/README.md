@@ -21,5 +21,5 @@ and MCP at `http://127.0.0.1:4750/mcp`. Notes live in
 Inspect selects the screen as a whole. Controls have no individual wrappers.
 Optional finer targets can be added at shared component roots.
 
-Follow the [consumer setup guide](../../docs/consumer-setup.md) to adapt the
+Follow the [consumer setup guide](../site/docs/consumer-setup.md) to adapt the
 example, choose dependencies and storage, and connect an agent.

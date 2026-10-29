@@ -13,7 +13,7 @@ Settings, CLI, and MCP versions derive from Cargo at build time. Review the diff
 add release notes to CHANGELOG.md without rewriting history, and run
 `make version-check version-test release-version-check` before promotion.
 
-The Cargo archive excludes the README demonstration GIFs under `docs/assets/`;
+The Cargo archive excludes the README demonstration GIFs under `site/docs/assets/`;
 they remain available in the repository and site. Before compiling the publication
 candidate, the publishing workflow packages it and checks crates.io's 10 MiB
 upload limit with `check-bridge-release.py --check-package-size`.

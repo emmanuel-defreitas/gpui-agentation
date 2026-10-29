@@ -8,9 +8,9 @@ Keep the integration in one app-local module, with one target for each screen.
 Buttons, inputs, and layout elements stay ordinary host code. Add finer targets
 later only where selecting a whole screen is insufficient.
 
-The runnable [consumer example](../examples/consumer/src/main.rs) demonstrates
+The runnable [consumer example](../../example/src/main.rs) demonstrates
 this pattern through the library's public API. Its
-[devtools.rs](../examples/consumer/src/devtools.rs) contains all debug/release
+[devtools.rs](../../example/src/devtools.rs) contains all debug/release
 handling and delegates to Agentation's public integration API. The app has no
 direct Ely dependency, initialization call, theme access, or focus scope.
 Agentation uses Ely internally; it does not traverse components automatically.
@@ -91,7 +91,7 @@ build script, proc macro, MCP service, or API key.
 ## 2. Add the app-local adapter
 
 Copy the production portion of
-[`examples/consumer/src/devtools.rs`](../examples/consumer/src/devtools.rs)
+[`example/src/devtools.rs`](../../example/src/devtools.rs)
 into the consumer's source tree. Stop before its `#[cfg(all(test,
 debug_assertions))]` test module: those tests refer to the example's `Consumer`
 and `Page` types and should be adapted to your host rather than copied unchanged.
@@ -217,7 +217,7 @@ Start the app in debug mode, open Settings, and verify MCP says Running. Copy
 the configuration there; it uses the actual listening endpoint. For the
 example the URL is `http://127.0.0.1:4750/mcp`. Client configuration is separate
 from integrating the Rust library. Use the client-specific examples in the
-[README](../README.md#connect-an-mcp-client), substituting this URL.
+[README](../../README.md#connect-an-mcp-client), substituting this URL.
 
 The app must stay running. Stopping it closes the server; a client may need to
 reconnect after a rebuild. With MCP switched off, `/mcp` returns 503 while
@@ -260,7 +260,7 @@ of loading native fonts/assets. No Ely test dependency is needed in the host.
 ## Set up another app with an agent
 
 The distributable skill is at
-[`skills/gpui-agentation-setup`](../skills/gpui-agentation-setup/SKILL.md).
+[`skills/gpui-agentation-setup`](../../skills/gpui-agentation-setup/SKILL.md).
 Copy that whole directory into your agent's skills directory. For a Codex
 project, from the consumer repository, with `AGENTATION_CHECKOUT` set to the
 path of this checkout:

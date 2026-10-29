@@ -7,11 +7,11 @@ publish = false
 license = "MIT"
 
 [dependencies]
-gpui_agentation = { package = "gpui-agentation", path = "../..", default-features = false, features = ["native"] }
+gpui_agentation = { package = "gpui-agentation", path = "..", default-features = false, features = ["native"] }
 gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
 gpui-platform = { package = "gpui-pre-platform", version = "=0.3.8" }
 
 [dev-dependencies]
 gpui = { package = "gpui-pre", version = "=0.3.8", features = ["test-support"] }
-gpui_agentation = { package = "gpui-agentation", path = "../..", default-features = false, features = ["test-support"] }
+gpui_agentation = { package = "gpui-agentation", path = "..", default-features = false, features = ["test-support"] }
 tempfile = "3.27.0"

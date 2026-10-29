@@ -1,7 +1,7 @@
 # Development reference
 
 Detailed native integration and API behavior for gpui-agentation 0.6.0.
-Start with the [README](../README.md) or [consumer setup guide](consumer-setup.md).
+Start with the [README](../../README.md) or [consumer setup guide](consumer-setup.md).
 
 Native feedback for GPUI development builds: select a registered element, write
 a note, copy Markdown, and exchange status updates and replies with an agent.
@@ -11,11 +11,11 @@ Agentation protocol implementation.
 
 ## Install
 
-Start with the [consumer setup guide](../docs/consumer-setup.md) and
-[complete consumer app](../examples/consumer/README.md). Its app-local adapter
+Start with the [consumer setup guide](consumer-setup.md) and
+[complete consumer app](../../example/README.md). Its app-local adapter
 keeps debug gates in one module and registers one screen at a time, so ordinary
 controls need no annotation wrappers. A reusable
-[setup skill](../skills/gpui-agentation-setup/SKILL.md) helps agents apply the same
+[setup skill](../../skills/gpui-agentation-setup/SKILL.md) helps agents apply the same
 pattern to another GPUI app. The consumer can use plain GPUI: Agentation owns
 its internal Ely setup and focus handling.
 
@@ -40,8 +40,8 @@ Ely globals are independent of host Ely globals. Development uses Rust 1.98.1.
 
 ## Toolbar and editor
 
-Run `make consumer` for a native playground with the real
-annotation overlay. See the [consumer example](../examples/consumer/README.md).
+Run `make example` for a native playground with the real
+annotation overlay. See the [consumer example](../../example/README.md).
 
 The toolbar always occupies a separate vertical companion window. It docks to the
 consumer's right edge with a 14-logical-pixel gap, shares its top edge and height,
@@ -380,7 +380,7 @@ Xcode command-line tools and Git access to Ely.
 
 ```sh
 make fetch           # Fetch locked dependencies
-make consumer        # Run the complete consumer app (debug or release capable)
+make example         # Run the example app (debug or release capable)
 make check           # Type-check all targets
 make fmt             # Format Rust sources
 make test            # Run workspace and documentation tests
@@ -411,7 +411,7 @@ promotion remains in GitHub Actions under the branch policy above.
 The combined package supports guarded trusted publishing. Agent workflows require
 their own GitHub/Copilot/Claude configuration before use.
 
-See [ORIGIN.md](../ORIGIN.md) for the source snapshot and license attribution.
+See [ORIGIN.md](../../ORIGIN.md) for the source snapshot and license attribution.
 
 ## Annotation controls
 

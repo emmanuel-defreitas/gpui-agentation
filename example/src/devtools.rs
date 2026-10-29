@@ -38,7 +38,7 @@ impl Devtools {
             // Choose a distinct port and store for each app. Running from any
             // working directory uses the same workspace-local ignored store.
             let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../target/consumer/feedback.json");
+                .join("../target/consumer/feedback.json");
             let feedback = gpui_agentation::Agentation::mount(
                 "Consumer example",
                 "gpui://consumer/overview",
