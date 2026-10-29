@@ -24,9 +24,9 @@ changing notes, editing code, or marking feedback resolved.
    forwards to the running host; it does not launch the app. Preserve unrelated
    client settings when connection setup is part of the user's request.
 
-When source documentation is available, consult `docs/reference.md` and
-`docs/package-layout.md` from the same gpui-agentation revision as the host.
-In this repository they are at `../../docs/` relative to this skill directory.
+When source documentation is available, consult `site/docs/reference.md` and
+`site/docs/package-layout.md` from the same gpui-agentation revision as the host.
+In this repository they are at `../../site/docs/` relative to this skill directory.
 If the skill was copied alone, use the host's selected source or retrieve those
 files at its revision from `https://github.com/emmanuel-defreitas/gpui-agentation`.
 Use the sibling `gpui-agentation-setup` skill for library integration or missing
@@ -65,10 +65,12 @@ text. Check protocol errors and `isError` before treating a call as successful.
    or reset statuses to populate the queue.
 3. Call `annotation_get` for relevant note IDs. Read the comment, thread, status,
    route, `element`, `elementPath`, `boundingBox`, optional `sourceFile`, and
-   optional `shape`. These feedback fields are flattened into the returned
+   optional `shape`, `inspection` (the property snapshot of an inspected
+   element), and `gpuiConfiguration` (style overrides with suggested Rust
+   builder calls). These feedback fields are flattened into the returned
    annotation object. Its `index` is the displayed note number, not its API ID. Source context identifies
-   the registered target's call site; verify that location in the actual host
-   checkout before editing. Do not assume it identifies an arbitrary child.
+   the picked element's or registered target's call site; verify that location
+   in the actual host checkout before editing.
 4. Use `annotation_markdown` for a portable session handoff when useful. Report
    the selected app/route, relevant note IDs and statuses, concrete feedback,
    available source context, and the next action. Distinguish observed results
@@ -98,21 +100,22 @@ original comment unless a comment edit is requested; put your progress in replie
 
 ## Explain native features and API boundaries
 
-The native toolbar provides **Inspect**, **Box**, **Arrow**, and **Pen**.
-Inspect selects registered targets, with the smallest visible target under the
-pointer winning. Registration may cover an entire screen; ordinary child
-controls are not automatically inspectable. Box, Arrow, and Pen add drawing
-context, and four color swatches distinguish strokes. Shapes use viewport
-shares from zero to one. Do not treat them as absolute screen pixels.
+The native toolbar is a separate companion window with **Inspect**, **Box**,
+**Arrow**, **Pen**, **Comment**, and **Textbox**. Inspect uses GPUI's native
+picker and saves a numbered inspection note with the element's source,
+property snapshot, and any style overrides. The **Annotation mode** switch
+enables the drawing tools; four color swatches distinguish strokes. Shapes use
+viewport shares from zero to one. Do not treat them as absolute screen pixels.
 
 **Comments → Copy** exports Markdown. Saved notes retain their route, lifecycle
-status, and conversation across app restarts. The toolbar can be repositioned.
+status, and conversation across app restarts. On macOS, Settings opens from
+the menu-bar icon; elsewhere it opens as a sheet.
 These are native user interactions, not MCP tool calls. Guide the user through
 them when needed; do not claim MCP can click, navigate, draw, or capture screens.
 
 REST on the same loopback listener additionally supports session/note creation,
 note deletion, and SSE events. None is an extra MCP tool. For an explicitly
-requested REST/SSE workflow, use `docs/reference.md`; `/events` is independent
+requested REST/SSE workflow, use `site/docs/reference.md`; `/events` is independent
 of MCP and `GET /mcp` returns 405. There is no MCP screenshot, arbitrary GPUI
 tree inspection, source rewriting, or filesystem mutation tool.
 
