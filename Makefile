@@ -3,7 +3,7 @@
 
 CARGO ?= cargo
 
-.PHONY: help fetch example bridge bridge-check bridge-install-check build check fmt fmt-check lint test test-doc doc release-check version-check version-test release-prepare release-version-check platform-check snapshot-check site-check verify ci
+.PHONY: help fetch example example-stock test-external bridge bridge-check bridge-install-check build check fmt fmt-check lint test test-doc doc release-check version-check version-test release-prepare release-version-check platform-check snapshot-check site-check verify ci
 
 help: ## Show available commands
 	@awk 'BEGIN { FS = ":.*## "; print "Usage: make <target>\n" } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -11,8 +11,14 @@ help: ## Show available commands
 fetch: ## Fetch locked registry dependencies
 	$(CARGO) fetch --locked
 
-example: ## Run the example app with minimal integration
+example: fetch ## Run the example app with the inspector outside the app (patched GPUI)
+	python3 scripts/inspector-poc.py run -p agentation-consumer
+
+example-stock: ## Run the example app on stock GPUI (inspector draws inside the app)
 	$(CARGO) run -p agentation-consumer --locked
+
+test-external: fetch ## Run the lib tests with the external inspector enabled
+	python3 scripts/inspector-poc.py test --lib
 
 bridge: ## Build the portable stdio MCP executable without native UI
 	$(CARGO) build --release --bin gpui-agentation --locked
