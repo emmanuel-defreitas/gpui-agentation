@@ -55,7 +55,7 @@ fn popup_fits_its_menu_bar_display_without_crossing_edges() {
     };
     let bounds = popup_bounds(anchor, size(px(380.), px(620.)));
     assert_eq!(bounds.right(), px(992.));
-    assert!(bounds.top() >= px(32.));
+    assert_eq!(bounds.top(), px(26.));
     assert!(bounds.bottom() <= px(736.));
     let small = Anchor {
         button: Bounds::new(point(px(0.), px(0.)), size(px(20.), px(20.))),

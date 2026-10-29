@@ -25,6 +25,16 @@ pub(super) enum CompanionPanel {
     Comments,
 }
 
+impl CompanionPanel {
+    fn width(&self) -> Pixels {
+        match self {
+            Self::Comments => px(380.),
+            #[cfg(agentation_external_inspector)]
+            Self::Inspector(_) => px(420.),
+        }
+    }
+}
+
 const GAP: f32 = 14.0;
 pub(super) const TOOLS: [(Option<Tool>, IconName, &str, &str); 6] = [
     (None, IconName::Crosshair, "Inspect", "inspect"),
@@ -103,7 +113,8 @@ impl AnnotationOverlay {
         } else {
             panel
         };
-        let total_width = width + if panel.is_some() { px(420.) } else { px(0.) };
+        let panel_width = panel.as_ref().map_or(px(0.), CompanionPanel::width);
+        let total_width = width + panel_width;
         ToolbarSpec {
             bounds: dock_bounds(window.bounds(), total_width),
             visible: !self.toolbar_hidden
@@ -543,6 +554,7 @@ impl Render for ToolbarWindow {
             .debug_selector(|| "feedback-companion-contents".into())
             .opacity(self.width.opacity)
             .children(self.width.panel.clone().map(|panel| {
+                let panel_width = panel.width();
                 let content = match panel {
                     #[cfg(agentation_external_inspector)]
                     CompanionPanel::Inspector(inspector) => inspector.into_any_element(),
@@ -555,7 +567,13 @@ impl Render for ToolbarWindow {
                     .h_full()
                     .overflow_hidden()
                     .relative()
-                    .child(div().w(px(420.)).min_w(px(420.)).h_full().child(content))
+                    .child(
+                        div()
+                            .w(panel_width)
+                            .min_w(panel_width)
+                            .h_full()
+                            .child(content),
+                    )
                     .when(self.state.panel.is_none(), |panel| {
                         panel.child(
                             div()

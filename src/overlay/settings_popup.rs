@@ -223,8 +223,8 @@ fn popup_bounds(anchor: Anchor, desired: gpui::Size<Pixels>) -> Bounds<Pixels> {
         work.left() + margin,
         (work.right() - width - margin).max(work.left() + margin),
     );
-    let top = (anchor.button.bottom() + px(6.)).clamp(
-        work.top() + margin,
+    let top = (anchor.button.bottom() + px(2.)).clamp(
+        work.top() + px(2.),
         (work.bottom() - height - margin).max(work.top() + margin),
     );
     Bounds::new(point(left, top), size(width, height))
@@ -316,7 +316,7 @@ impl SettingsTray {
             is_resizable: false,
             is_minimizable: false,
             display_id: anchor.display,
-            window_background: gpui::WindowBackgroundAppearance::Transparent,
+            window_background: gpui::WindowBackgroundAppearance::Blurred,
             ..Default::default()
         };
         #[cfg(target_os = "macos")]
@@ -344,6 +344,7 @@ impl SettingsTray {
                 glass::install(popup, cx);
                 #[cfg(target_os = "macos")]
                 if let Some(native) = &mut self.native {
+                    native.set_highlighted(true);
                     let _ = popup.update(cx, |_, window, _| native.watch(window, generation));
                 }
                 owner.update(cx, |_, cx| cx.notify());
@@ -361,6 +362,7 @@ impl SettingsTray {
         #[cfg(target_os = "macos")]
         if let Some(native) = &mut self.native {
             native.unwatch();
+            native.set_highlighted(false);
         }
         let restore = restore && std::mem::take(&mut self.restore_consumer);
         let selected = self.selected.take();
@@ -557,7 +559,7 @@ impl Render for SettingsPopup {
             .flex()
             .flex_col()
             .text_color(theme.colors.fg)
-            .rounded(theme.radius(Radius::Xl))
+
             .border_1()
             .border_color(theme.colors.fg.opacity(0.18))
             .when(native_surface && reduce_transparency, |panel| {
@@ -565,7 +567,6 @@ impl Render for SettingsPopup {
             })
             .when(!native_surface, |panel| {
                 panel
-                    .bg(theme.colors.surface)
                     .border_1()
                     .border_color(theme.colors.border)
             })
