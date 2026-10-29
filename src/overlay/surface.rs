@@ -575,29 +575,7 @@ impl AnnotationOverlay {
                 matches!(
                     note.status,
                     AnnotationStatus::Pending | AnnotationStatus::Acknowledged
-                ) && ({
-                    #[cfg(agentation_external_inspector)]
-                    if note.feedback.inspection.is_some() {
-                        return window
-                            .inspection_anchor(&note.feedback.element_path)
-                            .is_some_and(|(_, b)| {
-                                let x = f32::from(at.x);
-                                let y = f32::from(at.y);
-                                let r = Rect {
-                                    x: b.origin.x.into(),
-                                    y: b.origin.y.into(),
-                                    width: b.size.width.into(),
-                                    height: b.size.height.into(),
-                                };
-                                r.contains(x, y)
-                                    && ((x - r.x).abs() <= 6.
-                                        || (y - r.y).abs() <= 6.
-                                        || (x - r.x - r.width).abs() <= 6.
-                                        || (y - r.y - r.height).abs() <= 6.)
-                            });
-                    }
-                    false
-                } || self
+                ) && (self
                     .textbox_bounds
                     .get(&note.id)
                     .is_some_and(|bounds| bounds.contains(&at))
@@ -900,17 +878,7 @@ impl AnnotationOverlay {
             {
                 continue;
             }
-            #[cfg(agentation_external_inspector)]
-            if a.feedback.inspection.is_some() {
-                layer = layer.child(super::anchored::AnchorMark {
-                    key: a.feedback.element_path.clone(),
-                    marker: self
-                        .marker(&a.id, a.index, Rect::default(), window, cx)
-                        .into_any_element(),
-                    color: cx.theme().colors.chart[a.annotation_color()],
-                });
-                continue;
-            }
+
             let bounds = Rect {
                 x: a.feedback.x / 100.0 * w,
                 y: a.feedback.y,
@@ -1248,7 +1216,3 @@ pub(super) fn annotation_count(count: usize, over: impl IntoElement, cx: &App) -
             )
         })
 }
-
-#[cfg(test)]
-#[path = "surface.test.rs"]
-mod tests;
