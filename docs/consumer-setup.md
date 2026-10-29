@@ -47,7 +47,7 @@ it does not claim the individual button's source location.
 
 The example uses port **4750** and stores notes at
 `target/consumer/feedback.json` under this checkout, regardless of the current
-working directory. It can run alongside the playground on port 4749. Run one
+working directory. Run one
 process per store file. If the port is busy, local annotations still work and
 Settings reports that the API is offline; choose a different port in the adapter.
 
@@ -275,25 +275,3 @@ the current app. The skill checks the host and edits its integration; it does
 not require an already-running annotation MCP server. Installing a skill does
 not itself modify source code or configure an MCP client.
 
-## Optional rebuild and restart on save
-
-No extra annotations, component wrappers, or initialization calls are needed.
-With Python 3 installed, launch the debug consumer through the bundled runner:
-
-```sh
-python3 /path/to/gpui-agentation/src/hot_reload/runner.py \
-  --manifest-path /path/to/consumer/Cargo.toml --bin my-app
-```
-
-Then enable **Settings → Hot reload → Server status**. The switch starts off;
-turning it off pauses rebuilds without closing the app. Build failures keep
-the last running app alive until a later successful save. A successful build
-restarts the process: save host app work first; only persisted state survives.
-The runner watches source, workspace crates, assets, locales, examples, and
-Cargo files, excludes build output and temporary files, and requires a valid
-Cargo.lock. It uses debug builds and inherits the launch environment.
-
-Run the included demo with `make dev`. An ordinary `cargo run` remains valid,
-but the switch explains that no supervisor is present. See
-[runner options](../demo/README.md#hot-reload). The native control channel stays
-debug-only and private to the local supervisor; the loopback API is unchanged.

@@ -40,36 +40,30 @@ Ely globals are independent of host Ely globals. Development uses Rust 1.98.1.
 
 ## Toolbar and editor
 
-Run `make dev` for a standalone native playground with the real
-annotation overlay. See [demo/README.md](../demo/README.md) for controls, storage,
-and preview export instructions.
+Run `make consumer` for a native playground with the real
+annotation overlay. See the [consumer example](../examples/consumer/README.md).
 
-By default, the overlay renders an inline Ely **Banner** directly below the
-window titlebar. Mount it as the first child of your content column, or directly
-after a custom titlebar. It reserves its own height so application content starts
-below it. **Inspect**, **Box**, **Arrow**, and **Pen** show both icons and labels
-on the left, followed by the current color swatch. Click the
-swatch to open the color palette; choosing a color closes the popover. **Comments**, MCP status, and the Settings icon
-stay on the right. Comments uses a floating Ely count badge. MCP reports Running
-(green), Starting (yellow), or Off (gray). The banner
-uses a dark surface in light mode and a light surface in dark mode, with
-contrasting text, icons, and interaction states. All tools remain visible before, during, and after annotating;
-narrow windows wrap controls instead of hiding them behind an expand button.
+The toolbar always occupies a separate vertical companion window. It docks to the
+consumer's right edge with a 14-logical-pixel gap, shares its top edge and height,
+and reserves no space inside the consumer. Tools and color swatches occupy the
+upper scrollable section; MCP status and **Comments**, **Settings**, and **Close**
+stay at the bottom. Short windows scroll the tools while keeping the footer reachable.
 
-Use **Inspect** to anchor a note to a registered GPUI component. While inspecting,
-hover to see its label, dimensions, position, and Rust source location; click to
-comment. The button becomes **Stop** to exit inspection. This hover card preserves
-the host layout and click-to-comment behavior. Alternatively, choose
-**Box**, **Arrow**, or **Pen** to draw over the live window. The selecting click
-does not activate the application control. **Esc** cancels the editor; a second
-**Esc** exits picking while leaving the banner visible.
-Inspect uses the normal arrow cursor. Drawing tools, including Arrow, use a
-crosshair; an Ely drawing-tool glyph follows it.
+On macOS, an AppKit child-window relationship makes the toolbar follow consumer
+dragging without replacing its GPUI window. Resizing updates the dock and height.
+Minimizing, fullscreen, or filling the usable screen hides the companion until the
+consumer is restored. Closing the consumer closes the companion. Other backends
+use GPUI window placement and may reopen the companion on a position change.
 
-**Settings → Position → Floating** restores the draggable ActionBar. Its Plus
-button expands the tools; X collapses them. Drag its grip, or focus the grip and
-use the arrow keys, to move it within the viewport. Its width animates with Ely
-motion tokens and respects reduced motion.
+**Inspect** uses the consumer's native picker and sidebar. It becomes **Stop**
+while inspecting, and drawing controls hide. The toolbar stays outside the
+consumer's inspectable element tree in every mode. **Box**, **Arrow**, and **Pen**
+draw over the live consumer; the selecting click does not activate its controls.
+Inspect uses the normal arrow cursor; drawing tools use a crosshair with an Ely glyph.
+
+**Close** hides the toolbar without stopping inspection. **Debug → Show Toolbar**
+or its shortcut restores it. **Esc** closes the editor or inspector while leaving
+the companion available. There is no draggable grip or embedded Banner/Floating layout.
 
 Each note has a stable number within its route. Deleting a note does not
 renumber other notes or reuse its number. Every pin is a round button with its
@@ -126,22 +120,37 @@ saved notes stay with their route. Keep one app process per store file.
 
 ## Settings
 
-**Position** offers **Banner** (the default), **Floating**, and **None**. Position
-persists per application and notes store across windows and restarts. Banner mode uses the main app's layout and works
-with native or custom titlebars. It does not create an additional native window.
-Comments opens a Sheet in Banner mode and a popover in Floating mode.
+The companion has one fixed dock position, so Settings has no Position control.
+Comments opens a sheet inside the consumer window. On macOS, Settings opens
+from a process-wide menu-bar icon; the companion button, native Debug menu, and
+shortcut target that same popup. Other platforms retain the Settings sheet.
 The Comments sheet shares the compact sunken header used by Settings. Its rows
 fill the sheet width and show numbered badges; a full-width Add button follows
 the list, and Copy stays in the bottom footer.
 
-Settings opens an Ely **Sheet** from the right side of the main window, with
-a sunken header, a Settings icon, the `gpui-dev-mcp` subtitle,
+On macOS, Settings uses a separate GPUI popup below a native menu-bar icon.
+There is one icon per consumer process, not one per window. The last active
+consumer supplies the settings controller; its window title appears in the header.
+The popup owns its focus scope and configuration input, while MCP
+continues to use the consumer's existing state. It updates live, preserves the
+consumer's inspection/draft, and closes with Esc, its close button, an outside
+click, a second icon click, or closure/unmounting of its selected consumer.
+Outside clicks are passed through and do not reactivate the consumer. No global
+keyboard monitor or additional service is used. Multiple consumer processes each
+have their own icon.
+
+The icon is removed when the last mounted consumer is gone. A surviving consumer
+is selected by activation order. Native Debug → Settings and the existing shortcut
+remain alternate entry points. Where native tray support is unavailable, Settings
+continues to open an Ely **Sheet** inside the consumer, with a Settings icon and
 **Overline** section labels and typography components for field labels and
 descriptions. Its content scrolls independently; Escape, the close button, or
 a click on the scrim dismisses it and restores focus.
-**Position** uses an Ely SegmentedControl. **MCP** shows read-only, pretty-printed JSON
+**MCP** shows read-only, pretty-printed JSON
 in an Ely JsonInput that wraps and grows to fit its content without internal
-scrolling using the actual listening endpoint. **Copy config** copies
+scrolling using the actual listening endpoint. The collapsible header has a
+left-aligned MCP label, a trailing **Copy** action, and a disclosure chevron.
+Copy remains visible when collapsed and does not expand the section. It copies
 that exact JSON and shows green **copied!** feedback for two seconds; another
 click restarts the timer. The listener must be available to copy a configuration.
 The field is not editable, and copying does not modify any client's settings.
@@ -186,11 +195,38 @@ The existing `AnnotationOverlay`, `begin_frame`, and `target` APIs remain
 available for hosts that already manage their own Ely initialization and root
 focus scope. Those are lower-level integrations; don't mount both root paths.
 
-The picker uses the smallest visible registered region under the pointer.
-Bounds follow layout, scrolling, display scaling, and cached GPUI views;
-markers are hidden when their target is absent. Coordinates use logical pixels,
-with `x` expressed as a percentage of viewport width. Registration is explicit:
-GPUI has no browser DOM to inspect. Register the components that should be selectable in your host app.
+**Inspect** uses GPUI's native picker. Selecting an element creates or updates a
+numbered inspection annotation (IA) with its source and a snapshot of the
+displayed properties, including unchanged values. The IA's border follows its
+element; clicking the border reopens the inspector. Width, height, padding,
+margin, border, and opacity can be previewed with Ely sliders and save into the
+same annotation as they change. Clicking its numbered pin opens the optional
+comment editor. Both the comment and property snapshot appear in the notes,
+Markdown clipboard, and MCP response. Saved `gpuiConfiguration` retains style
+overrides and suggested Rust builder calls. Re-picking an existing IA restores
+those overrides before updating its snapshot; Reset clears the preview.
+
+The Inspector header **Stop** button exits inspection. While an element is
+selected, Esc or clicking elsewhere on the consumer resumes picking. The rail's
+Annotation mode switch enables drawing tools; when off, they stay visible but
+muted and disabled.
+Comments opens in the companion and shares the inspector panel's expand and
+collapse animation. Undo, Redo, Save, and Delete remain available through
+shortcuts and the native Debug menu; there is no power icon.
+
+The source path uses Ely's breadcrumb component and is relative to the process
+working directory. Generated bundled Ely paths resolve back to `vendor/ely/src`.
+Only the final segment is actionable: it opens the file at its source line using
+`$EDITOR`, defaulting to Zed. Zed, VS Code, Cursor, and VSCodium CLI conventions
+are supported, including quoted command paths and arguments. Commands run
+without a shell. Unknown IDEs, missing source files, and failed editor launches
+copy the relative `path:line:column` and show **Path copied to clipboard** inline.
+
+Registered targets remain available for host-defined feedback regions and the
+drawing tools. Their bounds follow layout and scrolling; their markers hide
+when the registered target is absent. Inspect feedback can identify native
+GPUI elements without additional target wrappers. Coordinates use logical
+pixels, with `x` expressed as a percentage of viewport width.
 
 The entire crate is gated by `cfg(debug_assertions)`. Gate imports, entity fields,
 mounting, and wrappers in host code the same way. Release profiles, including
@@ -264,22 +300,22 @@ For clients that launch stdio servers, use the optional
 builds its release executable with no GPUI/Ely dependency. It forwards to the
 same running app endpoint; direct HTTP configuration below remains supported.
 
-Run a debug host app first. The default host example uses port **4748**; the
-standalone demo uses **4749**. The configuration in Settings always uses the actual listening port,
+Run a debug host app first. The default port is **4748**; the
+consumer example uses **4750**. The configuration in Settings always uses the actual listening port,
 including an OS-assigned port when mounted with zero.
 
 For Codex CLI or desktop, use the URL shown in Settings in `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.gpui_agentation]
-url = "http://127.0.0.1:4749/mcp"
+url = "http://127.0.0.1:4748/mcp"
 ```
 
 Alternatively:
 
 ```sh
-codex mcp add gpui-agentation --url http://127.0.0.1:4749/mcp
-claude mcp add --transport http gpui-agentation http://127.0.0.1:4749/mcp
+codex mcp add gpui-agentation --url http://127.0.0.1:4748/mcp
+claude mcp add --transport http gpui-agentation http://127.0.0.1:4748/mcp
 ```
 
 For Claude Code `.mcp.json` or another client that accepts this configuration:
@@ -289,7 +325,7 @@ For Claude Code `.mcp.json` or another client that accepts this configuration:
   "mcpServers": {
     "gpui_agentation": {
       "type": "http",
-      "url": "http://127.0.0.1:4749/mcp"
+      "url": "http://127.0.0.1:4748/mcp"
     }
   }
 }
@@ -301,7 +337,7 @@ For Zed, merge this into `settings.json` (using the URL from Settings):
 {
   "context_servers": {
     "gpui_agentation": {
-      "url": "http://127.0.0.1:4749/mcp"
+      "url": "http://127.0.0.1:4748/mcp"
     }
   }
 }
@@ -339,12 +375,11 @@ the native UI; API updates appear on the overlay's existing refresh cycle.
 ## Verify
 
 Run `make help` to list the development commands. The pinned Rust toolchain
-includes Rustfmt and Clippy; native builds and the demo require macOS with
+includes Rustfmt and Clippy; native builds require macOS with
 Xcode command-line tools and Git access to Ely.
 
 ```sh
 make fetch           # Fetch locked dependencies
-make dev             # Run the native demo in debug mode
 make consumer        # Run the complete consumer app (debug or release capable)
 make check           # Type-check all targets
 make fmt             # Format Rust sources
@@ -378,17 +413,11 @@ their own GitHub/Copilot/Claude configuration before use.
 
 See [ORIGIN.md](../ORIGIN.md) for the source snapshot and license attribution.
 
-## Optional hot reload
-
-Run `make dev`, then enable **Settings → Hot reload → Server status**. The bundled
-Python 3 supervisor rebuilds on save and restarts only after a successful build.
-No extra component wrappers are required. See [runner setup and limitations](../demo/README.md#hot-reload).
-
 ## Annotation controls
 
 Annotation mode uses an icon-and-switch pill. Tool shortcuts appear as Ely
 keycaps inside tooltips while mode is on; buttons retain accessible names. The
-banner has extra vertical padding. Floating
+companion uses a vertical layout. Floating
 comment panels are 16 rem wide, with smaller headers, icon-only actions and a
 subtle theme shadow. Placeholder text uses the smaller theme size; comment text
 uses 50% opacity. Tool keys are I (Inspect),
@@ -437,26 +466,24 @@ Include that menu alongside existing menus rather than replacing them.
 Agentation updates only its Debug menu when window state or active window changes.
 `Agentation::root` handles `AnnotationCommand` automatically. Hosts mounting
 `AnnotationOverlay` directly must capture that action on their window root and
-forward it to `AnnotationOverlay::dispatch_command`; see `demo/app.rs`.
+forward it to `AnnotationOverlay::dispatch_command`.
 
-Settings offers Banner, Floating, and None. None hides the embedded toolbar,
-so install the Debug menu before choosing it. The selected position and floating
-coordinates are stored per app in the annotations file. Windows mounting the
-same path share a Store and observe preference changes. Independent processes
-should continue to use separate annotation stores.
+Close hides the companion; Show Toolbar restores it. Visibility is stored per
+app in the annotations file. Windows mounting the same path share preference
+changes; independent processes should use separate stores. Native menu commands
+remain available regardless of toolbar visibility.
 
-Debug follows native menu spacing, separators, shortcut columns and checkmarks.
 Undo/Redo reflect each window's history. New and Color are disabled while mode
-is off; Position is disabled while the toolbar is hidden. Show Toolbar restores
-the last visible Banner/Floating position. Settings also exposes a checked
-Annotation Mode command so the tools remain reachable with the toolbar hidden.
+is off. Settings also exposes a checked Annotation Mode command. The public
+`ToolbarPosition::Banner` and `Floating` values and their former shortcuts are
+retained as compatibility aliases that show the same companion; `None` hides it.
 
 Additional menu shortcuts use Command+Option on macOS and Control+Alt elsewhere:
 
 | Keys after those modifiers | Command |
 | --- | --- |
 | A / H | Annotation mode / toolbar visibility |
-| F / B | Floating / Banner |
+| F / B | Show companion (legacy placement shortcuts) |
 | C / S | Comments / Settings |
 | M | Start/stop MCP |
 

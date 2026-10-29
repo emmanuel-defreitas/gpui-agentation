@@ -3,16 +3,13 @@
 
 CARGO ?= cargo
 
-.PHONY: help fetch dev consumer bridge bridge-check build check fmt fmt-check lint test test-doc doc release-check hot-reload-test version-check version-test release-prepare release-version-check ci
+.PHONY: help fetch consumer bridge bridge-check build check fmt fmt-check lint test test-doc doc release-check version-check version-test release-prepare release-version-check ci
 
 help: ## Show available commands
 	@awk 'BEGIN { FS = ":.*## "; print "Usage: make <target>\n" } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
 fetch: ## Fetch locked registry dependencies
 	$(CARGO) fetch --locked
-
-dev: ## Run the demo with the Settings hot-reload toggle available
-	CARGO="$(CARGO)" python3 src/hot_reload/runner.py --manifest-path Cargo.toml --example demo --no-default-features --features native
 
 consumer: ## Run the complete consumer app with minimal integration
 	$(CARGO) run -p agentation-consumer --locked
@@ -24,10 +21,10 @@ bridge-check: ## Verify MCP-only compilation and tests
 	$(CARGO) test --no-default-features --features mcp --locked
 	$(CARGO) check --release --no-default-features --features mcp --locked
 
-build: ## Build the workspace and demo
+build: ## Build the workspace
 	$(CARGO) build --workspace --all-targets --all-features --locked
 
-check: ## Type-check the workspace and demo
+check: ## Type-check the workspace
 	$(CARGO) check --workspace --all-targets --all-features --locked
 
 fmt: ## Format all Rust sources
@@ -51,10 +48,6 @@ doc: ## Generate development API documentation without dependencies
 release-check: ## Check compilation with the annotation API disabled
 	$(CARGO) check --workspace --all-targets --release --all-features --locked
 
-# Keep these sequential, including under make -j, and stop on the first failure.
-hot-reload-test: ## Test watcher filtering, failed builds, restart recovery and cleanup
-	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s src/hot_reload -p 'test_*.py'
-
 version-check: ## Verify documented crate versions match Cargo.toml and server.json
 	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-version-refs.py
 	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-bridge-release.py
@@ -72,7 +65,7 @@ ci: ## Run the same formatting, lint, test, and release checks as Rust CI
 	$(MAKE) fmt-check
 	$(MAKE) lint
 	$(MAKE) test
-	$(MAKE) hot-reload-test
+	$(MAKE)
 	$(MAKE) version-check
 	$(MAKE) version-test
 	$(MAKE) release-check

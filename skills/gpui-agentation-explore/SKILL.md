@@ -17,8 +17,8 @@ changing notes, editing code, or marking feedback resolved.
    tool names. Use the connected server's actual schemas over this reference.
 2. If it is unavailable, check whether the native host is running in debug mode
    and **Settings → MCP** is on. Use the actual `/mcp` URL and client config
-   from Settings; do not assume a port. Host examples use `4748`, the standalone
-   demo uses `4749`, and mounting with zero assigns a port dynamically.
+   from Settings; do not assume a port. Host apps default to `4748`, the consumer
+   example uses `4750`, and mounting with zero assigns a port dynamically.
 3. Use direct Streamable HTTP if supported. Stdio clients can launch the
    installed `gpui-agentation` bridge with `--url <actual-mcp-url>`. The bridge
    forwards to the running host; it does not launch the app. Preserve unrelated
@@ -107,8 +107,6 @@ shares from zero to one. Do not treat them as absolute screen pixels.
 
 **Comments → Copy** exports Markdown. Saved notes retain their route, lifecycle
 status, and conversation across app restarts. The toolbar can be repositioned.
-**Settings → Hot reload**, when available in the host, rebuilds and restarts
-after a successful build; in-memory state resets while saved feedback survives.
 These are native user interactions, not MCP tool calls. Guide the user through
 them when needed; do not claim MCP can click, navigate, draw, or capture screens.
 

@@ -60,7 +60,7 @@
         <li><a href="#agent-skills">Agent skills</a></li>
       </ul>
     </li>
-    <li><a href="#try-the-demo">Try the Demo</a></li>
+    <li><a href="#try-the-example">Try the Example</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
@@ -110,7 +110,6 @@ initialize once at launch, then mount and wrap your screen.
 
 - **macOS** with Xcode command-line tools
 - **Rust** via [rustup](https://rustup.rs/) (the repository pins the toolchain)
-- **Python 3** (only needed to run the bundled demo)
 
 Ely is bundled, so there is nothing else to install.
 
@@ -192,8 +191,8 @@ menu.
 
 On macOS, the **Agentation Settings** menu-bar icon opens a rich popup for the
 last active consumer window. The companion's Settings button, **Debug → Settings**,
-and **⌘⌥S** open the same popup. Hot reload, MCP status, configuration preview,
-and Copy remain available there. Esc, clicking outside, or clicking the icon
+and **⌘⌥S** open the same popup. MCP status, configuration preview,
+and Copy are available there. Esc, clicking outside, or clicking the icon
 again closes it. Opening Settings preserves inspection and unfinished feedback.
 Other platforms retain the consumer's Settings sheet.
 
@@ -287,23 +286,21 @@ running debug app's MCP server separately using the steps above.
 
 <!-- DEMO -->
 
-## Try the Demo
+## Try the Example
 
-Clone the repository and run the bundled demo app:
+Clone the repository and run the bundled consumer app:
 
 ```sh
 git clone https://github.com/emmanuel-defreitas/gpui-agentation
 cd gpui-agentation
-make dev
+make consumer
 ```
 
 1. Choose **Inspect**, **Box**, **Arrow**, or **Pen**.
 2. Select an element or draw, then write a comment and save.
 3. Open **Comments → Copy** to copy your feedback as Markdown.
 
-For rebuilds on save, enable **Settings → Hot reload → Server status**. It rebuilds
-and restarts the app after a successful build; in-memory state resets, saved
-annotations survive. [Demo details](demo/README.md)
+See the [consumer example](examples/consumer/README.md) for the full integration.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -313,7 +310,6 @@ annotations survive. [Demo details](demo/README.md)
 
 - [x] Inspect, Box, Arrow, and Pen annotation tools
 - [x] Loopback MCP server plus REST/SSE access
-- [x] Hot reload for rebuild-on-save
 - [x] Add text annotation tool
 - [x] Update Comment annotation UX
 - [ ] Add gpui-devtools features from [joris-gallot/gpui-devtools](https://github.com/joris-gallot/gpui-devtools)
