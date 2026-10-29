@@ -258,7 +258,7 @@ impl StatusItem {
             manager,
         });
         unsafe {
-            let bytes = include_bytes!("../../assets/menubar/tray.png");
+            let bytes = include_bytes!("../../assets/menubar/brand-menu.svg");
             let data: id =
                 msg_send![class!(NSData), dataWithBytes: bytes.as_ptr() length: bytes.len()];
             let image: id = msg_send![class!(NSImage), alloc];
