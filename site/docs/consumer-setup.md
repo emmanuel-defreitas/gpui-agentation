@@ -261,13 +261,11 @@ of loading native fonts/assets. No Ely test dependency is needed in the host.
 
 The distributable skill is at
 [`skills/gpui-agentation-setup`](../../skills/gpui-agentation-setup/SKILL.md).
-Copy that whole directory into your agent's skills directory. For a Codex
-project, from the consumer repository, with `AGENTATION_CHECKOUT` set to the
-path of this checkout:
+Install it from [skills.sh](https://skills.sh) in the app you want to integrate
+(Node.js 22.20+):
 
 ```sh
-mkdir -p .agents/skills
-cp -R "$AGENTATION_CHECKOUT/skills/gpui-agentation-setup" .agents/skills/
+npx skills add emmanuel-defreitas/gpui-agentation --skill gpui-agentation-setup
 ```
 
 Then invoke `$gpui-agentation-setup` and ask it to integrate annotations into

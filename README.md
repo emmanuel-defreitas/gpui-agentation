@@ -249,23 +249,29 @@ _For more examples, please refer to the [Reference](site/docs/reference.md)._
 
 ### Agent skills
 
-Two skills live in [`skills/`](skills/). Use them to set up Agentation and to
-work through feedback.
+Two skills help your agent set up Agentation and work through feedback.
+Install them from [skills.sh](https://skills.sh) (needs Node.js 22.20+).
 
 | Skill | Use it to | Try |
 | --- | --- | --- |
 | [gpui-agentation-setup](skills/gpui-agentation-setup/SKILL.md) | Add Agentation to a GPUI app. | "Use gpui-agentation-setup to add development annotations to this app." |
 | [gpui-agentation-explore](skills/gpui-agentation-explore/SKILL.md) | Read your app's feedback over MCP and act on it. | "Use gpui-agentation-explore to summarize pending feedback without changing notes." |
 
-1. Copy the skills into your app (or into `~/.agents/skills/` for every project):
+1. From your app's folder, run:
 
    ```sh
-   mkdir -p /path/to/your-app/.agents/skills
-   cp -R skills/gpui-agentation-setup skills/gpui-agentation-explore /path/to/your-app/.agents/skills/
+   npx skills add emmanuel-defreitas/gpui-agentation
    ```
 
-2. Start a new conversation in your agent.
-3. Run `/gpui-agentation-setup` or `/gpui-agentation-explore`, or paste a prompt above.
+2. Pick the skills and agents when asked.
+3. Start a new conversation, then run `/gpui-agentation-setup` or
+   `/gpui-agentation-explore`, or paste a prompt above.
+
+Options:
+
+- One skill only: add `--skill gpui-agentation-setup`.
+- Every project: add `-g`.
+- Update later: `npx skills update`.
 
 Skills are instructions only. `explore` also needs your debug app running with
 **Settings → MCP** on. See [Connect your agent](#connect-your-agent).
