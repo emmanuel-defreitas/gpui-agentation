@@ -201,6 +201,7 @@ impl AnnotationOverlay {
             TextInput::new(window, cx)
                 .multi_line(1, 12)
                 .max_len(8000)
+                .caret_color(gpui::hsla(0.0, 0.0, 1.0, 1.0))
                 .label("Feedback")
                 .placeholder("")
         });
