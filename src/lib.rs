@@ -20,6 +20,16 @@ pub mod ely {
     include!(concat!(env!("OUT_DIR"), "/ely/lib.rs"));
 }
 
+#[cfg(test)]
+#[path = "tests/ely.rs"]
+mod ely_tests;
+
+/// Runs the unit tests of the build-script helper that bundles Ely.
+#[cfg(test)]
+#[path = "../build/ely.rs"]
+#[allow(dead_code)]
+mod ely_build;
+
 pub use drawing::AnnotationShape;
 pub use http::Server;
 #[cfg(feature = "test-support")]
