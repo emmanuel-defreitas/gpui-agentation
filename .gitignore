@@ -3,8 +3,8 @@
 .github/aw/logs/
 .DS_Store
 
-# Secrets — never commit. See .pre-commit-config.yaml and
-# .github/workflows/secret-scan.yml for the scanning that backs this up.
+# Secrets — never commit. See .github/workflows/secret-scan.yml for the
+# scanning that backs this up.
 .env
 .env.*
 !.env.example
@@ -20,9 +20,6 @@
 /vendor/ely/target/
 /vendor/ely/Cargo.lock
 /target-mcp/
-
-# Website visual review captures
-/.impeccable/review/
 
 /.worktrees/
 __pycache__/
