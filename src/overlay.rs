@@ -821,11 +821,15 @@ impl AnnotationOverlay {
 #[cfg(test)]
 use crate::AnnotationPatch;
 
+#[cfg(agentation_external_inspector)]
+mod anchored;
 mod annotation_menu;
 mod banner;
 pub mod commands;
 mod history;
-
+#[cfg(all(test, agentation_external_inspector))]
+#[path = "overlay/inspection.test.rs"]
+mod inspection_tests;
 pub(crate) mod inspector;
 mod mentions;
 mod settings;
@@ -839,6 +843,8 @@ mod toolbar_window;
 
 impl Render for AnnotationOverlay {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(agentation_external_inspector)]
+        self.keep_inspection_anchors(window, cx);
         self.sync_toolbar_window(window, cx);
         let surface = self.surface(window, cx);
         div()

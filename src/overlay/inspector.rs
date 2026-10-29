@@ -23,6 +23,8 @@ pub(crate) fn install(cx: &mut App) {
     tooling::install_inspector(cx);
     cx.set_global(Sidebars::default());
     cx.set_inspector_renderer(Box::new(|inspector, window, cx| {
+        #[cfg(agentation_external_inspector)]
+        let rendered_id = cx.entity_id();
         let target = tooling::inspector_target(window, cx);
         let native_owner = cx.entity().downgrade();
         let owner = cx
@@ -66,6 +68,24 @@ pub(crate) fn install(cx: &mut App) {
             cx,
             Some(header),
             |inspector, window, cx| {
+                #[cfg(agentation_external_inspector)]
+                if target != window.window_handle() {
+                    let _ = target.update(cx, |_, host, cx| {
+                        if host
+                            .inspector_entity()
+                            .is_none_or(|active| active.entity_id() != rendered_id)
+                            || !is_open(host, cx)
+                        {
+                            return;
+                        }
+                        if let Some(owner) = owner {
+                            let _ = owner.update(cx, |this, cx| {
+                                this.sync_inspector_selection(inspector, host, cx)
+                            });
+                        }
+                    });
+                    return None;
+                }
                 if let Some(owner) = owner {
                     let _ = owner.update(cx, |this, cx| {
                         this.sync_inspector_selection(inspector, window, cx)
@@ -96,6 +116,12 @@ pub(super) fn is_open(window: &Window, cx: &App) -> bool {
 }
 
 fn native_inspector(window: &Window, cx: &App) -> Option<Entity<Inspector>> {
+    #[cfg(agentation_external_inspector)]
+    {
+        let _ = cx;
+        window.inspector_entity()
+    }
+    #[cfg(not(agentation_external_inspector))]
     cx.try_global::<Sidebars>()?
         .0
         .get(&window.window_handle().window_id())?
@@ -130,6 +156,8 @@ fn present(window: &Window, presented: bool, cx: &mut App) {
 
 pub(super) fn start(window: &mut Window, cx: &mut App) {
     present(window, true, cx);
+    #[cfg(agentation_external_inspector)]
+    window.set_inspector_external(true);
     if let Some(inspector) = native_inspector(window, cx) {
         inspector.update(cx, |inspector, cx| {
             inspector.start_picking();
@@ -194,6 +222,23 @@ impl AnnotationOverlay {
         cx.notify();
     }
 
+    #[cfg(agentation_external_inspector)]
+    pub(super) fn keep_inspection_anchors(&self, window: &mut Window, cx: &mut App) {
+        if window.inspector_entity().is_none()
+            && self
+                .session
+                .annotations
+                .iter()
+                .any(|note| note.feedback.inspection.is_some())
+        {
+            window.set_inspector_external(true);
+            window.toggle_inspector(cx);
+            if let Some(inspector) = window.inspector_entity() {
+                inspector.update(cx, |inspector, _| inspector.stop_picking());
+            }
+        }
+    }
+
     pub(super) fn open_inspection(
         &mut self,
         id: &str,
@@ -209,8 +254,32 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
-        self.notice = "Reopening an anchored element is not available.".into();
-        cx.notify();
+        #[cfg(agentation_external_inspector)]
+        {
+            self.keep_inspection_anchors(window, cx);
+            if !window.select_inspection_anchor(&note.feedback.element_path, cx) {
+                self.notice = "This element is not available in the current view.".into();
+                cx.notify();
+                return;
+            }
+            present(window, true, cx);
+            self.inspecting = true;
+            self.inspected_id = window
+                .inspector_entity()
+                .and_then(|inspector| inspector.read(cx).active_element_id().cloned());
+            self.restore_configuration = note.feedback.gpui_configuration.clone();
+            self.review_open = false;
+            self.inspection_note = Some(note.id.clone());
+            self.selected_note = Some(note.id);
+            self.notice.clear();
+            cx.notify();
+        }
+        #[cfg(not(agentation_external_inspector))]
+        {
+            self.notice =
+                "Reopening an anchored element requires the external inspector build.".into();
+            cx.notify();
+        }
     }
 
     fn sync_inspector_selection(
