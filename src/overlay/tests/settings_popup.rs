@@ -96,7 +96,7 @@ fn rich_popup_has_own_input_copies_collapsed_config_and_preserves_consumer(
             .debug_bounds("feedback-mcp-server-toggle")
             .unwrap()
             .size,
-        size(px(36.), px(16.)),
+        size(px(36.), px(24.)),
     );
     assert!(
         about.bottom() <= panel.bottom(),

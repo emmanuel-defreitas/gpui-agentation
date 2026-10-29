@@ -212,7 +212,7 @@ fn dock_tracks_host_edges_and_height_with_fourteen_pixel_gap() {
 }
 
 #[gpui::test]
-fn expanded_comments_panel_is_slightly_narrower(cx: &mut TestAppContext) {
+fn expanded_comments_panel_is_380_wide(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
     cx.update(|_, cx| {
         crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
@@ -227,11 +227,11 @@ fn expanded_comments_panel_is_slightly_narrower(cx: &mut TestAppContext) {
     let mut tools = toolbar(&overlay, cx);
     let rail = tools.debug_bounds("feedback-native-toolbar").unwrap();
     let panel = tools.debug_bounds("companion-comments-panel").unwrap();
-    assert_eq!(panel.size.width, px(400.));
+    assert_eq!(panel.size.width, px(380.));
     tools.update(|window, _| {
         assert_eq!(
             window.bounds().size.width,
-            rail.size.width + px(2.) + px(400.)
+            rail.size.width + px(2.) + px(380.)
         );
     });
 }

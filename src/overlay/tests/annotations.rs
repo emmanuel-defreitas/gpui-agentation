@@ -378,7 +378,8 @@ fn floating_comments_should_save_and_open_in_one_click(cx: &mut TestAppContext) 
     draw(cx);
     click_toolbar(&overlay, "feedback-floating-comments", cx);
     draw(cx);
-    assert!(cx.debug_bounds("feedback-comments-list").is_some());
+    let mut comments = toolbar(&overlay, cx);
+    assert!(comments.debug_bounds("feedback-comments-list").is_some());
     cx.update(|_, cx| {
         assert!(overlay.read(cx).draft.is_none());
         assert_eq!(
@@ -523,6 +524,9 @@ fn store_identity_resolves_aliases_before_and_after_the_notes_file_exists() {
 fn text_draft(overlay: &Entity<AnnotationOverlay>, cx: &mut VisualTestContext) {
     cx.update(|window, cx| {
         overlay.update(cx, |this, cx| {
+            if !this.active {
+                this.toggle(window, cx);
+            }
             this.choose_tool(Some(Tool::Select), window, cx);
             this.color = 2;
             this.stroke = vec![(0.2, 0.4)];
