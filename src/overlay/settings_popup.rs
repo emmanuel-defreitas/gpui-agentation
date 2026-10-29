@@ -1,6 +1,6 @@
 //! One menu-bar entry per process, targeting the last active consumer window.
 use super::*;
-use crate::ely::{primitives::FocusScope, theme::Radius};
+use crate::ely::primitives::FocusScope;
 use gpui::{
     AnyWindowHandle, Bounds, DisplayId, Global, Pixels, WeakEntity, WindowBounds, WindowId,
     WindowOptions, point, px, size,
