@@ -12,7 +12,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/emmanuel-defreitas/gpui-agentation">
-    <img src="site/docs/assets/mark.svg" alt="gpui-agentation logo" width="80" height="80">
+    <img src="site/docs/assets/logo.png" alt="gpui-agentation logo" width="80" height="80">
   </a>
 
   <h1 align="center">gpui-agentation</h1>
@@ -352,7 +352,7 @@ Project Link: [https://github.com/emmanuel-defreitas/gpui-agentation](https://gi
   [Model Context Protocol](https://modelcontextprotocol.io/).
 - [Ely GPUI Components](https://elygpui.com/) by the Ely contributors
   ([source](https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components)).
-  The toolbar, theme, and assets are Ely, bundled unchanged at a pinned
+  The toolbar, theme, and assets are Ely, bundled at a pinned
   revision under the MIT license.
 - [gpui-devtools](https://github.com/joris-gallot/gpui-devtools) by
   [Joris Gallot](https://github.com/joris-gallot). The inspector's style editing
