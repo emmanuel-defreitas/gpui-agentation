@@ -27,6 +27,41 @@ impl Page {
     }
 }
 
+// The host UI follows the operating system's light or dark setting. There is no
+// manual toggle; `observe_window_appearance` re-renders when the OS changes.
+struct Palette {
+    page: Rgba,
+    card: Rgba,
+    text: Rgba,
+    border: Rgba,
+    button: Rgba,
+    button_hover: Rgba,
+    accent: Rgba,
+}
+
+fn palette(window: &Window) -> Palette {
+    match window.appearance() {
+        WindowAppearance::Dark | WindowAppearance::VibrantDark => Palette {
+            page: rgb(0x15171b),
+            card: rgb(0x1e2127),
+            text: rgb(0xe6e8eb),
+            border: rgb(0x3a3f47),
+            button: rgb(0x262a31),
+            button_hover: rgb(0x30353d),
+            accent: rgb(0x60a5fa),
+        },
+        WindowAppearance::Light | WindowAppearance::VibrantLight => Palette {
+            page: rgb(0xf7f8fa),
+            card: rgb(0xffffff),
+            text: rgb(0x20242a),
+            border: rgb(0xc8cbd0),
+            button: rgb(0xffffff),
+            button_hover: rgb(0xf1f3f5),
+            accent: rgb(0x2563eb),
+        },
+    }
+}
+
 // Ordinary host UI built with GPUI. Agentation owns its own UI dependencies.
 #[derive(Clone, Copy)]
 enum Command {
@@ -57,6 +92,7 @@ fn button(
         .read(cx)
         .clone();
     let click_focus = focus.clone();
+    let colors = palette(window);
     if window.focused(cx).is_none() {
         window.focus(&focus, cx);
     }
@@ -70,10 +106,11 @@ fn button(
         .py_2()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0xc8cbd0))
-        .bg(rgb(0xffffff))
-        .hover(|style| style.bg(rgb(0xf1f3f5)))
-        .focus(|style| style.border_color(rgb(0x2563eb)))
+        .border_color(colors.border)
+        .bg(colors.button)
+        .text_color(colors.text)
+        .hover(|style| style.bg(colors.button_hover))
+        .focus(|style| style.border_color(colors.accent))
         .on_click(move |_, window, cx| {
             window.focus(&click_focus, cx);
             command.dispatch(window, cx);
@@ -104,10 +141,12 @@ struct Consumer {
     devtools: Devtools,
     page: Page,
     count: usize,
+    _appearance: Subscription,
 }
 
 impl Render for Consumer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let colors = palette(window);
         let increment = button("increment", "Increment", Command::Increment, window, cx);
         let navigate = button(
             "navigate",
@@ -126,8 +165,8 @@ impl Render for Consumer {
             .min_h_0()
             .w_full()
             .overflow_y_scroll()
-            .bg(rgb(0xf7f8fa))
-            .text_color(rgb(0x20242a))
+            .bg(colors.page)
+            .text_color(colors.text)
             .font_family(".SystemUIFont")
             .on_action(cx.listener(|this, _: &Increment, _, cx| {
                 this.count += 1;
@@ -156,7 +195,7 @@ impl Render for Consumer {
                         div()
                             .p_4()
                             .rounded_lg()
-                            .bg(rgb(0xffffff))
+                            .bg(colors.card)
                             .flex()
                             .flex_col()
                             .gap_3()
@@ -195,6 +234,7 @@ fn main() {
                     devtools: Devtools::mount(window, cx),
                     page: Page::Overview,
                     count: 0,
+                    _appearance: cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
                 })
             },
         )

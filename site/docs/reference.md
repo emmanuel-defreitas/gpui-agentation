@@ -36,7 +36,9 @@ gpui-agentation = { version = "0.6.0", default-features = false, features = ["na
 
 Keep `gpui-pre =0.3.8`. Source and assets for Ely revision
 `da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721` are bundled. Agentation’s internal
-Ely globals are independent of host Ely globals. Development uses Rust 1.98.1.
+Ely globals are independent of host Ely globals. When Agentation creates its own theme, its toolbar, inspector and
+Settings follow the operating system's light or dark setting and switch live.
+A host that already initialized Ely keeps control of the theme. Development uses Rust 1.98.1.
 
 ## Toolbar and editor
 

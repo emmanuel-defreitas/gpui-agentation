@@ -131,10 +131,11 @@ mod tests {
     #[gpui::test]
     fn plain_host_controls_work_without_any_ui_initialization(cx: &mut TestAppContext) {
         // Same host fallback used in release. No Agentation/Ely setup at all.
-        let (host, cx) = cx.add_window_view(|_, _| crate::Consumer {
+        let (host, cx) = cx.add_window_view(|window, cx| crate::Consumer {
             devtools: Devtools { feedback: None },
             page: crate::Page::Overview,
             count: 0,
+            _appearance: cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
         });
         draw(cx);
         cx.simulate_keystrokes("enter");
