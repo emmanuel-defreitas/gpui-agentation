@@ -178,7 +178,9 @@ your app when you move or resize it.
 | **Comment** | Drop a numbered pin with a note. |
 | **Textbox** | Put plain text on the canvas. |
 
-Drawing tools need the **Annotation mode** switch on. Inspect does not.
+Drawing tools need the **Annotation mode** switch on. Inspect does not. With
+annotation mode on, right-click the canvas to open the same tools and edits as a
+context menu.
 
 **Inspect an element**
 

@@ -3,7 +3,7 @@
 
 CARGO ?= cargo
 
-.PHONY: help fetch example example-stock test-external bridge bridge-check bridge-install-check build check fmt fmt-check lint test test-doc doc release-check version-check version-test release-prepare release-version-check platform-check snapshot-check site-check verify ci
+.PHONY: help fetch example example-stock example-app test-external bridge bridge-check bridge-install-check build check fmt fmt-check lint test test-doc doc release-check version-check version-test release-prepare release-version-check platform-check snapshot-check site-check verify ci
 
 help: ## Show available commands
 	@awk 'BEGIN { FS = ":.*## "; print "Usage: make <target>\n" } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -16,6 +16,9 @@ example: fetch ## Run the example app with the inspector outside the app (patche
 
 example-stock: ## Run the example app on stock GPUI (inspector draws inside the app)
 	$(CARGO) run -p agentation-consumer --locked
+
+example-app: fetch ## Bundle the example as a macOS .app with the project icon and open it
+	python3 scripts/bundle-example.py
 
 test-external: fetch ## Run the lib tests with the external inspector enabled
 	python3 scripts/inspector-poc.py test --lib

@@ -81,6 +81,27 @@ impl Devtools {
             .into_any_element()
     }
 
+    /// Register a finer inspection target around a single element. Debug builds
+    /// record its ID, label, and Rust call site; release returns the child as is.
+    #[track_caller]
+    pub(super) fn target(
+        &self,
+        id: &str,
+        label: &str,
+        child: impl IntoElement,
+    ) -> gpui::AnyElement {
+        #[cfg(debug_assertions)]
+        {
+            let _ = &self.feedback;
+            gpui_agentation::target(id, label, child).into_any_element()
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = (id, label);
+            child.into_any_element()
+        }
+    }
+
     pub(super) fn set_route(&self, url: &str, window: &mut Window, cx: &mut App) {
         #[cfg(debug_assertions)]
         if let Some(feedback) = &self.feedback {
@@ -204,6 +225,8 @@ mod tests {
         cx.update(|_, cx| assert_eq!(host.read(cx).presses, 1));
         assert!(cx.debug_bounds("feedback-inspector-sidebar").is_none());
         assert!(cx.debug_bounds("feedback-editor-panel").is_none());
+        // The inspector saves the note while painting, so its pin lands one frame later.
+        draw(cx);
         let pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
         cx.simulate_click(pin.center(), Modifiers::none());
         cx.simulate_input("Consumer feedback");
