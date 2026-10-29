@@ -36,30 +36,24 @@ pub(crate) fn install(cx: &mut App) {
                 sidebar.overlay.clone()
             });
         let toggle_owner = owner.clone();
+        // Ely already titles the panel "Inspector"; the header is only Stop.
         let header = div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .child("Inspector")
+            .debug_selector(|| "feedback-inspect-stop".into())
             .child(
-                div()
-                    .debug_selector(|| "feedback-inspect-stop".into())
-                    .child(
-                        Button::new("feedback-inspect-stop", "Stop")
-                            .variant(ButtonVariant::Ghost)
-                            .on_click(move |_, _, cx| {
-                                let owner = toggle_owner.clone();
-                                cx.defer(move |cx| {
-                                    let _ = target.update(cx, |_, host, cx| {
-                                        if let Some(owner) = owner {
-                                            let _ = owner.update(cx, |this, cx| {
-                                                this.stop_inspection(host, cx)
-                                            });
-                                        }
-                                    });
-                                });
-                            }),
-                    ),
+                Button::new("feedback-inspect-stop", "Stop")
+                    .variant(ButtonVariant::Primary)
+                    .size(ControlSize::Sm)
+                    .on_click(move |_, _, cx| {
+                        let owner = toggle_owner.clone();
+                        cx.defer(move |cx| {
+                            let _ = target.update(cx, |_, host, cx| {
+                                if let Some(owner) = owner {
+                                    let _ =
+                                        owner.update(cx, |this, cx| this.stop_inspection(host, cx));
+                                }
+                            });
+                        });
+                    }),
             )
             .into_any_element();
         tooling::inspector_panel_with_header(
