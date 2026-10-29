@@ -226,5 +226,5 @@ impl AnnotationOverlay {
 }
 
 #[cfg(test)]
-#[path = "menu.test.rs"]
+#[path = "../tests/menu.rs"]
 mod tests;

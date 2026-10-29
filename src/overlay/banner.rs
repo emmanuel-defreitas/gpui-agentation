@@ -51,7 +51,3 @@ impl AnnotationOverlay {
         cx.notify();
     }
 }
-
-#[cfg(test)]
-#[path = "banner.test.rs"]
-mod tests;

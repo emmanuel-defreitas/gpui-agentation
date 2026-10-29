@@ -31,7 +31,7 @@ pub(super) fn tool_shortcut(tool: Option<Tool>) -> &'static str {
     }
 }
 
-fn tool_cursor(tool: Option<Tool>) -> CursorStyle {
+pub(super) fn tool_cursor(tool: Option<Tool>) -> CursorStyle {
     match tool {
         None => CursorStyle::Arrow,
         Some(_) => CursorStyle::Crosshair,
@@ -92,7 +92,7 @@ pub(super) fn comment_input(
         .into_any_element()
 }
 
-fn row_action(button: impl IntoElement) -> gpui::Div {
+pub(super) fn row_action(button: impl IntoElement) -> gpui::Div {
     div()
         .flex_none()
         .on_mouse_down(MouseButton::Left, |_, window, cx| {

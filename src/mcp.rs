@@ -242,5 +242,5 @@ fn call(store: &Store, name: &str, value: Value) -> Result<String, Error> {
 }
 
 #[cfg(test)]
-#[path = "mcp.test.rs"]
+#[path = "tests/mcp.rs"]
 mod tests;

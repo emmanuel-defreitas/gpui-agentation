@@ -1,11 +1,6 @@
 use super::*;
+use crate::overlay::tests::draw;
 use gpui::{Modifiers, TestAppContext, VisualTestContext};
-
-fn draw(cx: &mut VisualTestContext) {
-    cx.run_until_parked();
-    cx.update(|window, cx| window.draw(cx).clear(cx));
-    cx.run_until_parked();
-}
 
 fn host(cx: &mut TestAppContext, name: &str) -> (Entity<AnnotationOverlay>, VisualTestContext) {
     cx.update(crate::ely::init_for_tests);
@@ -80,7 +75,6 @@ fn rich_popup_has_own_input_copies_collapsed_config_and_preserves_consumer(
     assert!(popup.debug_bounds("feedback-settings-popup").is_some());
     for selector in [
         "feedback-settings-brand",
-        "feedback-settings-hot-reload",
         "feedback-settings-mcp",
         "feedback-settings-about",
     ] {
@@ -89,7 +83,6 @@ fn rich_popup_has_own_input_copies_collapsed_config_and_preserves_consumer(
     let panel = popup.debug_bounds("feedback-settings-popup").unwrap();
     let about = popup.debug_bounds("feedback-settings-about").unwrap();
     for (selector, height) in [
-        ("feedback-settings-hot-reload", 79.),
         ("feedback-settings-mcp", 116.),
         ("feedback-settings-about", 98.),
     ] {

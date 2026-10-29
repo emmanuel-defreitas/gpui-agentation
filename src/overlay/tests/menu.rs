@@ -1,5 +1,6 @@
 use super::*;
-use gpui::{TestAppContext, VisualTestContext};
+use crate::{AnnotationCommand, overlay::tests::draw};
+use gpui::TestAppContext;
 
 fn menu<'a>(root: &'a Menu, name: &str) -> &'a Menu {
     root.items
@@ -42,12 +43,6 @@ fn native_menu_groups_use_real_disabled_states_and_checkmarks() {
     assert!(
         matches!(&on.items[0], MenuItem::Action { action, .. } if action.as_any().is::<AnnotationCommand>())
     );
-}
-
-fn draw(cx: &mut VisualTestContext) {
-    cx.run_until_parked();
-    cx.update(|window, cx| window.draw(cx).clear(cx));
-    cx.run_until_parked();
 }
 
 #[gpui::test]

@@ -66,7 +66,7 @@ fn registration_should_preserve_layout_and_pick_the_smallest_target(cx: &mut Tes
             height: 40.0
         }
     );
-    assert!(target.source.contains("target.test.rs:"));
+    assert!(target.source.contains("tests/target.rs:"));
     cx.simulate_scale_factor_change(2.0);
     cx.run_until_parked();
     assert_eq!(

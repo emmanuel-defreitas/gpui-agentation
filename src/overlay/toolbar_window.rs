@@ -60,8 +60,8 @@ struct ToolbarState {
 
 #[derive(Clone, PartialEq)]
 pub(super) struct ToolbarSpec {
-    bounds: Bounds<Pixels>,
-    visible: bool,
+    pub(super) bounds: Bounds<Pixels>,
+    pub(super) visible: bool,
     state: ToolbarState,
 }
 
@@ -77,7 +77,7 @@ pub(super) struct ToolbarWindow {
     _content_resize: Subscription,
 }
 
-fn dock_bounds(host: Bounds<Pixels>, width: Pixels) -> Bounds<Pixels> {
+pub(super) fn dock_bounds(host: Bounds<Pixels>, width: Pixels) -> Bounds<Pixels> {
     Bounds::new(
         point(host.right() + px(GAP), host.top()),
         size(width, host.size.height),

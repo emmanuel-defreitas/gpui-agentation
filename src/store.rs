@@ -640,5 +640,5 @@ fn now() -> u64 {
 }
 
 #[cfg(test)]
-#[path = "store.test.rs"]
+#[path = "tests/store.rs"]
 mod tests;
