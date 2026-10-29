@@ -24,10 +24,10 @@ are local macOS responsibilities; hosted publication uses `--no-verify`.
 ## Bundled Ely verification
 
 Run `python3 .github/scripts/check-ely-snapshot.py --upstream /path/to/pinned/ely`.
-This checks the immutable upstream revision, source/asset/license hashes, GPUI
+This checks the immutable upstream revision, upstream source/asset/license hashes, recorded local source patches, GPUI
 0.3.8 pins and optional native dependency mapping. There is no Ely path or
 registry dependency. Native builds generate namespace/asset adaptations from
-unchanged upstream files; MCP-only builds skip that work.
+the verified bundled files; MCP-only builds skip that work.
 
 Verify Cargo's extracted package with all features, and independently verify
 the default portable install. Check the archive contains the full vendor source,

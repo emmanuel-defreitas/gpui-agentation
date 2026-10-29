@@ -1,7 +1,7 @@
 # Bundled pinned Ely source
 
-This directory preserves **Ely GPUI Components** runtime source, assets and
-license notices byte-for-byte from upstream Ely 0.1.1 at commit
+This package bundles **Ely GPUI Components** runtime source, assets and
+license notices, based on upstream Ely 0.1.1 at commit
 `da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721`:
 https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components
 
@@ -48,3 +48,13 @@ own component library.
 
 The previously published gpui-agentation 0.2.0 still uses gpui-agentation-ely
 0.1.1; those immutable releases remain available. Bundling starts in 0.3.0.
+
+## Recorded local source changes
+
+`vendor/ely/UPSTREAM.json` preserves the original pinned inventory and hashes.
+`vendor/ely/LOCAL_PATCHES.json` separately records Agentation's reviewed source
+additions and modifications for inspector routing, property snapshots, and
+component styling. Snapshot verification requires the exact union of these
+inventories and rejects missing, unlisted, or hash-mismatched files. Assets and
+license notices retain their original upstream hashes. `--upstream` compares
+the unmodified baseline against the pinned Git commit independently of patches.
