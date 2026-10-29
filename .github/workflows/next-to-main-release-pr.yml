@@ -2,7 +2,7 @@ name: Next to Main Release PR
 
 on:
   workflow_run:
-    workflows: [Preview CI]
+    workflows: [Promotion Preview]
     types: [completed]
     branches: [next]
 
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   open-release-pr:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,4 +38,4 @@ jobs:
             --base main \
             --head next \
             --title "release: promote preview ${SHA:0:7} to production" \
-            --body "Preview CI passed for commit \`${SHA}\`. This PR promotes the reviewed preview to production."
+            --body "Promotion metadata passed for commit \`${SHA}\`. Native tests run locally on macOS; confirm local verification before merging."

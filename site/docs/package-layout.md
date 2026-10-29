@@ -9,10 +9,14 @@ compile bundled Ely or enable its native dependencies.
 | Features | Result |
 | --- | --- |
 | default (`mcp`) | Portable stdio binary; no native UI compilation |
-| `--no-default-features --features native` | Native debug annotation library; no bridge dependencies |
+| `--no-default-features --features native` | macOS-only native debug annotation library; no bridge dependencies |
 | `--no-default-features --features mcp` | Same portable binary as the default install |
 | `--all-features` | Native library, bridge, and native test support |
 | `--no-default-features` | Empty library; no binary |
+
+The native library supports macOS only; other native targets report a compile
+error. The MCP-only executable has no native platform restriction, but this
+repository verifies it locally on macOS.
 
 The library keeps `cfg(debug_assertions)` as well as its feature gate. Even
 with `native` enabled, release builds expose no annotation API. The MCP binary

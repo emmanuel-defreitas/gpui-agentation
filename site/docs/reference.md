@@ -123,7 +123,7 @@ saved notes stay with their route. Keep one app process per store file.
 The companion has one fixed dock position, so Settings has no Position control.
 Comments opens a sheet inside the consumer window. On macOS, Settings opens
 from a process-wide menu-bar icon; the companion button, native Debug menu, and
-shortcut target that same popup. Other platforms retain the Settings sheet.
+shortcut target that same popup. macOS is the only supported native platform.
 The Comments sheet shares the compact sunken header used by Settings. Its rows
 fill the sheet width and show numbered badges; a full-width Add button follows
 the list, and Copy stays in the bottom footer.
@@ -385,10 +385,14 @@ make check           # Type-check all targets
 make fmt             # Format Rust sources
 make test            # Run workspace and documentation tests
 make doc             # Generate development API documentation
-make ci              # Run the complete Rust CI checks
+make verify          # Run the complete local macOS verification suite
+make site-check      # Validate website changes locally
 ```
 
-`make ci` runs the following checks in order and stops on failure. Clippy and
+`make verify` (`make ci` is an alias) checks the platform and pinned Ely snapshot,
+then runs formatting, Clippy, workspace tests, version checks and release-script
+tests, release compilation, MCP-only checks, and a default-install smoke test.
+It stops on failure. Clippy and
 tests also use `--locked` to preserve dependency resolution. Override `CARGO`
 if needed, for example `make check CARGO=/path/to/cargo`.
 
@@ -401,15 +405,17 @@ cargo check --workspace --all-targets --release --all-features --locked
 
 ## Repository workflow
 
-This repository was generated from `exegia/corpora-template`. `dev` is the
-default integration branch; promote through `next` into `main`. The template's
-branch policy and secret scanning are retained.
-Python packaging and the older Make-based release pipeline were removed;
-Rust CI runs `make ci` for formatting, Clippy, tests, and release compilation
-on macOS. The Makefile provides local build and validation commands; release
-promotion remains in GitHub Actions under the branch policy above.
-The combined package supports guarded trusted publishing. Agent workflows require
-their own GitHub/Copilot/Claude configuration before use.
+This repository was generated from `exegia/corpora-template`. Changes integrate
+through `dev`, then promote through `next` into `main`. The native library
+supports macOS only. Run `make verify` locally before merging and before
+promotion; run `make site-check` for website changes.
+
+GitHub Actions is limited to promotion metadata, release candidate tags,
+promotion PRs, release tags, explicit trusted publishing, and configured
+production deployment. No Rust or website tests run on hosted runners.
+Maintainers review local test results before merging. Publishing checks package
+identity and archive size on Linux and skips compilation; validate the extracted
+package locally with `cargo publish --dry-run --all-features --locked` first.
 
 See [ORIGIN.md](../../ORIGIN.md) for the source snapshot and license attribution.
 
@@ -445,7 +451,7 @@ Escape closes the list while keeping the comment open. Motion respects the
 theme's reduced-motion setting.
 
 Right-click any annotation for Edit…, Delete and a checked Color submenu.
-macOS uses an AppKit system context menu; other platforms use the themed Ely
+macOS uses an AppKit system context menu; bundled upstream code also contains a themed Ely
 context menu. Color and Delete actions participate in local undo/redo. The
 optional persisted `Annotation.color` field retains element-note colors without
 changing their annotation type; older records fall back to their shape color.

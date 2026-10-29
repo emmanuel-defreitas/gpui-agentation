@@ -169,6 +169,19 @@ fn configuration(window: &Window, cx: &App) -> Option<crate::GpuiConfiguration> 
     })
 }
 
+/// Whether a saved style override should be re-applied to the picked element.
+///
+/// Only a fresh pick restores it. Once the element is the current selection,
+/// later edits and Reset must reach the update logic instead of being undone.
+pub(super) fn should_restore(
+    restore_pending: bool,
+    already_selected: bool,
+    saved: &crate::GpuiConfiguration,
+    live: Option<&crate::GpuiConfiguration>,
+) -> bool {
+    !restore_pending && !already_selected && Some(saved) != live
+}
+
 impl AnnotationOverlay {
     pub(super) fn stop_inspection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         inspector::close(window, cx);
@@ -272,10 +285,14 @@ impl AnnotationOverlay {
         // A fresh pick of an existing inspection must restore its saved style
         // before capturing the selection again; otherwise the baseline would
         // overwrite the annotation's last saved configuration.
-        if self.restore_configuration.is_none()
-            && let Some(note) = &existing
+        if let Some(note) = &existing
             && let Some(saved) = &note.feedback.gpui_configuration
-            && Some(saved) != config.as_ref()
+            && should_restore(
+                self.restore_configuration.is_some(),
+                self.inspected_id.as_ref() == Some(&selection.id),
+                saved,
+                config.as_ref(),
+            )
         {
             self.inspected_id = Some(selection.id.clone());
             self.inspection_note = Some(note.id.clone());

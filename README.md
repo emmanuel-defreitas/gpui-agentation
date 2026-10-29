@@ -32,7 +32,7 @@
 </div>
 
 > **Version: 0.6.0.** Debug builds only — release builds expose no annotation API.
-> Pinned to `gpui-pre =0.3.8`.
+> macOS is the only supported native platform. Pinned to `gpui-pre =0.3.8`.
 
 <!-- TABLE OF CONTENTS -->
 <details>
@@ -224,8 +224,7 @@ Point your agent at the exact spot with an arrow, box, or pen stroke.
 - **Comments**, **Settings**, and **Close** sit at the bottom of the toolbar.
 - **Close** hides it. **Debug → Show Toolbar** brings it back.
 - Add `gpui_agentation::debug_menu()` to `cx.set_menus(...)` to get the Debug menu.
-- macOS: Settings opens from the menu-bar icon or `⌘⌥S`.
-  Other platforms: a sheet inside your app.
+- Settings opens from the macOS menu-bar icon or `⌘⌥S`.
 
 ### Capture feedback
 

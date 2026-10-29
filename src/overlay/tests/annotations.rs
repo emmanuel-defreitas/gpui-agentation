@@ -999,3 +999,33 @@ fn pin_motion_returns_to_normal_and_honors_reduced_motion() {
     };
     assert_eq!(down.sample(Duration::ZERO), (1.0, false));
 }
+
+#[test]
+fn saved_style_is_restored_only_for_a_fresh_pick() {
+    use super::super::inspector::should_restore;
+    use crate::{GpuiConfiguration, GpuiStyleChange};
+
+    let config = |after: &str| GpuiConfiguration {
+        source: "src/view.rs:1:1".into(),
+        element_path: "root".into(),
+        changes: vec![GpuiStyleChange {
+            property: "width".into(),
+            before: "10px".into(),
+            after: after.into(),
+        }],
+        rust: format!(".w(px({after}))"),
+    };
+    let saved = config("20px");
+    let edited = config("30px");
+
+    // Fresh pick of an element whose live style differs from the saved one.
+    assert!(should_restore(false, false, &saved, None));
+    assert!(should_restore(false, false, &saved, Some(&edited)));
+    // Nothing to restore when the live style already matches.
+    assert!(!should_restore(false, false, &saved, Some(&saved)));
+    // A restore is already queued.
+    assert!(!should_restore(true, false, &saved, Some(&edited)));
+    // Same selection: a new edit or Reset must not be undone.
+    assert!(!should_restore(false, true, &saved, Some(&edited)));
+    assert!(!should_restore(false, true, &saved, None));
+}

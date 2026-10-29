@@ -1,7 +1,10 @@
-//! Native element feedback and a loopback API, compiled only with debug assertions.
+//! macOS-native element feedback and a loopback API, compiled only with debug assertions.
 #![cfg(debug_assertions)]
 #![cfg(feature = "native")]
 #![deny(missing_docs)]
+
+#[cfg(not(target_os = "macos"))]
+compile_error!("gpui-agentation's native library supports macOS only");
 
 mod drawing;
 mod http;

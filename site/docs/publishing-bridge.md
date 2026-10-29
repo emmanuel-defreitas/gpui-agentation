@@ -11,12 +11,15 @@ documentation, setup skill, and site references together. Use
 promotion gate still requires it to agree with conventional-commit history.
 Settings, CLI, and MCP versions derive from Cargo at build time. Review the diff,
 add release notes to CHANGELOG.md without rewriting history, and run
-`make version-check version-test release-version-check` before promotion.
+`make verify release-version-check` on macOS before promotion. Run
+`cargo publish --dry-run --all-features --locked` on the exact release candidate
+to verify the extracted package locally.
 
 The Cargo archive excludes the README demonstration GIFs under `site/docs/assets/`;
-they remain available in the repository and site. Before compiling the publication
-candidate, the publishing workflow packages it and checks crates.io's 10 MiB
-upload limit with `check-bridge-release.py --check-package-size`.
+they remain available in the repository and site. The publishing workflow runs
+on Linux, packages without compilation, and checks crates.io's 10 MiB upload
+limit with `check-bridge-release.py --check-package-size`. Compilation and tests
+are local macOS responsibilities; hosted publication uses `--no-verify`.
 
 ## Bundled Ely verification
 
