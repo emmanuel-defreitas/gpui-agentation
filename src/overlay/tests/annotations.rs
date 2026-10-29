@@ -540,8 +540,10 @@ fn text_draft(overlay: &Entity<AnnotationOverlay>, cx: &mut VisualTestContext) {
 fn textbox_saves_inline_and_reopens_for_editing_without_a_comment(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
     text_draft(&overlay, cx);
-    let width = cx.debug_bounds("feedback-editor-panel").unwrap().size.width;
-    cx.update(|window, _| assert_eq!(width, gpui::rems(16.0).to_pixels(window.rem_size())));
+    // A new textbox edits inline on the canvas, not in a floating comment editor.
+    assert!(cx.debug_bounds("feedback-editor-panel").is_none());
+    assert!(cx.debug_bounds("feedback-textbox").is_some());
+    cx.update(|window, cx| assert!(overlay.read(cx).input.focus_handle(cx).is_focused(window)));
     cx.simulate_input("Plain textbox");
     cx.simulate_keystrokes("ctrl-s");
     draw(cx);
@@ -659,12 +661,7 @@ fn textbox_pin_selection_pointer_drag_and_context_actions_preserve_identity(
     cx.update(|window, cx| {
         overlay.update(cx, |this, cx| {
             assert_eq!(this.store.annotation(&before.id).unwrap(), before);
-            this.note_action(
-                &before.id,
-                super::annotation_menu::NoteAction::Color(1),
-                window,
-                cx,
-            );
+            this.note_action(&before.id, super::menu::NoteAction::Color(1), window, cx);
             assert_eq!(this.store.annotation(&before.id).unwrap().color, Some(1));
             this.undo(window, cx);
             assert_eq!(this.store.annotation(&before.id).unwrap(), before);
@@ -690,6 +687,33 @@ fn textbox_pin_selection_pointer_drag_and_context_actions_preserve_identity(
             before
         )
     });
+}
+
+#[gpui::test]
+fn right_click_on_empty_canvas_opens_the_tools_menu_in_annotation_mode(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    // Off: an empty-canvas right click shows nothing.
+    let at = cx.update(|window, _| {
+        let size = window.viewport_size();
+        point(size.width / 2., size.height / 2.)
+    });
+    cx.simulate_mouse_move(at, None, Modifiers::none());
+    cx.simulate_mouse_down(at, gpui::MouseButton::Right, Modifiers::none());
+    cx.simulate_mouse_up(at, gpui::MouseButton::Right, Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("menu-row-Box").is_none());
+    // On: the same right click lists the annotation tools and edits.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.toggle(window, cx)));
+    draw(cx);
+    cx.simulate_mouse_move(at, None, Modifiers::none());
+    cx.simulate_mouse_down(at, gpui::MouseButton::Right, Modifiers::none());
+    cx.simulate_mouse_up(at, gpui::MouseButton::Right, Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("menu-row-Box").is_some());
+    let arrow = cx.debug_bounds("menu-row-Arrow").expect("tools menu");
+    cx.simulate_click(arrow.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).tool, Some(Tool::Arrow)));
 }
 
 #[gpui::test]

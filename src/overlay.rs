@@ -85,11 +85,12 @@ pub struct AnnotationOverlay {
     future: Vec<(Option<crate::Annotation>, Option<crate::Annotation>)>,
     pin_drag: Option<(crate::Annotation, (f32, f32))>,
     textbox_drag: Option<(crate::Annotation, (f32, f32))>,
+    textbox_resize: Option<crate::Annotation>,
     annotation_press: Option<gpui::Point<gpui::Pixels>>,
     textbox_bounds: std::collections::HashMap<String, gpui::Bounds<gpui::Pixels>>,
     mentions: mentions::Mentions,
     context_request: Option<(u64, gpui::Point<gpui::Pixels>)>,
-    context_note: Option<String>,
+    context: Option<menu::ContextKind>,
     context_number: u64,
     settings_open: bool,
     review_open: bool,
@@ -328,11 +329,12 @@ impl AnnotationOverlay {
             future: vec![],
             pin_drag: None,
             textbox_drag: None,
+            textbox_resize: None,
             annotation_press: None,
             textbox_bounds: Default::default(),
             mentions: Default::default(),
             context_request: None,
-            context_note: None,
+            context: None,
             context_number: 0,
             settings_open: false,
             review_open: false,
@@ -373,10 +375,11 @@ impl AnnotationOverlay {
                 self.selected_note = None;
                 self.pin_drag = None;
                 self.textbox_drag = None;
+                self.textbox_resize = None;
                 self.textbox_bounds.clear();
                 self.mentions = Default::default();
                 self.context_request = None;
-                self.context_note = None;
+                self.context = None;
                 self.draft = None;
                 self.return_focus(window, cx);
                 self.stroke.clear();
@@ -823,7 +826,6 @@ use crate::AnnotationPatch;
 
 #[cfg(agentation_external_inspector)]
 mod anchored;
-mod annotation_menu;
 mod banner;
 pub mod commands;
 mod history;
@@ -832,6 +834,10 @@ mod history;
 mod inspection_tests;
 pub(crate) mod inspector;
 mod mentions;
+mod menu;
+#[cfg(all(target_os = "macos", not(test)))]
+#[allow(deprecated, unexpected_cfgs)]
+mod native_menu;
 mod settings;
 mod settings_popup;
 mod surface;
