@@ -111,8 +111,6 @@ pub(super) fn render(
     cx: &Context<SettingsPopup>,
 ) -> gpui::Div {
     let overlay = owner.read(cx);
-    let reload_owner = owner.downgrade();
-    let reload_key_owner = reload_owner.clone();
     let mcp_owner = owner.downgrade();
     let mcp_key_owner = mcp_owner.clone();
     let copy = cx.entity().downgrade();
@@ -123,61 +121,6 @@ pub(super) fn render(
         overlay._server.as_ref().is_some_and(Server::is_mcp_enabled)
     };
     let available = overlay._server.is_some();
-    let hot_reload = card(79., cx)
-        .pb(px(12.))
-        .debug_selector(|| "feedback-settings-hot-reload".into())
-        .child(
-            div()
-                .flex_none()
-                .h(px(29.))
-                .mx(px(9.))
-                .mt(px(7.))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .child(symbol("agentation/menubar/reload.svg", 25., 25., cx))
-                .child(title("Hot Reload"))
-                .child(
-                    div()
-                        .debug_selector(|| "feedback-hot-reload-toggle".into())
-                        .on_key_down(move |event, _, cx| {
-                            if matches!(event.keystroke.key.as_str(), "space" | "enter")
-                                && !event.keystroke.modifiers.modified()
-                                && !event.is_held
-                            {
-                                let _ = reload_key_owner.update(cx, |this, cx| {
-                                    this.set_hot_reload_enabled(!this.hot_reload_status.enabled, cx)
-                                });
-                                cx.stop_propagation();
-                            }
-                        })
-                        .child(
-                            menu_switch("tray-hot-reload", overlay.hot_reload_status.enabled)
-                                .name(if overlay.hot_reload_status.available {
-                                    "Hot Reload".to_string()
-                                } else {
-                                    format!("Hot Reload — {}", overlay.hot_reload_status.detail)
-                                })
-                                .disabled(
-                                    !overlay.hot_reload_status.available
-                                        || overlay.hot_reload_pending,
-                                )
-                                .on_change(move |enabled, _, cx| {
-                                    let _ = reload_owner.update(cx, |this, cx| {
-                                        this.set_hot_reload_enabled(enabled, cx)
-                                    });
-                                }),
-                        ),
-                ),
-        )
-        .child(
-            detail(
-                "Rebuilds and restarts this app after a source save. Save app work before enabling",
-                cx,
-            )
-            .mx(px(12.))
-            .mt(px(5.)),
-        );
     let copy_label = if popup.copied { "Copied!" } else { "Copy" };
     let copy_row = div()
         .w_full()
@@ -361,7 +304,6 @@ pub(super) fn render(
                         .flex()
                         .flex_col()
                         .gap(px(12.))
-                        .child(hot_reload)
                         .child(mcp)
                         .child(about),
                 ),

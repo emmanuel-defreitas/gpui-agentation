@@ -107,10 +107,6 @@ pub struct AnnotationOverlay {
     editor_size: (f32, f32),
     inspected_id: Option<gpui::InspectorElementId>,
     inspected_configuration: Option<crate::GpuiConfiguration>,
-    hot_reload: crate::hot_reload::HotReload,
-    hot_reload_status: crate::hot_reload::Status,
-    hot_reload_pending: bool,
-    _hot_reload_write: Option<Task<()>>,
     _refresh: Task<()>,
     _inputs: Vec<Subscription>,
 }
@@ -154,24 +150,6 @@ impl AnnotationOverlay {
         port: u16,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Self {
-        Self::new_with_hot_reload(
-            store,
-            session,
-            port,
-            window,
-            cx,
-            crate::hot_reload::HotReload::from_environment(),
-        )
-    }
-
-    fn new_with_hot_reload(
-        store: Store,
-        session: Session,
-        port: u16,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        hot_reload: crate::hot_reload::HotReload,
     ) -> Self {
         commands::init(cx);
         inspector::register(cx.entity().downgrade(), window, cx);
@@ -272,8 +250,6 @@ impl AnnotationOverlay {
             menu_updates,
             menu_activation,
         ];
-        let hot_reload_status = hot_reload.status();
-        let reload_watch = hot_reload.clone();
         let watch = store.clone();
         let preference = store
             .toolbar_preference(&session.app_name)
@@ -283,20 +259,11 @@ impl AnnotationOverlay {
                 cx.background_executor()
                     .timer(Duration::from_millis(300))
                     .await;
-                let control = reload_watch.clone();
-                let reload_status = cx
-                    .background_executor()
-                    .spawn(async move { control.status() })
-                    .await;
                 let Ok(revision) = watch.revision() else {
                     break;
                 };
                 if this
                     .update(cx, |this, cx| {
-                        if !this.hot_reload_pending && this.hot_reload_status != reload_status {
-                            this.hot_reload_status = reload_status;
-                            cx.notify();
-                        }
                         if revision != this.revision {
                             if let Ok(preference) =
                                 this.store.toolbar_preference(&this.session.app_name)
@@ -383,10 +350,6 @@ impl AnnotationOverlay {
             editor_size: (384.0, 240.0),
             inspected_id: None,
             inspected_configuration: None,
-            hot_reload,
-            hot_reload_status,
-            hot_reload_pending: false,
-            _hot_reload_write: None,
             _refresh: refresh,
             _inputs: inputs,
         }
@@ -858,31 +821,24 @@ impl AnnotationOverlay {
 #[cfg(test)]
 use crate::AnnotationPatch;
 
-#[cfg(agentation_external_inspector)]
-mod anchored;
 mod annotation_menu;
 mod banner;
 pub mod commands;
 mod history;
-#[cfg(all(test, agentation_external_inspector))]
-#[path = "overlay/inspection.test.rs"]
-mod inspection_tests;
+
 pub(crate) mod inspector;
 mod mentions;
-#[cfg(test)]
-#[path = "overlay/release.test.rs"]
-mod release_tests;
 mod settings;
 mod settings_popup;
 mod surface;
 mod surface_button;
+#[cfg(test)]
+mod tests;
 mod textbox;
 mod toolbar_window;
 
 impl Render for AnnotationOverlay {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        #[cfg(agentation_external_inspector)]
-        self.keep_inspection_anchors(window, cx);
         self.sync_toolbar_window(window, cx);
         let surface = self.surface(window, cx);
         div()
@@ -902,7 +858,3 @@ impl Render for AnnotationOverlay {
             .child(surface)
     }
 }
-
-#[cfg(test)]
-#[path = "overlay/editor.test.rs"]
-mod editor_tests;

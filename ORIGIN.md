@@ -12,16 +12,6 @@ and copyright notice are preserved in LICENSE.
 The GitHub repository was generated from `exegia/corpora-template`. Its initial
 commit is retained as the parent of the export commit.
 
-## Development reload supervisor
-
-`src/hot_reload/runner.py` adapts `scripts/dev.py` from
-`exegia/gpui-corpora` at `a240711296727d8379dfb9477d3cff99f162bab5`.
-Its polling snapshot, save debounce, build-before-restart, failed-build recovery,
-and process cleanup approach are retained. Cargo target discovery and the
-settings control channel are Agentation adaptations. The original copyright
-notice and full MIT license are preserved in `src/hot_reload/LICENSE`.
-The crate does not depend on Corpora.
-
 ## GPUI inspector configuration
 
 `vendor/ely/src/tooling/inspector.rs` adapts the temporary style editing and

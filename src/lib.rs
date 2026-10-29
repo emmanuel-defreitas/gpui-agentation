@@ -4,7 +4,6 @@
 #![deny(missing_docs)]
 
 mod drawing;
-mod hot_reload;
 mod http;
 mod integration;
 mod mcp;

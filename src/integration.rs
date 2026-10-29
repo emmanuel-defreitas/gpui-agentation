@@ -30,7 +30,6 @@ impl AssetSource for Assets {
         if let Some(name) = path.strip_prefix("agentation/menubar/") {
             let asset: Option<&'static [u8]> = match name {
                 "brand.svg" => Some(include_bytes!("assets/menubar/brand.svg")),
-                "reload.svg" => Some(include_bytes!("assets/menubar/reload.svg")),
                 "crates.png" => Some(include_bytes!("assets/menubar/crates.png")),
                 "github.svg" => Some(include_bytes!("assets/menubar/github.svg")),
                 "mcp.svg" => Some(include_bytes!("assets/menubar/mcp.svg")),
@@ -59,7 +58,6 @@ impl AssetSource for Assets {
         }
         for name in [
             "brand.svg",
-            "reload.svg",
             "crates.png",
             "github.svg",
             "mcp.svg",
@@ -213,5 +211,5 @@ impl Agentation {
 }
 
 #[cfg(test)]
-#[path = "integration.test.rs"]
+#[path = "tests/integration.rs"]
 mod tests;

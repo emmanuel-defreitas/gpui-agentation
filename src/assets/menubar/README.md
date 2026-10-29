@@ -7,7 +7,6 @@ The exported SVG roots are retained unchanged; dimensions below are logical pixe
 | --- | --- | --- | --- |
 | tray.png | 50:4397 | 14 × 14 | Native template status-item image; dark export background converted to transparency |
 | brand.svg | 49:4169 | 19 × 21.6553 | Header, original aspect ratio |
-| reload.svg | 49:4054 | 25 × 25 | Hot Reload leading icon |
 | crates.png | 50:4373 | 227 × 227 source | 16 × 16 crates.io icon |
 | github.svg | 50:4390 | 16 × 15 | GitHub button, original masked group |
 | mcp.svg | 49:4305 | 15 × 15 | 25 × 25 MCP disclosure badge |

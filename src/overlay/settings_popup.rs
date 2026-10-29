@@ -299,7 +299,7 @@ impl SettingsTray {
                 display: display.map(|(id, _)| id),
             }
         });
-        let bounds = popup_bounds(anchor, size(px(261.), px(367.)));
+        let bounds = popup_bounds(anchor, size(px(261.), px(276.)));
         self.previous_focus = focus;
         self.restore_consumer = was_active;
         self.selected = Some(id);
@@ -559,16 +559,13 @@ impl Render for SettingsPopup {
             .flex()
             .flex_col()
             .text_color(theme.colors.fg)
-
             .border_1()
             .border_color(theme.colors.fg.opacity(0.18))
             .when(native_surface && reduce_transparency, |panel| {
                 panel.bg(theme.colors.surface.opacity(1.))
             })
             .when(!native_surface, |panel| {
-                panel
-                    .border_1()
-                    .border_color(theme.colors.border)
+                panel.border_1().border_color(theme.colors.border)
             })
             .when(increase_contrast, |panel| {
                 panel.border_1().border_color(theme.colors.fg)
@@ -636,5 +633,5 @@ impl Render for SettingsPopup {
 }
 
 #[cfg(test)]
-#[path = "settings_popup.test.rs"]
+#[path = "tests/settings_popup.rs"]
 mod tests;
