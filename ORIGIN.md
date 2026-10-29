@@ -12,6 +12,13 @@ and copyright notice are preserved in LICENSE.
 The GitHub repository was generated from `exegia/corpora-template`. Its initial
 commit is retained as the parent of the export commit.
 
+## Ely components
+
+`vendor/ely/` is [Ely GPUI Components](https://elygpui.com/) at commit
+`da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721` (MIT, Copyright (c) 2026 Ely GPUI
+Component contributors), preserved byte for byte with its license. Source:
+https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components.
+
 ## GPUI inspector configuration
 
 `vendor/ely/src/tooling/inspector.rs` adapts the temporary style editing and

@@ -12,7 +12,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/emmanuel-defreitas/gpui-agentation">
-    <img src="docs/assets/mark.svg" alt="gpui-agentation logo" width="80" height="80">
+    <img src="site/docs/assets/mark.svg" alt="gpui-agentation logo" width="80" height="80">
   </a>
 
   <h1 align="center">gpui-agentation</h1>
@@ -20,7 +20,7 @@
   <p align="center">
     🎯 Point at a running GPUI app, leave a note, and your coding agent gets the element, its bounds, and its Rust source location.
     <br />
-    <a href="docs/reference.md"><strong>Explore the docs »</strong></a>
+    <a href="site/docs/reference.md"><strong>Explore the docs »</strong></a>
     <br />
     <br />
     <a href="https://emmanuel-defreitas.github.io/gpui-agentation/">View Demo</a>
@@ -152,10 +152,13 @@ Ely is bundled, so there is nothing else to install.
    controls need no wrappers. Agentation handles its Ely setup, assets, and focus
    internally.
 
-The [consumer example](examples/consumer/README.md) keeps all of this in one
-`devtools` module. More: [setup guide](docs/consumer-setup.md),
-[setup skill](skills/gpui-agentation-setup/SKILL.md) for agents, and
-[customization](docs/reference.md#settings).
+Want your agent to do this for you? Use the [setup skill](#agent-skills).
+
+More:
+
+- [Example app](example/README.md): all of this in one `devtools` module
+- [Setup guide](site/docs/consumer-setup.md)
+- [Customization](site/docs/reference.md#settings)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -165,83 +168,71 @@ The [consumer example](examples/consumer/README.md) keeps all of this in one
 
 ### Inspect and annotate
 
-Choose **Inspect**, **Box**, **Arrow**, **Pen**, **Comment**, or **Textbox**. Inspect
-uses GPUI's picker; selecting an element creates or updates a numbered inspection
-annotation. Its border follows the element, and clicking the border reopens its
-properties. The inspector shows source, box model, and editable width, height,
-padding, margin, border, and opacity sliders. Property snapshots include
-unchanged values and save to the inspection annotation as you edit. Click its
-numbered pin to add an optional comment; the properties and comment are exported
-together in MCP responses and copied Markdown.
+The toolbar is its own window, docked to the right edge of your app. It follows
+your app when you move or resize it.
 
-The rail's **Annotation mode** switch enables drawing tools. When off, the tools
-stay visible but muted and disabled. **Stop** in the Inspector header exits
-inspection; while an element is selected, Esc or clicking elsewhere on the
-consumer resumes picking.
-Comments opens in the companion and shares the inspector's expand and collapse
-transition. The toolbar is always a separate vertical companion, docked 14
-logical pixels to the consumer window's right edge. It matches the consumer's
-height and follows its movement and resizing. It hides with the consumer when
-minimized, fullscreen, or filling the display, and returns when restored.
-Closing the consumer also closes its toolbar.
+| Tool | What it does |
+| --- | --- |
+| **Inspect** | Pick an element. Saves its source and properties as a numbered note. |
+| **Box**, **Arrow**, **Pen** | Draw on the live window. |
+| **Comment** | Drop a numbered pin with a note. |
+| **Textbox** | Put plain text on the canvas. |
 
-The trailing toolbar group is **Comments**, **Settings**, and **Close**. Undo,
-Redo, Save, and Delete remain available through shortcuts and the native Debug
-menu.
+Drawing tools need the **Annotation mode** switch on. Inspect does not.
 
-On macOS, the **Agentation Settings** menu-bar icon opens a rich popup for the
-last active consumer window. The companion's Settings button, **Debug → Settings**,
-and **⌘⌥S** open the same popup. MCP status, configuration preview,
-and Copy are available there. Esc, clicking outside, or clicking the icon
-again closes it. Opening Settings preserves inspection and unfinished feedback.
-Other platforms retain the consumer's Settings sheet.
+**Inspect an element**
 
-The source breadcrumb starts at the working directory. Click its final segment
-to open that file and line using `$EDITOR` (Zed by default). Supported Zed,
-VS Code, Cursor, and VSCodium commands open the source location; unsupported or
-unavailable editors copy the relative path and show inline feedback instead.
+1. Click **Inspect**, then click an element.
+2. Optional: change width, height, padding, margin, border, or opacity with the sliders.
+3. Click the numbered pin to add a comment.
+4. Click **Stop** in the Inspector header to leave Inspect.
 
-![Inspecting a registered element](docs/assets/inspector.gif)
+Press **Esc** or click elsewhere to pick another element.
 
-Draw an arrow (or a box or freehand pen stroke) to point your agent at exactly
-the right spot.
+![Inspecting a registered element](site/docs/assets/inspector.gif)
 
-![Drawing an annotation arrow](docs/assets/annotation-arrow.gif)
+Your agent gets the comment, the property snapshot, and any style changes with
+suggested Rust builder calls. Click the last breadcrumb segment to open the
+source line in `$EDITOR` (Zed by default; VS Code, Cursor, and VSCodium work too).
+Other editors copy the path instead.
 
-While annotation mode is on, use **I / B / A / P / C / T** to select a tool.
-Hover a tool to see its shortcut as an Ely keycap in the tooltip. **Ctrl/Cmd+S** saves the current draft;
-**Ctrl/Cmd+Z** and **Ctrl/Cmd+Shift+Z** undo and redo annotation changes.
-**Delete/Backspace** removes a selected annotation when its text field is not
-being edited. Text fields retain their ordinary typing and text undo behavior.
+**Draw**
 
-Textboxes use plain text with one style and size, preceded by a numbered pin.
-Click to select and show the bounding box; drag the text or pin to move both.
-Double-click or press Enter on the selected textbox to edit it. Saving displays
-the text directly on the canvas without opening a comment.
-Other numbered pins can be dragged independently of their drawings.
+Point your agent at the exact spot with an arrow, box, or pen stroke.
 
-In a floating comment, type **@** to choose an existing note or **#12** to
-preview pin 12. Hovering a suggestion or using the arrow keys animates its pin;
-click, Enter or Tab inserts an **@#12** reference. Escape dismisses the list.
-Right-click an annotation for Edit, Delete and Color actions, with undo support.
+![Drawing an annotation arrow](site/docs/assets/annotation-arrow.gif)
 
-Include `gpui_agentation::debug_menu()` in your host's `cx.set_menus(...)` list
-to expose the controls in the native **Debug** menu. `Agentation::root` routes
-those menu commands to the active window. **Close** hides the toolbar;
-**Debug → Show Toolbar** restores it. There are no embedded toolbar placements
-or Position settings. Toolbar visibility persists per application in its notes
-file and is shared by windows mounted against that file.
+**Shortcuts** (annotation mode on)
+
+| Keys | Action |
+| --- | --- |
+| `I` `B` `A` `P` `C` `T` | Pick a tool |
+| `Ctrl/Cmd+S` | Save the draft |
+| `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z` | Undo, redo |
+| `Delete` | Remove the selected note |
+
+**Pins, textboxes, mentions**
+
+- Drag a pin to move it, separately from its drawing.
+- Textbox: click to select, drag to move, Enter or double-click to edit.
+- In a comment, type `@` to pick a note or `#12` to preview pin 12.
+  Enter or Tab inserts `@#12`. Esc closes the list.
+- Right-click a note for Edit, Delete, and Color.
+
+**Toolbar, menus, Settings**
+
+- **Comments**, **Settings**, and **Close** sit at the bottom of the toolbar.
+- **Close** hides it. **Debug → Show Toolbar** brings it back.
+- Add `gpui_agentation::debug_menu()` to `cx.set_menus(...)` to get the Debug menu.
+- macOS: Settings opens from the menu-bar icon or `⌘⌥S`.
+  Other platforms: a sheet inside your app.
 
 ### Capture feedback
 
 Write a comment and save it. Open **Comments → Copy** to copy your feedback as
 Markdown, ready to paste to your agent.
 
-![Copying comments as Markdown](docs/assets/comments.gif)
-
-Move the toolbar out of the way whenever it overlaps the UI you are inspecting.
-
-![Repositioning the toolbar](docs/assets/change-tool-position.gif)
+![Copying comments as Markdown](site/docs/assets/comments.gif)
 
 ### Connect your agent
 
@@ -250,37 +241,34 @@ Move the toolbar out of the way whenever it overlaps the UI you are inspecting.
 3. Copy the config into your MCP client.
 
 The endpoint runs on loopback. Clients that require stdio can use the
-[MCP bridge](docs/package-layout.md#mcp-client).
+[MCP bridge](site/docs/package-layout.md#mcp-client).
 
 - MCP Registry name: `mcp-name: io.github.emmanuel-defreitas/gpui-agentation`
 
-_For more examples, please refer to the [Reference](docs/reference.md)._
+_For more examples, please refer to the [Reference](site/docs/reference.md)._
 
 ### Agent skills
 
-Give your coding agent a reusable workflow for installation or exploring a
-running app's feedback. Both skills live under [`skills/`](skills/):
+Two skills live in [`skills/`](skills/). Use them to set up Agentation and to
+work through feedback.
 
-| Skill                                                              | Use it to                                                                                                                                     |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| [gpui-agentation-setup](skills/gpui-agentation-setup/SKILL.md)     | Integrate the native library into a GPUI app, register screens, and verify debug and release builds.                                          |
-| [gpui-agentation-explore](skills/gpui-agentation-explore/SKILL.md) | Discover the connected MCP tools, read sessions and notes, export Markdown, and work through requested feedback with verified status updates. |
+| Skill | Use it to | Try |
+| --- | --- | --- |
+| [gpui-agentation-setup](skills/gpui-agentation-setup/SKILL.md) | Add Agentation to a GPUI app. | "Use gpui-agentation-setup to add development annotations to this app." |
+| [gpui-agentation-explore](skills/gpui-agentation-explore/SKILL.md) | Read your app's feedback over MCP and act on it. | "Use gpui-agentation-explore to summarize pending feedback without changing notes." |
 
-From a clone of this repository, copy either skill directory into your host
-project's `.agents/skills/` directory, or into `~/.agents/skills/` for personal
-use across projects. For example, to install the exploration skill in a host:
+1. Copy the skills into your app (or into `~/.agents/skills/` for every project):
 
-```sh
-mkdir -p /path/to/your-app/.agents/skills
-cp -R skills/gpui-agentation-explore /path/to/your-app/.agents/skills/
-```
+   ```sh
+   mkdir -p /path/to/your-app/.agents/skills
+   cp -R skills/gpui-agentation-setup skills/gpui-agentation-explore /path/to/your-app/.agents/skills/
+   ```
 
-In Zed, start a new conversation after copying, then invoke
-`/gpui-agentation-explore` or `/gpui-agentation-setup`. Other agents can load the
-linked `SKILL.md` directly or use their supported skill directory. Try:
-“Use gpui-agentation-explore to discover my app's MCP tools and summarize pending
-feedback without changing notes.” Skills provide instructions; connect the
-running debug app's MCP server separately using the steps above.
+2. Start a new conversation in your agent.
+3. Run `/gpui-agentation-setup` or `/gpui-agentation-explore`, or paste a prompt above.
+
+Skills are instructions only. `explore` also needs your debug app running with
+**Settings → MCP** on. See [Connect your agent](#connect-your-agent).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -288,19 +276,19 @@ running debug app's MCP server separately using the steps above.
 
 ## Try the Example
 
-Clone the repository and run the bundled consumer app:
+Clone the repository and run the example app:
 
 ```sh
 git clone https://github.com/emmanuel-defreitas/gpui-agentation
 cd gpui-agentation
-make consumer
+make example
 ```
 
 1. Choose **Inspect**, **Box**, **Arrow**, or **Pen**.
 2. Select an element or draw, then write a comment and save.
 3. Open **Comments → Copy** to copy your feedback as Markdown.
 
-See the [consumer example](examples/consumer/README.md) for the full integration.
+See the [example app](example/README.md) for the full integration.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -326,28 +314,8 @@ for a full list of proposed features (and known issues).
 
 ## Contributing
 
-Contributions are what make the open source community such an amazing place to
-learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-If you have a suggestion that would make this better, please fork the repo and
-create a pull request. You can also simply open an issue with the tag
-"enhancement". Don't forget to give the project a star! Thanks again!
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/123-amazing-feature`)
-3. Commit your Changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the Branch (`git push origin feature/123-amazing-feature`)
-5. Open a Pull Request
-
-Changes target `dev`, then promote through `next` to `main`. Run `make ci` for
-checks or `make help` for available commands.
-
-Before promotion, run `make release-prepare` to calculate the next stable version
-from conventional commits and synchronize Cargo, the lockfile, Registry metadata,
-documentation, skills, and site references. Settings, CLI, and MCP versions derive
-from Cargo at build time. Review that diff and update `CHANGELOG.md` before
-committing through the promotion PRs. CI and release tagging reject mismatched
-versions. See the [release policy](.github/BRANCH-AND-RELEASE-POLICY.md).
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the
+workflow, checks, and release steps.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -377,6 +345,13 @@ Project Link: [https://github.com/emmanuel-defreitas/gpui-agentation](https://gi
   implementation. Original MIT attribution is preserved in [ORIGIN.md](ORIGIN.md).
 - Built on [GPUI](https://www.gpui.rs/) and the
   [Model Context Protocol](https://modelcontextprotocol.io/).
+- [Ely GPUI Components](https://elygpui.com/) by the Ely contributors
+  ([source](https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components)).
+  The toolbar, theme, and assets are Ely, bundled unchanged at a pinned
+  revision under the MIT license.
+- [gpui-devtools](https://github.com/joris-gallot/gpui-devtools) by
+  [Joris Gallot](https://github.com/joris-gallot). The inspector's style editing
+  and export approach comes from it (MIT), rewritten on Ely components.
 - [Best-README-Template](https://github.com/othneildrew/Best-README-Template)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
