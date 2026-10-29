@@ -283,5 +283,5 @@ pub(crate) fn note_panel_position(
 }
 
 #[cfg(test)]
-#[path = "drawing.test.rs"]
+#[path = "tests/drawing.rs"]
 mod tests;

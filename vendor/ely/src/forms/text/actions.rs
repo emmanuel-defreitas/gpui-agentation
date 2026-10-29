@@ -428,6 +428,6 @@ impl Render for TextInput {
             .on_mouse_move(cx.listener(Self::mouse_move))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::mouse_up))
-            .child(TextElement::new(cx.entity()))
+            .child(TextElement::new(cx.entity()).caret_color(self.caret_color))
     }
 }

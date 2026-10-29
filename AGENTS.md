@@ -2,6 +2,7 @@
 
 Native development annotations for GPUI and Ely. Read README.md before editing.
 
+- The native library supports macOS only. Run Rust and website checks locally; GitHub Actions is limited to promotion and release operations.
 - Keep the public API independent of Corpora and other host applications.
 - Keep `cfg(debug_assertions)` on the crate; release builds expose no annotation API.
 - Match the pinned Ely revision and `gpui-pre =0.3.8`; do not mix GPUI sources.
@@ -11,6 +12,13 @@ Native development annotations for GPUI and Ely. Read README.md before editing.
 - Never commit credentials, local annotation stores, or generated build artifacts.
 
 ## Verification
+
+```sh
+make verify
+make site-check  # when website files change
+```
+
+The core Rust checks included in `make verify` are:
 
 ```sh
 cargo fmt --all -- --check

@@ -363,5 +363,5 @@ fn event_stream(
 }
 
 #[cfg(test)]
-#[path = "http.test.rs"]
+#[path = "tests/http.rs"]
 mod tests;

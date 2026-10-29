@@ -96,6 +96,13 @@ pub(super) fn shortcut(name: &str) -> Option<&'static str> {
                 "ctrl-alt-m"
             }
         }
+        "devtools" => {
+            if mac {
+                "cmd-alt-i"
+            } else {
+                "ctrl-alt-i"
+            }
+        }
         _ => return None,
     })
 }
@@ -107,7 +114,7 @@ pub(super) fn init(cx: &mut App) {
     let mut bindings = Vec::new();
     for name in [
         "inspect", "box", "arrow", "pen", "comment", "text", "delete", "undo", "redo", "save",
-        "toggle", "toolbar", "floating", "banner", "comments", "settings", "mcp",
+        "toggle", "toolbar", "floating", "banner", "comments", "settings", "mcp", "devtools",
     ] {
         let key = shortcut(name).expect("command shortcut");
         let context = match name {
@@ -146,11 +153,16 @@ impl AnnotationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.command_enabled(&action.name) {
+        if !self.command_enabled(&action.name, cx) {
             return;
         }
         match action.name.as_str() {
             "toggle" => self.toggle(window, cx),
+            "stop" => {
+                if self.inspecting { self.stop_inspection(window, cx); }
+                else { self.close(window, cx); }
+            },
+            "resume-inspection" => inspector::resume_picking(window, cx),
             "inspect" => self.choose_tool(None, window, cx),
             "box" => self.choose_tool(Some(Tool::Box), window, cx),
             "arrow" => self.choose_tool(Some(Tool::Arrow), window, cx),
@@ -182,7 +194,9 @@ impl AnnotationOverlay {
                 }
             }
             "settings" => {
-                if self.settings_open {
+                if settings_popup::is_open_for(window.window_handle().window_id(), cx) {
+                    settings_popup::close(cx, true);
+                } else if self.settings_open {
                     self.dismiss_sheet(window, cx)
                 } else {
                     self.open_sheet(true, window, cx)
@@ -193,9 +207,10 @@ impl AnnotationOverlay {
                 Err(error) => self.notice = error.to_string(),
             },
             "mcp" => self.toggle_mcp(cx),
-            "banner" => self.set_toolbar_position(ToolbarPosition::Banner, cx),
-            "floating" => self.set_toolbar_position(ToolbarPosition::Floating, cx),
-            "none" => self.set_toolbar_position(ToolbarPosition::None, cx),
+            "devtools" => self.choose_tool(None, window, cx),
+            "banner" => self.set_toolbar_banner(true, window, cx),
+            "floating" => self.set_toolbar_banner(false, window, cx),
+            "none" | "close-toolbar" => self.set_toolbar_position(ToolbarPosition::None, cx),
             "toolbar" => self.set_toolbar_position(
                 if self.toolbar_hidden {
                     if self.banner {
@@ -245,6 +260,19 @@ impl AnnotationOverlay {
                 return;
             }
         }
+        if event.keystroke.key == "escape"
+            && inspector::is_open(window, cx)
+            && !self.settings_open
+            && !self.review_open
+        {
+            if self.inspecting {
+                inspector::resume_picking(window, cx);
+            } else {
+                self.close(window, cx);
+            }
+            cx.stop_propagation();
+            return;
+        }
         if !self.active || self.settings_open || self.review_open {
             return;
         }
@@ -252,6 +280,14 @@ impl AnnotationOverlay {
         let modifiers = event.keystroke.modifiers;
         let editing = self.draft.as_ref().is_some_and(|d| d.editing)
             && self.input.focus_handle(cx).is_focused(window);
+        // Native property fields own their text-editing shortcuts too.
+        if self.inspected_id.is_some()
+            && !editing
+            && !self.focus.is_focused(window)
+            && !((modifiers.control || modifiers.platform) && key == "s")
+        {
+            return;
+        }
         let name = if (modifiers.control || modifiers.platform) && !modifiers.alt {
             match key {
                 "s" => Some("save"),

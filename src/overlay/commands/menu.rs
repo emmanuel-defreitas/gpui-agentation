@@ -14,8 +14,9 @@ struct MenuState {
     active: bool,
     undo: bool,
     redo: bool,
+    save: bool,
+    delete: bool,
     hidden: bool,
-    floating: bool,
     comments: bool,
     settings: bool,
     mcp: bool,
@@ -58,6 +59,7 @@ fn build_menu(state: MenuState) -> Menu {
     Menu::new("Debug").items([
         item("Undo", "undo", state.undo),
         item("Redo", "redo", state.redo),
+        item("Inspect element", "devtools", true),
         MenuItem::submenu(Menu::new("New").disabled(!state.active).items([
             item("Square", "box", state.active),
             item("Arrow", "arrow", state.active),
@@ -76,6 +78,8 @@ fn build_menu(state: MenuState) -> Menu {
             ),
         ),
         MenuItem::separator(),
+        item("Save feedback", "save", state.save),
+        item("Delete annotation", "delete", state.delete),
         item(
             if state.hidden {
                 "Show Toolbar"
@@ -85,10 +89,6 @@ fn build_menu(state: MenuState) -> Menu {
             "toolbar",
             true,
         ),
-        MenuItem::submenu(Menu::new("Position").disabled(state.hidden).items([
-            item("Floating", "floating", !state.hidden).checked(state.floating),
-            item("Banner", "banner", !state.hidden).checked(!state.floating),
-        ])),
         MenuItem::submenu(Menu::new("Comments").items([
             item(
                 if state.comments { "Hide" } else { "Show…" },
@@ -155,21 +155,34 @@ fn is_agentation(menu: &OwnedMenu) -> bool {
 }
 
 impl AnnotationOverlay {
-    pub(in crate::overlay) fn command_enabled(&self, name: &str) -> bool {
+    pub(in crate::overlay) fn command_enabled(&self, name: &str, cx: &App) -> bool {
         match name {
+            "save" => {
+                self.draft.is_some()
+                    && (!self.input.read(cx).text().trim().is_empty()
+                        || self.inspected_configuration.is_some())
+            }
+            "delete" => {
+                self.draft
+                    .as_ref()
+                    .and_then(|draft| draft.id.as_ref())
+                    .is_some()
+                    || self.selected_note.is_some()
+            }
             "undo" => !self.history.is_empty(),
             "redo" => !self.future.is_empty(),
-            "floating" | "banner" => !self.toolbar_hidden,
             "color-0" | "color-1" | "color-2" | "color-3" => self.active,
-            "inspect" | "box" | "arrow" | "pen" | "comment" | "text" => self.active,
+            "box" | "arrow" | "pen" | "comment" | "text" => self.active,
             _ => true,
         }
     }
 
     pub(in crate::overlay) fn sync_debug_menu(&self, window: WindowId, cx: &mut App) {
-        if cx
-            .active_window()
-            .is_none_or(|active| active.window_id() != window)
+        if !self.companion_toolbar_active
+            && !settings_popup::is_open_for(window, cx)
+            && cx
+                .active_window()
+                .is_none_or(|active| active.window_id() != window)
         {
             return;
         }
@@ -177,10 +190,16 @@ impl AnnotationOverlay {
             active: self.active,
             undo: !self.history.is_empty(),
             redo: !self.future.is_empty(),
+            save: self.command_enabled("save", cx),
+            delete: self
+                .draft
+                .as_ref()
+                .and_then(|draft| draft.id.as_ref())
+                .is_some()
+                || self.selected_note.is_some(),
             hidden: self.toolbar_hidden,
-            floating: !self.banner,
             comments: self.review_open,
-            settings: self.settings_open,
+            settings: self.settings_open || settings_popup::is_open_for(window, cx),
             mcp: if self.mcp_starting {
                 self.mcp_requested
             } else {
@@ -207,5 +226,5 @@ impl AnnotationOverlay {
 }
 
 #[cfg(test)]
-#[path = "menu.test.rs"]
+#[path = "../tests/menu.rs"]
 mod tests;

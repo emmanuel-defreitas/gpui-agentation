@@ -3,7 +3,7 @@
 
 CARGO ?= cargo
 
-.PHONY: help fetch dev consumer bridge bridge-check build check fmt fmt-check lint test test-doc doc release-check hot-reload-test version-check version-test release-prepare release-version-check ci
+.PHONY: help fetch example bridge bridge-check bridge-install-check build check fmt fmt-check lint test test-doc doc release-check version-check version-test release-prepare release-version-check platform-check snapshot-check site-check verify ci
 
 help: ## Show available commands
 	@awk 'BEGIN { FS = ":.*## "; print "Usage: make <target>\n" } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -11,23 +11,26 @@ help: ## Show available commands
 fetch: ## Fetch locked registry dependencies
 	$(CARGO) fetch --locked
 
-dev: ## Run the demo with the Settings hot-reload toggle available
-	CARGO="$(CARGO)" python3 src/hot_reload/runner.py --manifest-path Cargo.toml --example demo --no-default-features --features native
-
-consumer: ## Run the complete consumer app with minimal integration
+example: ## Run the example app with minimal integration
 	$(CARGO) run -p agentation-consumer --locked
 
 bridge: ## Build the portable stdio MCP executable without native UI
 	$(CARGO) build --release --bin gpui-agentation --locked
 
 bridge-check: ## Verify MCP-only compilation and tests
+	$(CARGO) clippy --all-targets --locked -- -D warnings
 	$(CARGO) test --no-default-features --features mcp --locked
-	$(CARGO) check --release --no-default-features --features mcp --locked
+	$(CARGO) build --release --bin gpui-agentation --locked
 
-build: ## Build the workspace and demo
+bridge-install-check: ## Smoke-test the default Cargo install and executable locally
+	@set -eu; install_dir=$$(mktemp -d); trap 'rm -rf "$$install_dir"' EXIT; \
+		$(CARGO) install --path . --locked --debug --root "$$install_dir"; \
+		"$$install_dir/bin/gpui-agentation" --version
+
+build: ## Build the workspace
 	$(CARGO) build --workspace --all-targets --all-features --locked
 
-check: ## Type-check the workspace and demo
+check: ## Type-check the workspace
 	$(CARGO) check --workspace --all-targets --all-features --locked
 
 fmt: ## Format all Rust sources
@@ -51,10 +54,6 @@ doc: ## Generate development API documentation without dependencies
 release-check: ## Check compilation with the annotation API disabled
 	$(CARGO) check --workspace --all-targets --release --all-features --locked
 
-# Keep these sequential, including under make -j, and stop on the first failure.
-hot-reload-test: ## Test watcher filtering, failed builds, restart recovery and cleanup
-	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s src/hot_reload -p 'test_*.py'
-
 version-check: ## Verify documented crate versions match Cargo.toml and server.json
 	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-version-refs.py
 	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-bridge-release.py
@@ -68,12 +67,25 @@ release-prepare: ## Synchronize the next release version locally (optional VERSI
 release-version-check: ## Verify metadata and the version required for promotion
 	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release_version.py check-release
 
-ci: ## Run the same formatting, lint, test, and release checks as Rust CI
+platform-check: ## Require macOS for the supported native library and local checks
+	@test "$$(uname -s)" = Darwin || { echo 'Native development and verification require macOS.' >&2; exit 1; }
+
+snapshot-check: ## Verify the pinned bundled Ely snapshot
+	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-ely-snapshot.py
+
+site-check: ## Install website dependencies and validate the website locally
+	cd site && npm ci && npm run check
+
+verify: ## Run the complete local macOS verification suite before merging or promotion
+	$(MAKE) platform-check
+	$(MAKE) snapshot-check
 	$(MAKE) fmt-check
 	$(MAKE) lint
 	$(MAKE) test
-	$(MAKE) hot-reload-test
 	$(MAKE) version-check
 	$(MAKE) version-test
 	$(MAKE) release-check
 	$(MAKE) bridge-check
+	$(MAKE) bridge-install-check
+
+ci: verify ## Alias for local verification; GitHub Actions only promotes and releases

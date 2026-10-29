@@ -1,97 +1,63 @@
 # Branch & Release Policy
 
-This is the source of truth for the template's branch model, PR targeting rules, protection expectations, and release promotion flow. Read [`LIFECYCLE.md`](./LIFECYCLE.md) alongside it.
+The native library supports macOS only. Rust and website verification runs
+locally; GitHub Actions is reserved for promotion and release operations.
+Read [LIFECYCLE.md](./LIFECYCLE.md) for the workflow inventory.
 
-## Branch model
+## Branch model and local verification
 
-| Branch / prefix | Purpose | Created by | Lifecycle? |
-|---|---|---|---|
-| `feature/<n>-<slug>` | New capability or enhancement | `issue-start-branch.yml` | yes |
-| `bug/<n>-<slug>` | Defect fix | `issue-start-branch.yml` | yes |
-| `doc/<n>-<slug>` | Documentation-only change | `issue-start-branch.yml` | yes |
-| `chore/<n>-<slug>` | CI, build, refactor, tooling | `issue-start-branch.yml` | yes |
-| `ai/v6-01-annotation-model`, `ai/v6-02-annotation-tools`, `release/v6.0.0` | Approved v6 release stack | maintainer | exact-name stack exception |
-| `dev` | Integration and default branch | protected long-lived branch | yes |
-| `next` | Staging / pre-release branch | protected long-lived branch | yes |
-| `main` | Production branch | protected long-lived branch | yes |
-| `hotfix/*`, `dependabot/*`, `copilot/*`, `claude/*` | Bot and exception flows | respective bots / maintainers | exempt from branch-tag enforcement |
+Work branches target `dev`. Maintainers create branches and tracking issues,
+review conventional PR titles, manage labels, and merge changes manually.
+Use conventional commit subjects and squash titles because release versioning
+reads the integrated commit history. Issue creation, automatic drafts, AI reviews,
+Dependabot auto-merge, hosted secret scanning, and routine PR CI are removed.
 
-The lifecycle prefix is chosen from the issue's `type:*` label when `status:in-progress` is applied, so branch prefix and issue type stay aligned.
+Before merging, run `make verify` on macOS. `make ci` remains an alias.
+For website changes, also run `make site-check`. Before promotion, rerun the
+local suite on the candidate commit and review the results with the release PR.
+A green hosted check confirms release metadata, not successful native tests.
 
-## PR targeting rules (enforced by `pr-base-policy.yml`)
+## Promotion and branch protection
 
-1. **Lifecycle work targets `dev`.** PRs opened against unsupported base branches are reassigned to `dev`.
-2. **Only `dev` promotes into `next`.** Any other head branch targeting `next` is redirected back to `dev`.
-3. **Only `next` releases into `main`.** PRs into `main` from any head other than `next` are closed.
+Only same-repository `dev → next` and `next → main` PRs are promotions.
+`next-preview.yml` runs the `promotion-metadata` check for PRs targeting `next`
+or `main`, validating both the lane and reviewed release metadata. It also
+validates metadata on pushes to `next`. Invalid lanes
+fail; ordinary PRs targeting `dev` do not start Actions.
 
-The approved same-repository v6 stack preserves these dependent PR bases:
+Keep `dev`, `next`, and `main` protected against deletion and force pushes.
+Checked-in rulesets require `promotion-metadata` on `next` and `main`, with
+no hosted test contexts on `dev` or temporary release branches. The promotion
+preview reports the same metadata context on the `next` commit, so a release
+PR created using `GITHUB_TOKEN` does not depend on a new PR event to run it.
 
-```text
-ai/v6-01-annotation-model → dev
-ai/v6-02-annotation-tools → ai/v6-01-annotation-model
-release/v6.0.0 → ai/v6-02-annotation-tools
-```
-
-Only those two dependent edges are exceptions to the normal `dev` target.
-Forks with matching branch names receive no exception. Base policy rechecks on
-opening, edits, reopening and new commits. These three exact branch names are
-exempt from automatic tracking-issue creation and require conventional PR titles,
-with stack numbering after the prefix, such as `feat: add textboxes [1/3]`.
-No general `ai/*` or `release/*` exemption is granted.
-
-Review and merge bottom-up. After each parent merges, retarget its dependent PR
-to `dev` and rebase it onto the integrated parent before merging. With squash
-merges, use `git rebase --onto origin/dev <old-parent-tip> <child>` to avoid
-replaying the parent's commits. Never merge a dependent PR into its feature
-parent. Production promotion remains `dev → next → main`.
-
-## Branch protection and ruleset expectations
-
-`main`, `dev`, and `next` should all be non-deletable and non-force-pushable. `main` is read-only:
-
-1. changes must arrive through an approved PR with required checks;
-2. direct updates are allowed only for explicitly configured owner and GitHub Actions bypass actors;
-3. the template does not hard-code bypass IDs because they belong to the generated repository.
-
-Run `.github/scripts/apply-branch-guardrails.sh` after creating a repository from the template. It
-creates `dev` and `next`, makes `dev` the default branch, and applies the rulesets. Supply
-`MAIN_BYPASS_ACTORS_JSON` with the generated repository's owner/team and GitHub App actor IDs when
-the `main` ruleset is applied.
-
-## Branch-tag enforcement (`pr-branch-enforcement.yml`)
-
-When a PR is opened from a branch that is not one of the lifecycle prefixes and not an exempt automation branch, the workflow:
-
-1. infers work type from the PR title's conventional-commit prefix
-2. opens a tracking issue under the `⚙️ EPIC: Workflow` milestone
-3. comments on the PR with the tracking issue link
-
-Type inference uses the same conventional-commit vocabulary as `release-tag.yml`, so issue labels and semver signals stay aligned.
-
-## Dynamic issue title prefixes
-
-| Prefix | Label | When |
-|---|---|---|
-| `[BUG]` | `type:bug` | fix work inferred from `fix:` / `bug:` titles |
-| `[FEATURE]` | `type:feature` | feature work inferred from `feat:` titles |
-| `[DOC]` | `type:docs` | docs work inferred from `docs:` titles |
-| `[CHORE]` | `type:chore` | default for everything else |
+`.github/scripts/apply-branch-guardrails.sh` applies these expectations and
+sets `dev` as the default branch. Its updates to GitHub are a separate
+maintainer operation; editing these files does not change live repository
+settings. Existing live protections must not require retired CI contexts.
+Supply `MAIN_BYPASS_ACTORS_JSON` when owner/team or GitHub App bypass actors
+are needed. Keep existing review and signature requirements in the live rules.
 
 ## Release flow: `dev → next → main`
 
-1. **PR → `dev`** — CI and SemVer-title validation run. Lifecycle PRs
-   are squash-merged, then `dev-release-candidate.yml` tags the squash merge.
-2. **Prepare and promote** — run `make release-prepare` in a branch targeting `dev`.
-   It synchronizes Cargo.toml, Cargo.lock, server.json, current docs, skills, and
-   site references. Settings, CLI, and MCP versions derive from Cargo. Review the
-   generated diff and update `CHANGELOG.md`, merge through review, then open
-   `dev → next` after validation passes. No command commits or pushes changes.
-3. **Preview** — merging to `next` runs `next-preview.yml`, which runs configured install, test,
-   build, container, and preview deployment commands.
-4. **Release PR** — a successful preview opens a `next → main` PR. Promotion
-   checks reject stale metadata or a version that disagrees with commit history.
-5. **Release** — merging `next → main` creates the SemVer tag and GitHub Release; the published
-   release triggers the configured production deployment.
+1. Run `make verify` locally, review the results, and merge work into `dev`.
+   Lifecycle merges can still create release candidate tags through
+   `dev-release-candidate.yml`; no tests run in that workflow.
+2. Run `make release-prepare` on a preparation branch targeting `dev`, review
+   the version diff and `CHANGELOG.md`, and merge through review. No local
+   command commits or pushes changes. Verify the candidate locally on macOS,
+   including `cargo publish --dry-run --all-features --locked`, then open
+   `dev → next`. Hosted promotion checks require synchronized metadata and the
+   version inferred from committed history.
+3. Merging to `next` runs `Promotion Preview`, which validates metadata only.
+   On success, `next-to-main-release-pr.yml` opens the `next → main` PR.
+4. After local verification and production review, merging `next → main`
+   creates the SemVer tag and GitHub Release. Configured production deployment
+   remains release-triggered.
+5. Dispatch `Publish MCP Bridge` explicitly from promoted `main`. Linux jobs
+   verify package identity and size and publish with short-lived crates.io
+   credentials. They use `--no-verify`: compilation and tests must already
+   have passed locally. Release tags do not automatically publish the crate.
 
 ### Semantic versioning (`release-tag.yml`)
 
@@ -142,29 +108,10 @@ updates current metadata once; ordinary preparation still refuses downgrades.
 This is an input to the existing `release-tag.yml` workflow, not another release
 trigger. It does not create a tag, release, merge, or deployment by itself.
 
-## Cheat sheet
-
-```text
-issue (type:feature) ──status:in-progress──▶ feature/123-slug
-                                              │
-                                              ▼
-                                  PR feature/123 → dev (squash + candidate tag)
-                                              │
-                                              ▼  Validation green on dev
-                                  PR dev → next (docs + version metadata)
-                                              │
-                                              ▼
-                                  preview CI → PR next → main
-                                              │  merge
-                                              ▼
-                                  tag vX.Y.Z + Release + production deploy
-```
-
 ## Related files
 
 - `.github/LIFECYCLE.md`
-- `.github/workflows/pr-base-policy.yml`
-- `.github/workflows/pr-branch-enforcement.yml`
+- `.github/workflows/next-preview.yml`
 - `.github/workflows/release-tag.yml`
-- `.github/workflows/issue-start-branch.yml`
-- `.github/scripts/create-triage-labels.sh`
+- `.github/workflows/publish-bridge.yml`
+- `CONTRIBUTING.md`

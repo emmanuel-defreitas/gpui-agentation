@@ -8,7 +8,7 @@ mod ime;
 use std::{ops::Range, rc::Rc, time::Duration};
 
 use gpui::{
-    App, Bounds, Context, EventEmitter, FocusHandle, Focusable, Pixels, Point, SharedString,
+    App, Bounds, Context, EventEmitter, FocusHandle, Focusable, Hsla, Pixels, Point, SharedString,
     Subscription, Task, Window, WrappedLine,
 };
 
@@ -65,6 +65,7 @@ pub struct TextInput {
     fit: Option<Fit>,
     max_len: Option<usize>,
     highlighter: Option<Highlighter>,
+    caret_color: Option<Hsla>,
     disabled: bool,
     history: History<Snapshot>,
     /// The selection the last edit replaced.
@@ -122,6 +123,7 @@ impl TextInput {
             fit: None,
             max_len: None,
             highlighter: None,
+            caret_color: None,
             disabled: false,
             history: History::default(),
             edited_from: 0..0,
@@ -141,6 +143,12 @@ impl TextInput {
     pub fn multi_line(mut self, min: usize, max: usize) -> Self {
         assert!(0 < min && min <= max, "text rows {min}..={max} are empty");
         self.rows = Some((min, max));
+        self
+    }
+
+    /// Overrides the blinking caret color while preserving the text color.
+    pub fn caret_color(mut self, color: Hsla) -> Self {
+        self.caret_color = Some(color);
         self
     }
 

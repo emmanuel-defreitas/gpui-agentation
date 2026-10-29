@@ -27,6 +27,24 @@ impl AssetSource for Assets {
         if path == "agentation/mcp.svg" {
             return Ok(Some(Cow::Borrowed(include_bytes!("assets/mcp.svg"))));
         }
+        if let Some(name) = path.strip_prefix("agentation/menubar/") {
+            let asset: Option<&'static [u8]> = match name {
+                "brand.svg" => Some(include_bytes!("assets/menubar/brand.svg")),
+                "crates.png" => Some(include_bytes!("assets/menubar/crates.png")),
+                "github.svg" => Some(include_bytes!("assets/menubar/github.svg")),
+                "mcp.svg" => Some(include_bytes!("assets/menubar/mcp.svg")),
+                "copy.svg" => Some(include_bytes!("assets/menubar/copy.svg")),
+                _ => None,
+            };
+            if let Some(asset) = asset {
+                return Ok(Some(Cow::Borrowed(asset)));
+            }
+        }
+        if path == "agentation/mark.svg" {
+            return Ok(Some(Cow::Borrowed(include_bytes!(
+                "../site/docs/assets/mark.svg"
+            ))));
+        }
         crate::ely::Assets.load(path)
     }
 
@@ -34,6 +52,21 @@ impl AssetSource for Assets {
         let mut paths = crate::ely::Assets.list(path)?;
         if "agentation/mcp.svg".starts_with(path) {
             paths.push("agentation/mcp.svg".into());
+        }
+        if "agentation/mark.svg".starts_with(path) {
+            paths.push("agentation/mark.svg".into());
+        }
+        for name in [
+            "brand.svg",
+            "crates.png",
+            "github.svg",
+            "mcp.svg",
+            "copy.svg",
+        ] {
+            let asset = format!("agentation/menubar/{name}");
+            if asset.starts_with(path) {
+                paths.push(asset.into());
+            }
         }
         Ok(paths)
     }
@@ -74,6 +107,7 @@ pub fn init(cx: &mut App) -> gpui::Result<()> {
                 ))
             })?;
         }
+        crate::overlay::inspector::install(cx);
         cx.set_global(Initialized);
     }
     Ok(())
@@ -88,6 +122,7 @@ pub fn init_for_tests(cx: &mut App) {
         if !cx.has_global::<Theme>() {
             crate::ely::init_for_tests(cx);
         }
+        crate::overlay::inspector::install(cx);
         cx.set_global(Initialized);
     }
 }
@@ -128,7 +163,7 @@ impl Agentation {
         Ok(Self { overlay, focus })
     }
 
-    /// Render one screen below the toolbar and own its root focus handling.
+    /// Render one screen and own its root focus handling; the toolbar is a companion window.
     ///
     /// Call once per window render, below custom chrome and outside content
     /// padding/scrolling. The content should fill the remaining column space.
@@ -176,5 +211,5 @@ impl Agentation {
 }
 
 #[cfg(test)]
-#[path = "integration.test.rs"]
+#[path = "tests/integration.rs"]
 mod tests;

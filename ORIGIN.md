@@ -12,15 +12,21 @@ and copyright notice are preserved in LICENSE.
 The GitHub repository was generated from `exegia/corpora-template`. Its initial
 commit is retained as the parent of the export commit.
 
-## Development reload supervisor
+## Ely components
 
-`src/hot_reload/runner.py` adapts `scripts/dev.py` from
-`exegia/gpui-corpora` at `a240711296727d8379dfb9477d3cff99f162bab5`.
-Its polling snapshot, save debounce, build-before-restart, failed-build recovery,
-and process cleanup approach are retained. Cargo target discovery and the
-settings control channel are Agentation adaptations. The original copyright
-notice and full MIT license are preserved in `src/hot_reload/LICENSE`.
-The crate does not depend on Corpora.
+`vendor/ely/` is [Ely GPUI Components](https://elygpui.com/) at commit
+`da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721` (MIT, Copyright (c) 2026 Ely GPUI
+Component contributors), preserved byte for byte with its license. Source:
+https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components.
+
+## GPUI inspector configuration
+
+`vendor/ely/src/tooling/inspector.rs` adapts the temporary style editing and
+style-export approach from
+[`joris-gallot/gpui-devtools`](https://github.com/joris-gallot/gpui-devtools)
+at commit `e967606d18709e89cad002db49f7d3b6eae19646` (MIT). The controls and
+published configuration model are rewritten against the bundled Ely components
+and Agentation note pipeline.
 
 ## Model Context Protocol mark
 

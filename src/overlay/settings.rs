@@ -1,8 +1,8 @@
 use super::*;
 use crate::ely::{
     agent::{McpServer, McpServerList, ServerState},
-    buttons::{IconButton, SegmentedControl},
-    forms::{JsonInput, Switch},
+    buttons::IconButton,
+    forms::JsonInput,
     layout::Collapsible,
     primitives::{FocusScope, IconName, Place},
     theme::ActiveTheme,
@@ -67,52 +67,22 @@ impl AnnotationOverlay {
         cx.notify();
     }
 
-    fn set_hot_reload_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
-        if self.hot_reload_pending || !self.hot_reload_status.available {
-            return;
-        }
-        self.hot_reload_pending = true;
-        let control = self.hot_reload.clone();
-        self._hot_reload_write = Some(cx.spawn(async move |owner, cx| {
-            let result = cx
-                .background_executor()
-                .spawn(async move { control.set_enabled(enabled) })
-                .await;
-            let _ = owner.update(cx, |this, cx| {
-                this.hot_reload_pending = false;
-                match result {
-                    Ok(status) => this.hot_reload_status = status,
-                    Err(error) => {
-                        this.hot_reload_status.detail =
-                            format!("Could not update hot reload: {error}")
-                    }
-                }
-                cx.notify();
-            });
-        }));
-        cx.notify();
-    }
-
-    pub(super) fn settings(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        div()
-            .debug_selector(|| "feedback-settings-trigger-target".into())
-            .child(
-                IconButton::new("feedback-settings-trigger", IconName::Settings)
-                    .tooltip("Settings")
-                    .variant(ButtonVariant::Ghost)
-                    .on_click(cx.listener(|this, _, window, cx| this.open_sheet(true, window, cx))),
-            )
-    }
-
     pub(super) fn open_sheet(
         &mut self,
         settings: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if settings && super::settings_popup::available(cx) {
+            super::settings_popup::open_for(window.window_handle().window_id(), cx);
+            return;
+        }
         if !self.dismiss_note(window, cx) {
             return;
         }
+        self.stop_inspection(window, cx);
+        self.inspected_id = None;
+        self.inspected_configuration = None;
         if !self.settings_open && !self.review_open {
             self.sheet_previous_focus = window.focused(cx);
         }
@@ -143,7 +113,7 @@ impl AnnotationOverlay {
                 let _ = close_owner.update(cx, |this, cx| this.dismiss_sheet(window, cx));
             });
         let content = if self.settings_open {
-            settings_content(self, cx.entity(), close.clone())
+            settings_content(self, cx.entity(), sheet_config(self, cx.entity()), cx)
         } else {
             surface::notes_body(self, cx.entity(), close.clone(), true, window, cx)
         };
@@ -152,60 +122,62 @@ impl AnnotationOverlay {
     }
 }
 
-fn settings_content(
+pub(super) struct ConfigControls {
+    pub input: Entity<TextInput>,
+    pub copied: bool,
+    pub expanded: bool,
+    pub copy: std::rc::Rc<dyn Fn(&mut App)>,
+    pub toggle: std::rc::Rc<dyn Fn(&mut App)>,
+}
+
+fn sheet_config(this: &AnnotationOverlay, owner: Entity<AnnotationOverlay>) -> ConfigControls {
+    let copy_owner = owner.clone();
+    ConfigControls {
+        input: this.mcp_config_input.clone(),
+        copied: this.mcp_config_copied,
+        expanded: this.mcp_config_expanded,
+        copy: std::rc::Rc::new(move |cx| {
+            copy_owner.update(cx, |this, cx| this.copy_mcp_config(cx))
+        }),
+        toggle: std::rc::Rc::new(move |cx| {
+            owner.update(cx, |this, cx| {
+                this.mcp_config_expanded = !this.mcp_config_expanded;
+                cx.notify();
+            })
+        }),
+    }
+}
+
+pub(super) fn settings_content(
     this: &AnnotationOverlay,
     owner: Entity<AnnotationOverlay>,
-    close: std::rc::Rc<dyn Fn(&mut Window, &mut App)>,
+    controls: ConfigControls,
+    cx: &App,
 ) -> gpui::Div {
+    let owner = owner.downgrade();
     let enabled = this._server.as_ref().is_some_and(Server::is_mcp_enabled);
     let endpoint = this
         ._server
         .as_ref()
         .map(|server| format!("http://{}/mcp", server.address()));
-    let position_owner = owner.clone();
-    let position = SegmentedControl::new(
-        "feedback-position",
-        if this.toolbar_hidden {
-            "none"
-        } else if this.banner {
-            "banner"
-        } else {
-            "floating"
-        },
-    )
-    .segment("floating", "Floating", None)
-    .segment("banner", "Banner", None)
-    .segment("none", "None (Debug menu)", None)
-    .on_change(move |value, window, cx| {
-        close(window, cx);
-        position_owner.update(cx, |this, cx| {
-            if value == "none" {
-                this.set_toolbar_position(crate::ToolbarPosition::None, cx);
-            } else {
-                this.set_toolbar_banner(value == "banner", window, cx);
-            }
-        });
-    });
-    let copy_owner = owner.clone();
+    let copy_action = controls.copy;
     let config = div()
         .w_full()
         .debug_selector(|| "feedback-mcp-config-code".into())
         .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-        .child(JsonInput::new(&this.mcp_config_input));
+        .child(JsonInput::new(&controls.input));
     let copy = CopyConfigButton {
         button: Button::new(
             "feedback-mcp-copy-config",
-            if this.mcp_config_copied {
-                "copied!"
-            } else {
-                "Copy"
-            },
+            if controls.copied { "copied!" } else { "Copy" },
         )
+        .variant(ButtonVariant::Ghost)
+        .size(ControlSize::Sm)
         .disabled(endpoint.is_none())
-        .on_click(move |_, _, cx| copy_owner.update(cx, |this, cx| this.copy_mcp_config(cx))),
-        copied: this.mcp_config_copied,
+        .on_click(move |_, _, cx| copy_action(cx)),
+        copied: controls.copied,
     };
-    let config_owner = owner.clone();
+    let toggle_config = controls.toggle.clone();
     let toggle_owner = owner.clone();
     let server_list = McpServerList::new(
         "feedback-mcp-server",
@@ -231,61 +203,72 @@ fn settings_content(
         }],
     )
     .on_toggle(move |_, enabled, _, cx| {
-        toggle_owner.update(cx, |this, cx| this.set_mcp_enabled(enabled, cx));
+        let _ = toggle_owner.update(cx, |this, cx| this.set_mcp_enabled(enabled, cx));
     });
+    let toggle_chevron = controls.toggle;
     let config_section = div()
         .flex()
         .flex_col()
-        .gap_2()
+        .rounded(cx.theme().radius(crate::ely::theme::Radius::Md))
+        .border_1()
+        .border_color(cx.theme().colors.border)
         .child(
             div()
-                .debug_selector(|| "feedback-mcp-config-toggle".into())
-                .child(DisclosureButton {
-                    button: Button::new("feedback-mcp-config-toggle", "MCP config")
-                        .variant(ButtonVariant::Ghost)
-                        .full_width()
-                        .icon(if this.mcp_config_expanded {
+                .debug_selector(|| "feedback-mcp-config-header".into())
+                .flex()
+                .items_center()
+                .gap_1()
+                .px_1()
+                .py_1()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .debug_selector(|| "feedback-mcp-config-toggle".into())
+                        .child(DisclosureButton {
+                            button: Button::new("feedback-mcp-config-toggle", "MCP")
+                                .variant(ButtonVariant::Ghost)
+                                .full_width()
+                                .on_click(move |_, _, cx| toggle_config(cx)),
+                            expanded: controls.expanded,
+                        }),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .debug_selector(|| "feedback-mcp-copy-config-target".into())
+                        .child(copy),
+                )
+                .child(
+                    IconButton::new(
+                        "feedback-mcp-config-chevron",
+                        if controls.expanded {
                             IconName::ChevronDown
                         } else {
                             IconName::ChevronRight
-                        })
-                        .on_click(move |_, _, cx| {
-                            config_owner.update(cx, |this, cx| {
-                                this.mcp_config_expanded = !this.mcp_config_expanded;
-                                cx.notify();
-                            });
-                        }),
-                    expanded: this.mcp_config_expanded,
-                }),
+                        },
+                    )
+                    .variant(ButtonVariant::Ghost)
+                    .size(ControlSize::Sm)
+                    .tooltip(if controls.expanded {
+                        "Collapse MCP configuration"
+                    } else {
+                        "Expand MCP configuration"
+                    })
+                    .on_click(move |_, _, cx| toggle_chevron(cx)),
+                ),
         )
         .child(
-            Collapsible::new("feedback-mcp-config-details", this.mcp_config_expanded).child(
+            Collapsible::new("feedback-mcp-config-details", controls.expanded).child(
                 div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(config)
-                    .child(Caption::new(
-                        "Turn on to connect an MCP client. Annotations remain available.",
-                    ))
-                    .child(
-                        div().flex().justify_end().child(
-                            div()
-                                .flex_none()
-                                .debug_selector(|| "feedback-mcp-copy-config-target".into())
-                                .child(copy),
-                        ),
-                    ),
+                    .border_t_1()
+                    .border_color(cx.theme().colors.border)
+                    .p_2()
+                    .child(config),
             ),
         );
-    let position_section = div()
-        .debug_selector(|| "feedback-settings-position".into())
-        .flex()
-        .flex_col()
-        .gap_2()
-        .child(Overline::new("Position"))
-        .child(position);
     let mcp_section = div()
+        .debug_selector(|| "feedback-settings-mcp".into())
         .flex()
         .flex_col()
         .gap_2()
@@ -295,7 +278,6 @@ fn settings_content(
         .when(!this.settings_status.is_empty(), |section| {
             section.child(Caption::new(this.settings_status.clone()))
         });
-    let hot_reload = hot_reload_section(this, owner.clone());
     let about = div()
         .debug_selector(|| "feedback-settings-about".into())
         .flex()
@@ -343,68 +325,10 @@ fn settings_content(
                 .flex()
                 .flex_col()
                 .gap_5()
-                .child(position_section)
-                .child(hot_reload)
                 .child(mcp_section)
                 .child(about),
         );
     div().size_full().child(body)
-}
-
-fn hot_reload_section(this: &AnnotationOverlay, owner: Entity<AnnotationOverlay>) -> gpui::Div {
-    let reload_owner = owner.clone();
-    let reload_key_owner = owner.clone();
-    div()
-        .debug_selector(|| "feedback-settings-hot-reload".into())
-        .flex()
-        .flex_col()
-        .gap_2()
-        .child(Overline::new("Hot reload"))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .child("Server status")
-                .child(
-                    div()
-                        .debug_selector(|| "feedback-hot-reload-toggle".into())
-                        // The pinned Ely Switch owns focus and pointer behavior;
-                        // supply keyboard activation on its focused event path.
-                        .on_key_down(move |event, _, cx| {
-                            if matches!(event.keystroke.key.as_str(), "space" | "enter")
-                                && !event.keystroke.modifiers.modified()
-                                && !event.is_held
-                            {
-                                reload_key_owner.update(cx, |this, cx| {
-                                    this.set_hot_reload_enabled(
-                                        !this.hot_reload_status.enabled,
-                                        cx,
-                                    );
-                                });
-                                cx.stop_propagation();
-                            }
-                        })
-                        .child(
-                            Switch::new(
-                                "feedback-hot-reload-toggle",
-                                this.hot_reload_status.enabled,
-                            )
-                            .name("Hot reload server status")
-                            .disabled(!this.hot_reload_status.available || this.hot_reload_pending)
-                            .on_change(move |enabled, _, cx| {
-                                reload_owner.update(cx, |this, cx| {
-                                    this.set_hot_reload_enabled(enabled, cx)
-                                });
-                            }),
-                        ),
-                ),
-        )
-        .child(Caption::new(this.hot_reload_status.detail.clone()))
-        .child(Caption::new(
-            "Rebuilds and restarts this app after a source save. Save app work before enabling.",
-        ))
 }
 
 pub(super) fn mcp_config(url: &str) -> String {
@@ -415,7 +339,7 @@ pub(super) fn mcp_config(url: &str) -> String {
 }
 
 impl AnnotationOverlay {
-    fn copy_mcp_config(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn copy_mcp_config(&mut self, cx: &mut Context<Self>) {
         if self._server.is_none() {
             return;
         }
@@ -438,9 +362,9 @@ impl AnnotationOverlay {
 // interactive root so focus, click handling, and the accessibility state belong
 // to the same button, rather than adding another accessible wrapper.
 #[derive(IntoElement)]
-struct DisclosureButton {
-    button: Button,
-    expanded: bool,
+pub(super) struct DisclosureButton {
+    pub(super) button: Button,
+    pub(super) expanded: bool,
 }
 
 impl RenderOnce for DisclosureButton {
@@ -449,7 +373,16 @@ impl RenderOnce for DisclosureButton {
         let root = button
             .downcast_mut::<gpui::Stateful<gpui::Div>>()
             .expect("pinned Ely Button renders a stateful Div");
-        std::mem::replace(root, div().id("unused-disclosure-root")).aria_expanded(self.expanded)
+        root.style().flex_direction = Some(gpui::FlexDirection::RowReverse);
+        root.extend([gpui::svg()
+            .path("agentation/mcp.svg")
+            .size(gpui::rems(1.0))
+            .debug_selector(|| "feedback-mcp-config-icon".into())
+            .text_color(cx.theme().colors.fg)
+            .into_any_element()]);
+        std::mem::replace(root, div().id("unused-disclosure-root"))
+            .justify_start()
+            .aria_expanded(self.expanded)
     }
 }
 
@@ -574,308 +507,5 @@ impl RenderOnce for StarButton {
                 .into_any_element()]);
         }
         button
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[gpui::test]
-    fn disclosure_exposes_expanded_state_on_the_actual_button(cx: &mut gpui::TestAppContext) {
-        use gpui::Element;
-
-        cx.update(crate::ely::init_for_tests);
-        let (_, cx) = cx.add_window_view(|_, _| gpui::EmptyView);
-        cx.update(|window, cx| {
-            for expanded in [false, true, false] {
-                let mut element = DisclosureButton {
-                    button: Button::new("test-config-toggle", "MCP config"),
-                    expanded,
-                }
-                .render(window, cx)
-                .into_any_element();
-                let root = element.downcast_mut::<gpui::Stateful<gpui::Div>>().unwrap();
-                assert_eq!(root.a11y_role(), Some(gpui::Role::Button));
-                let mut node = gpui::accesskit::Node::new(gpui::Role::Button);
-                root.write_a11y_info(&mut node);
-                assert_eq!(node.label(), Some("MCP config"));
-                assert_eq!(node.is_expanded(), Some(expanded));
-            }
-        });
-    }
-
-    #[gpui::test]
-    fn settings_scroll_should_reach_sheet_edges_with_padding_inside_content(
-        cx: &mut gpui::TestAppContext,
-    ) {
-        cx.update(|cx| {
-            crate::ely::init_for_tests(cx);
-            crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
-        });
-        let store = Store::memory();
-        let session = store
-            .ensure_session("Scroll test", "gpui://scroll")
-            .unwrap();
-        let (overlay, cx) =
-            cx.add_window_view(|window, cx| AnnotationOverlay::new(store, session, 0, window, cx));
-        cx.update(|window, cx| {
-            crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
-            overlay.update(cx, |this, cx| this.open_sheet(true, window, cx));
-        });
-        for height in [560., 900.] {
-            cx.simulate_resize(gpui::size(gpui::px(900.), gpui::px(height)));
-            cx.run_until_parked();
-            cx.update(|window, cx| window.draw(cx).clear(cx));
-            cx.run_until_parked();
-            let header = cx.debug_bounds("feedback-sheet-header").unwrap();
-            let body = cx.debug_bounds("feedback-sheet-body").unwrap();
-            let scroll = cx.debug_bounds("feedback-settings-scroll").unwrap();
-            assert_eq!(body.top(), header.bottom());
-            assert_eq!(body.bottom(), gpui::px(height));
-            assert_eq!(scroll, body, "scroll viewport must reach all body edges");
-            // Return to the start after resizing; spacing belongs to the
-            // content, not a stationary mask around the scroll viewport.
-            cx.simulate_event(gpui::ScrollWheelEvent {
-                position: scroll.origin + gpui::point(gpui::px(2.), gpui::px(2.)),
-                delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(2000.))),
-                modifiers: gpui::Modifiers::none(),
-                touch_phase: gpui::TouchPhase::Moved,
-            });
-            cx.run_until_parked();
-            cx.update(|window, cx| window.draw(cx).clear(cx));
-            cx.run_until_parked();
-            let position = cx.debug_bounds("feedback-settings-position").unwrap();
-            let margin = position.left() - scroll.left();
-            assert!(margin > gpui::px(0.));
-            assert_eq!(scroll.right() - position.right(), margin);
-            assert_eq!(position.top() - scroll.top(), margin);
-            // Scroll in the gutter, outside the intentionally locked JSON input.
-            cx.simulate_event(gpui::ScrollWheelEvent {
-                position: scroll.origin + gpui::point(gpui::px(2.), gpui::px(2.)),
-                delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(-2000.))),
-                modifiers: gpui::Modifiers::none(),
-                touch_phase: gpui::TouchPhase::Moved,
-            });
-            cx.run_until_parked();
-            cx.update(|window, cx| window.draw(cx).clear(cx));
-            cx.run_until_parked();
-            let about = cx.debug_bounds("feedback-settings-about").unwrap();
-            assert!(about.top() >= scroll.top());
-            assert!(about.bottom() <= scroll.bottom() - margin + gpui::px(1.));
-        }
-    }
-
-    #[gpui::test]
-    fn copying_config_should_use_live_endpoint_and_restart_two_second_feedback(
-        cx: &mut gpui::TestAppContext,
-    ) {
-        cx.update(|cx| {
-            crate::ely::init_for_tests(cx);
-            crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
-        });
-        let store = Store::memory();
-        let session = store
-            .ensure_session("Config test", "gpui://config")
-            .unwrap();
-        let (overlay, cx) =
-            cx.add_window_view(|window, cx| AnnotationOverlay::new(store, session, 0, window, cx));
-        cx.update(|window, cx| {
-            crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
-            overlay.update(cx, |this, cx| this.open_sheet(true, window, cx));
-        });
-        cx.run_until_parked();
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-        cx.run_until_parked();
-        assert!(cx.debug_bounds("feedback-mcp-config-code").is_none());
-        let toggle = cx.debug_bounds("feedback-mcp-config-toggle").unwrap();
-        cx.simulate_click(toggle.center(), gpui::Modifiers::none());
-        cx.run_until_parked();
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-        cx.run_until_parked();
-        assert!(cx.update(|_, cx| overlay.read(cx).mcp_config_expanded));
-        let field = cx.debug_bounds("feedback-mcp-config-code").unwrap();
-        assert!(
-            field.size.height > gpui::px(100.),
-            "formatted JSON grows to multiple lines"
-        );
-        cx.simulate_event(gpui::ScrollWheelEvent {
-            position: field.center(),
-            delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(-80.), gpui::px(-160.))),
-            modifiers: gpui::Modifiers::none(),
-            touch_phase: gpui::TouchPhase::Moved,
-        });
-        cx.run_until_parked();
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-        cx.run_until_parked();
-        assert_eq!(
-            cx.debug_bounds("feedback-mcp-config-code").unwrap(),
-            field,
-            "scrolling over JSON must not move the field"
-        );
-        let target = cx.debug_bounds("feedback-mcp-copy-config-target").unwrap();
-        cx.simulate_click(target.center(), gpui::Modifiers::none());
-        cx.run_until_parked();
-        cx.update(|_, cx| {
-            let this = overlay.read(cx);
-            assert!(this.mcp_config_input.read(cx).is_disabled());
-            assert!(this.mcp_config_copied);
-            let copied = cx.read_from_clipboard().unwrap().text().unwrap();
-            let config: serde_json::Value = serde_json::from_str(&copied).unwrap();
-            assert_eq!(copied, serde_json::to_string_pretty(&config).unwrap());
-            assert_eq!(copied, this.mcp_config_input.read(cx).text());
-            assert_eq!(
-                config["mcpServers"]["gpui_agentation"]["url"],
-                format!("http://{}/mcp", this._server.as_ref().unwrap().address())
-            );
-            assert_eq!(config["mcpServers"]["gpui_agentation"]["type"], "http");
-        });
-        cx.executor().advance_clock(Duration::from_millis(1500));
-        cx.run_until_parked();
-        cx.update(|_, cx| overlay.update(cx, |this, cx| this.copy_mcp_config(cx)));
-        cx.run_until_parked();
-        cx.executor().advance_clock(Duration::from_millis(1000));
-        cx.run_until_parked();
-        cx.update(|_, cx| assert!(overlay.read(cx).mcp_config_copied));
-        cx.executor().advance_clock(Duration::from_millis(1001));
-        cx.run_until_parked();
-        cx.update(|_, cx| assert!(!overlay.read(cx).mcp_config_copied));
-    }
-
-    #[gpui::test]
-    fn starting_mcp_should_retain_an_off_request_until_start_finishes(
-        cx: &mut gpui::TestAppContext,
-    ) {
-        cx.update(|cx| {
-            crate::ely::init_for_tests(cx);
-            crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
-        });
-        let store = Store::memory();
-        let session = store
-            .ensure_session("Startup test", "gpui://startup")
-            .unwrap();
-        let (overlay, cx) =
-            cx.add_window_view(|window, cx| AnnotationOverlay::new(store, session, 0, window, cx));
-        cx.update(|_, cx| {
-            overlay.update(cx, |this, cx| {
-                this._server.take();
-                this.set_mcp_enabled(true, cx);
-                assert!(this.mcp_starting);
-                this.set_mcp_enabled(false, cx);
-            })
-        });
-        cx.run_until_parked();
-        cx.update(|_, cx| {
-            let this = overlay.read(cx);
-            assert!(!this.mcp_starting);
-            assert!(
-                !this
-                    ._server
-                    .as_ref()
-                    .expect("server started")
-                    .is_mcp_enabled()
-            );
-        });
-    }
-}
-
-#[cfg(test)]
-mod hot_reload_tests {
-    use super::*;
-    use gpui::{Modifiers, TestAppContext};
-
-    #[gpui::test]
-    fn hot_reload_switch_updates_the_runner_without_closing_settings(cx: &mut TestAppContext) {
-        let directory = tempfile::tempdir().unwrap();
-        std::fs::write(directory.path().join("enabled"), "0").unwrap();
-        std::fs::write(directory.path().join("status"), "Off").unwrap();
-        cx.update(|cx| {
-            crate::ely::init_for_tests(cx);
-            crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
-        });
-        let store = Store::memory();
-        let session = store.ensure_session("Reload test", "gpui://test").unwrap();
-        let control = crate::hot_reload::HotReload::for_directory(directory.path().into());
-        let (overlay, cx) = cx.add_window_view(|window, cx| {
-            AnnotationOverlay::new_with_hot_reload(store, session, 0, window, cx, control)
-        });
-        cx.update(|window, cx| overlay.update(cx, |this, cx| this.open_sheet(true, window, cx)));
-        cx.run_until_parked();
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-        cx.executor().advance_clock(Duration::from_millis(400));
-        cx.run_until_parked();
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-        let bounds = cx.debug_bounds("feedback-hot-reload-toggle").unwrap();
-        cx.simulate_click(bounds.center(), Modifiers::none());
-        cx.run_until_parked();
-        cx.update(|_, cx| {
-            assert!(overlay.read(cx).settings_open);
-            assert!(
-                overlay.read(cx).hot_reload_status.enabled,
-                "bounds={bounds:?}, status={:?}, pending={}",
-                overlay.read(cx).hot_reload_status,
-                overlay.read(cx).hot_reload_pending
-            );
-        });
-        assert_eq!(
-            std::fs::read_to_string(directory.path().join("enabled")).unwrap(),
-            "1"
-        );
-    }
-    struct ReloadSection {
-        overlay: Entity<AnnotationOverlay>,
-        focus: FocusHandle,
-        _observe: Subscription,
-    }
-    impl Render for ReloadSection {
-        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-            FocusScope::new(&self.focus).child(hot_reload_section(
-                self.overlay.read(cx),
-                self.overlay.clone(),
-            ))
-        }
-    }
-    #[gpui::test]
-    fn hot_reload_switch_is_reachable_by_tab_and_space(cx: &mut TestAppContext) {
-        let directory = tempfile::tempdir().unwrap();
-        std::fs::write(directory.path().join("enabled"), "0").unwrap();
-        std::fs::write(directory.path().join("status"), "Off").unwrap();
-        cx.update(|cx| {
-            crate::ely::init_for_tests(cx);
-            crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
-        });
-        let control = crate::hot_reload::HotReload::for_directory(directory.path().into());
-        let (_, cx) = cx.add_window_view(|window, cx| {
-            let store = Store::memory();
-            let session = store
-                .ensure_session("Reload keyboard", "gpui://test")
-                .unwrap();
-            let overlay = cx.new(|cx| {
-                AnnotationOverlay::new_with_hot_reload(store, session, 0, window, cx, control)
-            });
-            let focus = cx.focus_handle();
-            window.focus(&focus, cx);
-            let observe = cx.observe(&overlay, |_, _, cx| cx.notify());
-            ReloadSection {
-                overlay,
-                focus,
-                _observe: observe,
-            }
-        });
-        cx.run_until_parked();
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-        cx.simulate_keystrokes("tab space");
-        cx.run_until_parked();
-        assert_eq!(
-            std::fs::read_to_string(directory.path().join("enabled")).unwrap(),
-            "1"
-        );
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-        cx.simulate_keystrokes("space");
-        cx.run_until_parked();
-        assert_eq!(
-            std::fs::read_to_string(directory.path().join("enabled")).unwrap(),
-            "0"
-        );
     }
 }

@@ -2461,6 +2461,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "shlex 2.0.1",
  "similar",
  "smallvec",
  "tempfile",

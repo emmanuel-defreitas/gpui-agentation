@@ -52,16 +52,16 @@ pub(crate) struct ToolbarPreference {
     pub last_position: ToolbarPosition,
 }
 
-/// Where Agentation's controls are displayed.
+/// Toolbar visibility and legacy placement preferences.
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ToolbarPosition {
-    /// Inline strip above application content.
     #[default]
+    /// Legacy placement value; shows the vertical companion window.
     Banner,
-    /// Draggable floating controls.
+    /// Legacy placement value; shows the vertical companion window.
     Floating,
-    /// Use the host's Debug menu without an embedded toolbar.
+    /// Hide the companion while retaining native menu commands.
     None,
 }
 
@@ -219,7 +219,12 @@ impl Store {
                 url: session.url.clone(),
                 timestamp: now(),
                 status: AnnotationStatus::Pending,
-                kind: "feedback".into(),
+                kind: if input.inspection.is_some() {
+                    "inspection"
+                } else {
+                    "feedback"
+                }
+                .into(),
                 color,
                 feedback: input,
                 thread: vec![],
@@ -247,11 +252,15 @@ impl Store {
 
     /// Update a comment or lifecycle status; unrelated fields are preserved.
     pub fn update(&self, id: &str, patch: AnnotationPatch) -> Result<Annotation, Error> {
-        if let Some(comment) = &patch.comment {
-            text(comment, 8000)?;
-        }
         self.change(id, "annotation.updated", |a| {
             if let Some(comment) = patch.comment {
+                if a.feedback.inspection.is_some() && comment.trim().is_empty() {
+                    if comment.chars().count() > 8000 {
+                        return Err(Error::Invalid("comment exceeds 8000 characters".into()));
+                    }
+                } else {
+                    text(&comment, 8000)?;
+                }
                 if let Some(crate::AnnotationShape::Text { text, .. }) = &mut a.feedback.shape {
                     *text = comment.clone();
                 }
@@ -530,6 +539,29 @@ fn append_annotations(output: &mut String, annotations: &[Annotation]) -> Result
         if let Some(shape) = &a.feedback.shape {
             output.push_str(&format!("   Shape: `{}`\n", serde_json::to_string(shape)?));
         }
+        if let Some(snapshot) = &a.feedback.inspection {
+            output.push_str("   Inspection annotation · anchored element properties\n");
+            for (property, value) in &snapshot.properties {
+                output.push_str(&format!("   - {property}: `{value}`\n"));
+            }
+        }
+        if let Some(configuration) = &a.feedback.gpui_configuration {
+            output.push_str(&format!(
+                "   GPUI configuration for `{}` ({})\n",
+                configuration.element_path, configuration.source
+            ));
+            for change in &configuration.changes {
+                output.push_str(&format!(
+                    "   - {}: `{}` → `{}`\n",
+                    change.property, change.before, change.after
+                ));
+            }
+            output.push_str("\n   ```rust\n");
+            for line in configuration.rust.lines() {
+                output.push_str(&format!("   {line}\n"));
+            }
+            output.push_str("   ```\n");
+        }
         for message in &a.thread {
             output.push_str(&format!("   {}: {}\n", message.role, message.message));
         }
@@ -552,11 +584,43 @@ fn validate(input: &AnnotationInput) -> Result<(), Error> {
             return Err(Error::Invalid("invalid annotation shape".into()));
         }
     }
-    text(&input.comment, 8000)?;
+    if (input.gpui_configuration.is_none() && input.inspection.is_none())
+        || !input.comment.trim().is_empty()
+    {
+        text(&input.comment, 8000)?;
+    } else if input.comment.chars().count() > 8000 {
+        return Err(Error::Invalid("comment exceeds 8000 characters".into()));
+    }
     text(&input.element_path, 2000)?;
     text(&input.element, 500)?;
     if let Some(source) = &input.source_file {
         text(source, 2000)?;
+    }
+    if let Some(snapshot) = &input.inspection {
+        if snapshot.properties.is_empty() || snapshot.properties.len() > 64 || input.shape.is_some()
+        {
+            return Err(Error::Invalid("invalid inspection snapshot".into()));
+        }
+        for (property, value) in &snapshot.properties {
+            text(property, 100)?;
+            text(value, 2000)?;
+        }
+    }
+    if let Some(configuration) = &input.gpui_configuration {
+        text(&configuration.source, 2000)?;
+        if configuration.element_path.chars().count() > 2000
+            || configuration.changes.is_empty()
+            || configuration.changes.len() > 16
+            || configuration.rust.trim().is_empty()
+            || configuration.rust.chars().count() > 8000
+        {
+            return Err(Error::Invalid("invalid GPUI configuration".into()));
+        }
+        for change in &configuration.changes {
+            text(&change.property, 100)?;
+            text(&change.before, 500)?;
+            text(&change.after, 500)?;
+        }
     }
     if !input.x.is_finite()
         || !(0.0..=100.0).contains(&input.x)
@@ -576,5 +640,5 @@ fn now() -> u64 {
 }
 
 #[cfg(test)]
-#[path = "store.test.rs"]
+#[path = "tests/store.rs"]
 mod tests;
