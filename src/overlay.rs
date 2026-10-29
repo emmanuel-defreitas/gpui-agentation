@@ -86,6 +86,7 @@ pub struct AnnotationOverlay {
     pin_drag: Option<(crate::Annotation, (f32, f32))>,
     textbox_drag: Option<(crate::Annotation, (f32, f32))>,
     textbox_resize: Option<crate::Annotation>,
+    follow_baselines: std::collections::HashMap<String, followed::Baseline>,
     annotation_press: Option<gpui::Point<gpui::Pixels>>,
     textbox_bounds: std::collections::HashMap<String, gpui::Bounds<gpui::Pixels>>,
     mentions: mentions::Mentions,
@@ -330,6 +331,7 @@ impl AnnotationOverlay {
             pin_drag: None,
             textbox_drag: None,
             textbox_resize: None,
+            follow_baselines: Default::default(),
             annotation_press: None,
             textbox_bounds: Default::default(),
             mentions: Default::default(),
@@ -376,6 +378,7 @@ impl AnnotationOverlay {
                 self.pin_drag = None;
                 self.textbox_drag = None;
                 self.textbox_resize = None;
+                self.follow_baselines.clear();
                 self.textbox_bounds.clear();
                 self.mentions = Default::default();
                 self.context_request = None;
@@ -828,6 +831,7 @@ use crate::AnnotationPatch;
 mod anchored;
 mod banner;
 pub mod commands;
+mod followed;
 mod history;
 #[cfg(all(test, agentation_external_inspector))]
 #[path = "overlay/inspection.test.rs"]

@@ -492,6 +492,8 @@ impl AnnotationOverlay {
             return;
         }
         if let Some((before, offset)) = self.pin_drag.take() {
+            // The dropped spot is the new anchor; re-seed it from the target's current position.
+            self.follow_baselines.remove(&before.id);
             let mut after = before.clone();
             let p = normalized(at, window);
             let p = (
@@ -1042,6 +1044,20 @@ impl AnnotationOverlay {
             };
             if matches!(a.feedback.shape, Some(AnnotationShape::Text { .. })) {
                 layer = layer.child(self.textbox(a, window, cx));
+            } else if a.feedback.shape.is_none() && !a.feedback.element_path.starts_with("gpui:") {
+                let baseline = self
+                    .follow_baselines
+                    .entry(a.id.clone())
+                    .or_default()
+                    .clone();
+                layer = layer.child(super::followed::FollowMark {
+                    target: a.feedback.element_path.clone(),
+                    baseline,
+                    center: (bounds.x, bounds.y),
+                    marker: self
+                        .marker(&a.id, a.index, Rect::default(), window, cx)
+                        .into_any_element(),
+                });
             } else {
                 layer = layer.child(self.marker(&a.id, a.index, bounds, window, cx));
             }

@@ -1053,3 +1053,69 @@ fn saved_style_is_restored_only_for_a_fresh_pick() {
     assert!(!should_restore(false, true, &saved, Some(&edited)));
     assert!(!should_restore(false, true, &saved, None));
 }
+
+struct ScrollHost {
+    overlay: Entity<AnnotationOverlay>,
+    scroll: f32,
+}
+
+impl gpui::Render for ScrollHost {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::begin_frame(window, cx);
+        div()
+            .size_full()
+            .child(
+                div()
+                    .absolute()
+                    .top(px(100. - self.scroll))
+                    .left(px(40.))
+                    .child(crate::target("card", "Card", div().w(px(200.)).h(px(80.)))),
+            )
+            .child(self.overlay.clone())
+    }
+}
+
+#[gpui::test]
+fn pins_on_a_registered_target_scroll_with_it_while_annotating_is_off(cx: &mut TestAppContext) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Scroll test", "gpui://scroll")
+        .unwrap();
+    store
+        .add(
+            &session.id,
+            AnnotationInput {
+                inspection: None,
+                comment: "Pinned".into(),
+                element_path: "card".into(),
+                element: "Card".into(),
+                x: 10.,
+                y: 140.,
+                bounding_box: crate::Rect::default(),
+                source_file: None,
+                gpui_configuration: None,
+                shape: None,
+            },
+        )
+        .unwrap();
+    let session = store.session(&session.id).unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| ScrollHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+        scroll: 0.,
+    });
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.scroll = 30.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after.center().y, before.center().y - px(30.));
+    assert_eq!(after.center().x, before.center().x);
+}
