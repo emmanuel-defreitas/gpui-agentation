@@ -3,8 +3,7 @@
 .github/aw/logs/
 .DS_Store
 
-# Secrets — never commit. See .github/workflows/secret-scan.yml for the
-# scanning that backs this up.
+# Secrets — never commit.
 .env
 .env.*
 !.env.example
@@ -23,4 +22,5 @@
 
 /.worktrees/
 __pycache__/
-vendor/ely/
+vendor/ely/*
+!vendor/ely/LOCAL_PATCHES.json

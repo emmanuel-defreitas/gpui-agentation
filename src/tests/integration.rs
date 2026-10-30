@@ -324,3 +324,39 @@ fn failed_editor_launch_should_copy_source_and_finish_inline_feedback(cx: &mut T
         );
     });
 }
+
+fn mount_in_light_window(cx: &mut TestAppContext) -> &mut VisualTestContext {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("notes.json");
+    let (_, cx) = cx.add_window_view(|window, cx| {
+        let tools = Agentation::mount("Appearance", "gpui://appearance", path, 0, window, cx);
+        assert!(tools.is_ok());
+        std::mem::forget(tools);
+        InspectorSample
+    });
+    cx
+}
+
+#[gpui::test]
+fn mounted_tools_adopt_the_window_appearance_when_agentation_owns_the_theme(
+    cx: &mut TestAppContext,
+) {
+    cx.update(init_for_tests);
+    assert!(cx.update(|cx| cx.has_global::<FollowSystemAppearance>()));
+    // A stale dark theme is replaced by the (light) appearance of the window.
+    cx.update(|cx| Theme::set_mode_now(Mode::Dark, cx));
+    let cx = mount_in_light_window(cx);
+    cx.update(|_, cx| assert!(!cx.theme().is_dark()));
+}
+
+#[gpui::test]
+fn mounted_tools_leave_a_host_owned_theme_alone(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        crate::ely::init_for_tests(cx);
+        Theme::set_mode_now(Mode::Dark, cx);
+        init_for_tests(cx);
+        assert!(!cx.has_global::<FollowSystemAppearance>());
+    });
+    let cx = mount_in_light_window(cx);
+    cx.update(|_, cx| assert!(cx.theme().is_dark()));
+}

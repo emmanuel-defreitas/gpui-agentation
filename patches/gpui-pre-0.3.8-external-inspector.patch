@@ -1,0 +1,172 @@
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -1249,6 +1249,8 @@
+     captured_hitbox: Option<HitboxId>,
+     #[cfg(any(feature = "inspector", debug_assertions))]
+     inspector: Option<Entity<Inspector>>,
++    #[cfg(any(feature = "inspector", debug_assertions))]
++    inspector_external: bool,
+     #[cfg(feature = "profiler")]
+     debug_frame_overlay: crate::debug_overlay::DebugFrameOverlay,
+     pub(crate) a11y: A11y,
+@@ -2138,6 +2140,8 @@
+             captured_hitbox: None,
+             #[cfg(any(feature = "inspector", debug_assertions))]
+             inspector: None,
++            #[cfg(any(feature = "inspector", debug_assertions))]
++            inspector_external: false,
+             #[cfg(feature = "profiler")]
+             debug_frame_overlay: crate::debug_overlay::DebugFrameOverlay::new(),
+             a11y: A11y::new(
+@@ -3559,7 +3563,7 @@
+         let root_size = {
+             #[cfg(any(feature = "inspector", debug_assertions))]
+             {
+-                if self.inspector.is_some() {
++                if self.inspector.is_some() && !self.inspector_external {
+                     let mut size = self.viewport_size;
+                     size.width = (size.width - _inspector_width).max(px(0.0));
+                     size
+@@ -3586,7 +3590,11 @@
+         root_element.prepaint_as_root(Point::default(), root_size.into(), self, cx);
+ 
+         #[cfg(any(feature = "inspector", debug_assertions))]
+-        let inspector_element = self.prepaint_inspector(_inspector_width, cx);
++        let inspector_element = if self.inspector_external {
++            None
++        } else {
++            self.prepaint_inspector(_inspector_width, cx)
++        };
+ 
+         self.prepaint_deferred_draws(cx);
+ 
+@@ -3634,6 +3642,13 @@
+ 
+         #[cfg(any(feature = "inspector", debug_assertions))]
+         self.paint_inspector_hitbox(cx);
++
++        #[cfg(any(feature = "inspector", debug_assertions))]
++        if self.inspector_external {
++            if let Some(inspector) = self.inspector.clone() {
++                inspector.update(cx, |_, cx| cx.notify());
++            }
++        }
+ 
+         // a11y may have been activated/deactivated halfway through the frame
+         let a11y_active_start_of_frame = self.a11y.is_active();
+@@ -6955,6 +6970,56 @@
+         }
+     }
+ 
++    /// Presents the inspector in another window without reserving sidebar space.
++    #[cfg(any(feature = "inspector", debug_assertions))]
++    pub fn set_inspector_external(&mut self, external: bool) {
++        self.inspector_external = external;
++        self.refresh();
++    }
++
++    /// The native picker/controller, which may be rendered in an external window.
++    #[cfg(any(feature = "inspector", debug_assertions))]
++    pub fn inspector_entity(&self) -> Option<Entity<Inspector>> {
++        self.inspector.clone()
++    }
++
++    /// Resolves a saved inspection anchor against this window's live hitboxes.
++    #[cfg(any(feature = "inspector", debug_assertions))]
++    pub fn inspection_anchor(&self, key: &str) -> Option<(crate::InspectorElementId, Bounds<Pixels>)> {
++        let frame = if self.invalidator.not_drawing() { &self.rendered_frame } else { &self.next_frame };
++        let canonical = |key: &str| {
++            let (path, source) = key.split_once('@')?;
++            let path = path.split('.').filter(|segment| !segment.trim_start_matches("gpui:").starts_with("view-")).collect::<Vec<_>>().join(".");
++            Some((path.trim_start_matches("gpui:").to_owned(), source.to_owned()))
++        };
++        let wanted = canonical(key)?;
++        let mut fallback = None;
++        let mut ambiguous = false;
++        for (hitbox_id, id) in &frame.inspector_hitboxes {
++            let source = id.path.source_location;
++            let candidate = format!("gpui:{}@{}:{}:{}#{}", id.path.global_id, source.file(), source.line(), source.column(), id.instance_id);
++            let Some(hitbox) = frame.hitboxes.iter().find(|hitbox| hitbox.id == *hitbox_id) else { continue; };
++            let bounds = hitbox.bounds.intersect(&hitbox.content_mask.bounds);
++            if bounds.size.width <= px(0.) || bounds.size.height <= px(0.) { continue; }
++            if candidate == key { return Some((id.clone(), bounds)); }
++            if canonical(&candidate).as_ref() == Some(&wanted) {
++                ambiguous |= fallback.is_some();
++                fallback = Some((id.clone(), bounds));
++            }
++        }
++        if ambiguous { None } else { fallback }
++    }
++
++    /// Selects an existing element without synthesizing a pointer event.
++    #[cfg(any(feature = "inspector", debug_assertions))]
++    pub fn select_inspection_anchor(&mut self, key: &str, cx: &mut App) -> bool {
++        let Some((id, _)) = self.inspection_anchor(key) else { return false; };
++        let Some(inspector) = self.inspector.clone() else { return false; };
++        inspector.update(cx, |inspector, cx| { inspector.select(id, self); cx.notify(); });
++        self.refresh();
++        true
++    }
++
+     /// Toggles the inspector mode on this window.
+     #[cfg(any(feature = "inspector", debug_assertions))]
+     pub fn toggle_inspector(&mut self, cx: &mut App) {
+@@ -7057,9 +7122,10 @@
+         cx: &App,
+     ) {
+         self.invalidator.debug_assert_paint_or_prepaint();
+-        if !self.is_inspector_picking(cx) {
++        if !self.inspector_enabled() {
+             return;
+         }
++        let _ = cx;
+         if let Some(inspector_id) = inspector_id {
+             self.next_frame
+                 .inspector_hitboxes
+@@ -7102,6 +7168,7 @@
+                     self.hovered_inspector_hitbox(inspector, &self.rendered_frame)
+                 {
+                     inspector.select(inspector_id, self);
++                    self.refresh();
+                 }
+             });
+         } else if let Some(event) = event.downcast_ref::<crate::ScrollWheelEvent>() {
+--- a/src/inspector.rs
++++ b/src/inspector.rs
+@@ -147,6 +147,11 @@
+         /// Starts element picking mode, allowing the user to select elements by clicking.
+         pub fn start_picking(&mut self) {
+             self.pick_depth = Some(0.0);
++        }
++
++        /// Stops pointer picking while retaining captured element state.
++        pub fn stop_picking(&mut self) {
++            self.pick_depth = None;
+         }
+ 
+         /// Returns whether the inspector is currently in picking mode.
+--- a/src/elements/div.rs
++++ b/src/elements/div.rs
+@@ -2393,6 +2393,11 @@
+                                 None
+                             };
+ 
++                            #[cfg(any(feature = "inspector", debug_assertions))]
++                            if let Some(hitbox) = &hitbox {
++                                window.insert_inspector_hitbox(hitbox.id, _inspector_id, cx);
++                            }
++
+                             let scroll_offset =
+                                 self.clamp_scroll_position(bounds, &style, window, cx);
+                             let result = f(&style, scroll_offset, hitbox, window, cx);
+@@ -2405,6 +2410,10 @@
+     }
+ 
+     fn should_insert_hitbox(&self, style: &Style, window: &Window, cx: &App) -> bool {
++        #[cfg(any(feature = "inspector", debug_assertions))]
++        if window.inspector_enabled() {
++            return true;
++        }
+         self.hitbox_behavior != HitboxBehavior::Normal
+             || self.window_control.is_some()
+             || style.mouse_cursor.is_some()

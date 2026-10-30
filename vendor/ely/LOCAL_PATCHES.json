@@ -1,0 +1,16 @@
+{
+  "base_revision": "da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721",
+  "description": "Reviewed Agentation additions and overrides for inspector source routing, property snapshots, and component styling. UPSTREAM.json retains the unmodified upstream inventory and hashes.",
+  "files": {
+    "src/buttons/button.rs": "47257dd9ef8f14067a2b5e4656743db96345702eea4c5b41762e68dca75bf0d0",
+    "src/forms/slider.rs": "27daeca73655d54e895f72ed7f9bf7aee4ab3da85ac1724dad706dd7b4a39704",
+    "src/forms/switch.rs": "c1eebac90cc48cb776bd4981e5fb7121b24cfa55828afb698c6c92804133993f",
+    "src/forms/text/actions.rs": "a1efc41d6d26c699f067974544b3224e8ed566c640696db603645ac2abfa85d3",
+    "src/forms/text/element.rs": "267432164afc5e0bd91c0c949ff4e5eff612eb914795276fe1658c639808dfc1",
+    "src/forms/text/mod.rs": "fef78822519e8761b1aa13b56b19e2a643e72873f7eafd410cb50d7bf0abffb0",
+    "src/navigation/breadcrumb.rs": "e9d1e8d21aa1b710b826db95eb728598898d1d17f26fe3e5cdcd3755e16dfe59",
+    "src/tooling/inspector.rs": "e1b9323d9fa023c484c99b6f7d243aa64ba532229f69f7de4203b542b0cfefac",
+    "src/tooling/inspector/source.rs": "89a62d4fd03877fa443bc1f74c7c8ecd74804d783424edf748c9953d33188268",
+    "src/tooling/mod.rs": "47c920ff10bda6a20a1ad4d9fd78ae6917c7de5bc082606b98df5466a530f5c0"
+  }
+}

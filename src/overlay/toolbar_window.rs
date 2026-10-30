@@ -20,6 +20,8 @@ mod width;
 
 #[derive(Clone, PartialEq)]
 pub(super) enum CompanionPanel {
+    #[cfg(agentation_external_inspector)]
+    Inspector(Entity<gpui::Inspector>),
     Comments,
 }
 
@@ -27,6 +29,8 @@ impl CompanionPanel {
     fn width(&self) -> Pixels {
         match self {
             Self::Comments => px(380.),
+            #[cfg(agentation_external_inspector)]
+            Self::Inspector(_) => px(420.),
         }
     }
 }
@@ -73,7 +77,7 @@ pub(super) struct ToolbarWindow {
     _activation: Subscription,
     comments: Entity<comments::Comments>,
     _external_release: Subscription,
-    width: width::WidthAnimation,
+    pub(super) width: width::WidthAnimation,
     _content_resize: Subscription,
 }
 
@@ -103,6 +107,12 @@ impl AnnotationOverlay {
         #[cfg(target_os = "macos")]
         let fullscreen = fullscreen || native::fills_screen(window);
         let panel = self.review_open.then_some(CompanionPanel::Comments);
+        #[cfg(agentation_external_inspector)]
+        let panel = if self.inspecting && !self.review_open {
+            window.inspector_entity().map(CompanionPanel::Inspector)
+        } else {
+            panel
+        };
         let panel_width = panel.as_ref().map_or(px(0.), CompanionPanel::width);
         let total_width = width + panel_width;
         ToolbarSpec {
@@ -546,6 +556,8 @@ impl Render for ToolbarWindow {
             .children(self.width.panel.clone().map(|panel| {
                 let panel_width = panel.width();
                 let content = match panel {
+                    #[cfg(agentation_external_inspector)]
+                    CompanionPanel::Inspector(inspector) => inspector.into_any_element(),
                     CompanionPanel::Comments => self.comments.clone().into_any_element(),
                 };
                 div()

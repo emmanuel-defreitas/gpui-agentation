@@ -1,4 +1,4 @@
-//! Build-only namespace adaptation of the immutable upstream Ely snapshot.
+//! Build-only namespace adaptation of the verified bundled Ely source.
 use std::{env, fs, path::Path};
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};

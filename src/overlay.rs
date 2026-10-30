@@ -85,11 +85,13 @@ pub struct AnnotationOverlay {
     future: Vec<(Option<crate::Annotation>, Option<crate::Annotation>)>,
     pin_drag: Option<(crate::Annotation, (f32, f32))>,
     textbox_drag: Option<(crate::Annotation, (f32, f32))>,
+    textbox_resize: Option<crate::Annotation>,
+    follow_baselines: std::collections::HashMap<String, followed::Baseline>,
     annotation_press: Option<gpui::Point<gpui::Pixels>>,
     textbox_bounds: std::collections::HashMap<String, gpui::Bounds<gpui::Pixels>>,
     mentions: mentions::Mentions,
     context_request: Option<(u64, gpui::Point<gpui::Pixels>)>,
-    context_note: Option<String>,
+    context: Option<menu::ContextKind>,
     context_number: u64,
     settings_open: bool,
     review_open: bool,
@@ -328,11 +330,13 @@ impl AnnotationOverlay {
             future: vec![],
             pin_drag: None,
             textbox_drag: None,
+            textbox_resize: None,
+            follow_baselines: Default::default(),
             annotation_press: None,
             textbox_bounds: Default::default(),
             mentions: Default::default(),
             context_request: None,
-            context_note: None,
+            context: None,
             context_number: 0,
             settings_open: false,
             review_open: false,
@@ -373,10 +377,12 @@ impl AnnotationOverlay {
                 self.selected_note = None;
                 self.pin_drag = None;
                 self.textbox_drag = None;
+                self.textbox_resize = None;
+                self.follow_baselines.clear();
                 self.textbox_bounds.clear();
                 self.mentions = Default::default();
                 self.context_request = None;
-                self.context_note = None;
+                self.context = None;
                 self.draft = None;
                 self.return_focus(window, cx);
                 self.stroke.clear();
@@ -821,13 +827,21 @@ impl AnnotationOverlay {
 #[cfg(test)]
 use crate::AnnotationPatch;
 
-mod annotation_menu;
+#[cfg(agentation_external_inspector)]
+mod anchored;
 mod banner;
 pub mod commands;
+mod followed;
 mod history;
-
+#[cfg(all(test, agentation_external_inspector))]
+#[path = "overlay/inspection.test.rs"]
+mod inspection_tests;
 pub(crate) mod inspector;
 mod mentions;
+mod menu;
+#[cfg(all(target_os = "macos", not(test)))]
+#[allow(deprecated, unexpected_cfgs)]
+mod native_menu;
 mod settings;
 mod settings_popup;
 mod surface;
@@ -839,6 +853,8 @@ mod toolbar_window;
 
 impl Render for AnnotationOverlay {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(agentation_external_inspector)]
+        self.keep_inspection_anchors(window, cx);
         self.sync_toolbar_window(window, cx);
         let surface = self.surface(window, cx);
         div()

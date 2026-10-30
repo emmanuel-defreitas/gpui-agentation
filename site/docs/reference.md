@@ -36,7 +36,9 @@ gpui-agentation = { version = "0.6.0", default-features = false, features = ["na
 
 Keep `gpui-pre =0.3.8`. Source and assets for Ely revision
 `da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721` are bundled. Agentation’s internal
-Ely globals are independent of host Ely globals. Development uses Rust 1.98.1.
+Ely globals are independent of host Ely globals. When Agentation creates its own theme, its toolbar, inspector and
+Settings follow the operating system's light or dark setting and switch live.
+A host that already initialized Ely keeps control of the theme. Development uses Rust 1.98.1.
 
 ## Toolbar and editor
 
@@ -55,7 +57,9 @@ Minimizing, fullscreen, or filling the usable screen hides the companion until t
 consumer is restored. Closing the consumer closes the companion. Other backends
 use GPUI window placement and may reopen the companion on a position change.
 
-**Inspect** uses the consumer's native picker and sidebar. It becomes **Stop**
+**Inspect** uses the consumer's native picker. Its panel opens in the toolbar
+window, not inside the app, when run with the [external inspector](external-inspector.md)
+(`make example`); stock GPUI draws it inside the app. It becomes **Stop**
 while inspecting, and drawing controls hide. The toolbar stays outside the
 consumer's inspectable element tree in every mode. **Box**, **Arrow**, and **Pen**
 draw over the live consumer; the selecting click does not activate its controls.

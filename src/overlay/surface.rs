@@ -92,6 +92,46 @@ pub(super) fn comment_input(
         .into_any_element()
 }
 
+/// The text field shown inside a textbox on the canvas: transparent, drawn in
+/// the annotation color, with its own placeholder. Used for inline editing.
+pub(super) fn textbox_input(
+    input: &gpui::Entity<TextInput>,
+    color: gpui::Hsla,
+    window: &mut Window,
+    cx: &mut App,
+) -> gpui::AnyElement {
+    let mut field = Input::new(input).render(window, cx).into_any_element();
+    let focused = input.read(cx).focus().is_focused(window);
+    if let Some(root) = field.downcast_mut::<gpui::Div>() {
+        root.style().refine(
+            &gpui::StyleRefinement::default()
+                .bg(gpui::transparent_black())
+                .text_color(color)
+                .border_0()
+                .rounded_none()
+                .p_0(),
+        );
+    }
+    div()
+        .relative()
+        .w_full()
+        .text_size(px(16.0))
+        .line_height(px(22.0))
+        .child(field)
+        .when(input.read(cx).text().is_empty() && !focused, |root| {
+            root.child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .text_size(px(16.0))
+                    .text_color(color.opacity(0.6))
+                    .child("Type text…"),
+            )
+        })
+        .into_any_element()
+}
+
 pub(super) fn row_action(button: impl IntoElement) -> gpui::Div {
     div()
         .flex_none()
@@ -408,6 +448,27 @@ impl AnnotationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if let Some(before) = self.textbox_resize.take() {
+            let after = self
+                .session
+                .annotations
+                .iter()
+                .find(|n| n.id == before.id)
+                .cloned();
+            if let Some(after) = after {
+                if before != after {
+                    match self.store.replace_note(Some(&before), Some(&after)) {
+                        Ok(()) => self.record_change(Some(before), Some(after)),
+                        Err(error) => self.notice = error.to_string(),
+                    }
+                }
+            }
+            if let Ok(session) = self.store.session(&self.session.id) {
+                self.session = session;
+            }
+            cx.notify();
+            return;
+        }
         if let Some((before, offset)) = self.textbox_drag.take() {
             let p = normalized(at, window);
             let after = super::textbox::moved_textbox(
@@ -431,6 +492,8 @@ impl AnnotationOverlay {
             return;
         }
         if let Some((before, offset)) = self.pin_drag.take() {
+            // The dropped spot is the new anchor; re-seed it from the target's current position.
+            self.follow_baselines.remove(&before.id);
             let mut after = before.clone();
             let p = normalized(at, window);
             let p = (
@@ -468,6 +531,7 @@ impl AnnotationOverlay {
                 at: points[0],
                 text: String::new(),
                 color: self.color,
+                width: None,
             })
         } else {
             crate::drawing::finish_shape(tool, points, normalized(at, window), self.color)
@@ -506,7 +570,20 @@ impl AnnotationOverlay {
         window: &Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some((before, offset)) = &self.textbox_drag {
+        if let Some(before) = &self.textbox_resize {
+            let id = before.id.clone();
+            if let Some(AnnotationShape::Text { at: origin, .. }) = before.feedback.shape.as_ref() {
+                let left = origin.0;
+                let p = normalized(at, window);
+                let width = (p.0 - left).clamp(0.04, (1.0 - left).max(0.04));
+                if let Some(note) = self.session.annotations.iter_mut().find(|n| n.id == id) {
+                    if let Some(AnnotationShape::Text { width: w, .. }) = &mut note.feedback.shape {
+                        *w = Some(width);
+                    }
+                }
+                cx.notify();
+            }
+        } else if let Some((before, offset)) = &self.textbox_drag {
             let p = normalized(at, window);
             let after = super::textbox::moved_textbox(
                 before,
@@ -575,7 +652,29 @@ impl AnnotationOverlay {
                 matches!(
                     note.status,
                     AnnotationStatus::Pending | AnnotationStatus::Acknowledged
-                ) && (self
+                ) && ({
+                    #[cfg(agentation_external_inspector)]
+                    if note.feedback.inspection.is_some() {
+                        return window
+                            .inspection_anchor(&note.feedback.element_path)
+                            .is_some_and(|(_, b)| {
+                                let x = f32::from(at.x);
+                                let y = f32::from(at.y);
+                                let r = Rect {
+                                    x: b.origin.x.into(),
+                                    y: b.origin.y.into(),
+                                    width: b.size.width.into(),
+                                    height: b.size.height.into(),
+                                };
+                                r.contains(x, y)
+                                    && ((x - r.x).abs() <= 6.
+                                        || (y - r.y).abs() <= 6.
+                                        || (x - r.x - r.width).abs() <= 6.
+                                        || (y - r.y - r.height).abs() <= 6.)
+                            });
+                    }
+                    false
+                } || self
                     .textbox_bounds
                     .get(&note.id)
                     .is_some_and(|bounds| bounds.contains(&at))
@@ -694,6 +793,41 @@ impl AnnotationOverlay {
             )
     }
 
+    /// A border around the element a draft comment is attached to, echoing the
+    /// outline Inspect draws. Only for element-attached drafts (no drawn shape).
+    fn selection_outline(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui::AnyElement> {
+        let draft = self.draft.as_ref()?;
+        if draft.shape.is_some() || self.inspected_id.is_some() {
+            return None;
+        }
+        let bounds = target::targets(window, cx)
+            .into_iter()
+            .find(|t| draft.url == self.session.url && t.id == draft.target.id)
+            .map(|t| t.bounds)
+            .unwrap_or(draft.target.bounds);
+        if bounds.width <= 0.0 || bounds.height <= 0.0 {
+            return None;
+        }
+        let color = cx.theme().colors.chart[draft.color];
+        Some(
+            div()
+                .debug_selector(|| "feedback-selection-outline".into())
+                .absolute()
+                .left(px(bounds.x))
+                .top(px(bounds.y))
+                .w(px(bounds.width))
+                .h(px(bounds.height))
+                .border_2()
+                .border_color(color)
+                .rounded(cx.theme().radius(Radius::Sm))
+                .into_any_element(),
+        )
+    }
+
     pub(super) fn surface(
         &mut self,
         window: &mut Window,
@@ -795,6 +929,19 @@ impl AnnotationOverlay {
                         }
                     }),
                 )
+                // The picker occludes the surface, so right click reaches the
+                // element or tools menu (or a note's menu) here, not the root.
+                .on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
+                        cx.stop_propagation();
+                        if let Some(id) = this.shape_at(event.position, window) {
+                            this.show_annotation_menu(&id, event.position, window, cx);
+                        } else {
+                            this.open_canvas_menu(event.position, window, cx);
+                        }
+                    }),
+                )
                 .when(drawing, |pad| {
                     pad.on_drag(FeedbackDrag { owner }, move |_, _, window, cx| {
                         let _ = start_drag.update(cx, |this, cx| {
@@ -878,21 +1025,55 @@ impl AnnotationOverlay {
             {
                 continue;
             }
-
+            #[cfg(agentation_external_inspector)]
+            if a.feedback.inspection.is_some() {
+                layer = layer.child(super::anchored::AnchorMark {
+                    key: a.feedback.element_path.clone(),
+                    marker: self
+                        .marker(&a.id, a.index, Rect::default(), window, cx)
+                        .into_any_element(),
+                    color: cx.theme().colors.chart[a.annotation_color()],
+                });
+                continue;
+            }
             let bounds = Rect {
                 x: a.feedback.x / 100.0 * w,
                 y: a.feedback.y,
                 width: 0.0,
                 height: 0.0,
             };
-            if let Some(AnnotationShape::Text { at, text, color }) = &a.feedback.shape {
-                let _ = (at, text, color);
+            if matches!(a.feedback.shape, Some(AnnotationShape::Text { .. })) {
                 layer = layer.child(self.textbox(a, window, cx));
+            } else if a.feedback.shape.is_none() && !a.feedback.element_path.starts_with("gpui:") {
+                let baseline = self
+                    .follow_baselines
+                    .entry(a.id.clone())
+                    .or_default()
+                    .clone();
+                layer = layer.child(super::followed::FollowMark {
+                    target: a.feedback.element_path.clone(),
+                    baseline,
+                    center: (bounds.x, bounds.y),
+                    marker: self
+                        .marker(&a.id, a.index, Rect::default(), window, cx)
+                        .into_any_element(),
+                });
             } else {
                 layer = layer.child(self.marker(&a.id, a.index, bounds, window, cx));
             }
         }
-        if self.draft.is_some() && self.inspected_id.is_none() {
+        if let Some(outline) = self.selection_outline(window, cx) {
+            layer = layer.child(outline);
+        }
+        let text_draft = matches!(
+            self.draft.as_ref().and_then(|d| d.shape.as_ref()),
+            Some(AnnotationShape::Text { .. })
+        );
+        if let Some(editor) = self.draft_textbox(window, cx) {
+            layer = layer.child(editor);
+        }
+        // Textboxes edit on the canvas; only other drafts get the floating editor.
+        if self.draft.is_some() && self.inspected_id.is_none() && !text_draft {
             layer = layer.child(self.panel(window, cx));
         }
         if let Some(popup) = self.mention_popup(window, cx) {
@@ -901,7 +1082,7 @@ impl AnnotationOverlay {
         if self.settings_open {
             layer = layer.child(self.sheet(window, cx));
         }
-        layer = layer.child(self.annotation_context_layer(cx));
+        layer = layer.child(self.context_layer(cx));
         let scope = FocusScope::new(&self.focus)
             .size_full()
             .child(layer)
@@ -932,6 +1113,10 @@ impl AnnotationOverlay {
                             }
                             if let Some(id) = this.shape_at(event.position, window) {
                                 this.show_annotation_menu(&id, event.position, window, cx);
+                                cx.stop_propagation();
+                            } else if this.active {
+                                // Empty canvas: the clicked element's menu, else tools.
+                                this.open_canvas_menu(event.position, window, cx);
                                 cx.stop_propagation();
                             }
                         }),

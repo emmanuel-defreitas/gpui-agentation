@@ -59,7 +59,7 @@ fn symbol(path: &'static str, width: f32, height: f32, cx: &App) -> AnyElement {
 
 fn menu_switch(id: &'static str, on: bool) -> Switch {
     Switch::new(id, on)
-        .geometry(size(px(36.), px(24.)), size(px(21.), px(21.)))
+        .geometry(size(px(36.), px(20.)), size(px(17.), px(17.)))
         .tint(gpui::rgb(0x0a38ff).into())
         .thumb_color(gpui::rgb(0xffffff).into())
 }

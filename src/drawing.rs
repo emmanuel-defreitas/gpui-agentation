@@ -40,6 +40,9 @@ pub enum AnnotationShape {
         text: String,
         /// Ely chart color, zero through three.
         color: usize,
+        /// Normalized wrap width. `None` sizes the box to its content.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        width: Option<f32>,
     },
     /// Point marker.
     Pin {
@@ -104,6 +107,23 @@ impl AnnotationShape {
             | Self::Pen { color, .. }
             | Self::Pin { color, .. }
             | Self::Text { color, .. } => *color,
+        }
+    }
+
+    /// Offset every normalized point by `delta`, clamped to the surface, so a
+    /// duplicated shape lands just beside its original.
+    pub(crate) fn nudge(&mut self, delta: f32) {
+        let shift = |p: &mut (f32, f32)| {
+            p.0 = (p.0 + delta).clamp(0.0, 1.0);
+            p.1 = (p.1 + delta).clamp(0.0, 1.0);
+        };
+        match self {
+            Self::Box { from, to, .. } | Self::Arrow { from, to, .. } => {
+                shift(from);
+                shift(to);
+            }
+            Self::Pen { points, .. } => points.iter_mut().for_each(shift),
+            Self::Pin { at, .. } | Self::Text { at, .. } => shift(at),
         }
     }
 

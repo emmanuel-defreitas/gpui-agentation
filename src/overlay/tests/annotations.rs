@@ -540,8 +540,10 @@ fn text_draft(overlay: &Entity<AnnotationOverlay>, cx: &mut VisualTestContext) {
 fn textbox_saves_inline_and_reopens_for_editing_without_a_comment(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
     text_draft(&overlay, cx);
-    let width = cx.debug_bounds("feedback-editor-panel").unwrap().size.width;
-    cx.update(|window, _| assert_eq!(width, gpui::rems(16.0).to_pixels(window.rem_size())));
+    // A new textbox edits inline on the canvas, not in a floating comment editor.
+    assert!(cx.debug_bounds("feedback-editor-panel").is_none());
+    assert!(cx.debug_bounds("feedback-textbox").is_some());
+    cx.update(|window, cx| assert!(overlay.read(cx).input.focus_handle(cx).is_focused(window)));
     cx.simulate_input("Plain textbox");
     cx.simulate_keystrokes("ctrl-s");
     draw(cx);
@@ -659,12 +661,7 @@ fn textbox_pin_selection_pointer_drag_and_context_actions_preserve_identity(
     cx.update(|window, cx| {
         overlay.update(cx, |this, cx| {
             assert_eq!(this.store.annotation(&before.id).unwrap(), before);
-            this.note_action(
-                &before.id,
-                super::annotation_menu::NoteAction::Color(1),
-                window,
-                cx,
-            );
+            this.note_action(&before.id, super::menu::NoteAction::Color(1), window, cx);
             assert_eq!(this.store.annotation(&before.id).unwrap().color, Some(1));
             this.undo(window, cx);
             assert_eq!(this.store.annotation(&before.id).unwrap(), before);
@@ -690,6 +687,33 @@ fn textbox_pin_selection_pointer_drag_and_context_actions_preserve_identity(
             before
         )
     });
+}
+
+#[gpui::test]
+fn right_click_on_empty_canvas_opens_the_tools_menu_in_annotation_mode(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    // Off: an empty-canvas right click shows nothing.
+    let at = cx.update(|window, _| {
+        let size = window.viewport_size();
+        point(size.width / 2., size.height / 2.)
+    });
+    cx.simulate_mouse_move(at, None, Modifiers::none());
+    cx.simulate_mouse_down(at, gpui::MouseButton::Right, Modifiers::none());
+    cx.simulate_mouse_up(at, gpui::MouseButton::Right, Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("menu-row-Box").is_none());
+    // On: the same right click lists the annotation tools and edits.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.toggle(window, cx)));
+    draw(cx);
+    cx.simulate_mouse_move(at, None, Modifiers::none());
+    cx.simulate_mouse_down(at, gpui::MouseButton::Right, Modifiers::none());
+    cx.simulate_mouse_up(at, gpui::MouseButton::Right, Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("menu-row-Box").is_some());
+    let arrow = cx.debug_bounds("menu-row-Arrow").expect("tools menu");
+    cx.simulate_click(arrow.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).tool, Some(Tool::Arrow)));
 }
 
 #[gpui::test]
@@ -1028,4 +1052,70 @@ fn saved_style_is_restored_only_for_a_fresh_pick() {
     // Same selection: a new edit or Reset must not be undone.
     assert!(!should_restore(false, true, &saved, Some(&edited)));
     assert!(!should_restore(false, true, &saved, None));
+}
+
+struct ScrollHost {
+    overlay: Entity<AnnotationOverlay>,
+    scroll: f32,
+}
+
+impl gpui::Render for ScrollHost {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::begin_frame(window, cx);
+        div()
+            .size_full()
+            .child(
+                div()
+                    .absolute()
+                    .top(px(100. - self.scroll))
+                    .left(px(40.))
+                    .child(crate::target("card", "Card", div().w(px(200.)).h(px(80.)))),
+            )
+            .child(self.overlay.clone())
+    }
+}
+
+#[gpui::test]
+fn pins_on_a_registered_target_scroll_with_it_while_annotating_is_off(cx: &mut TestAppContext) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Scroll test", "gpui://scroll")
+        .unwrap();
+    store
+        .add(
+            &session.id,
+            AnnotationInput {
+                inspection: None,
+                comment: "Pinned".into(),
+                element_path: "card".into(),
+                element: "Card".into(),
+                x: 10.,
+                y: 140.,
+                bounding_box: crate::Rect::default(),
+                source_file: None,
+                gpui_configuration: None,
+                shape: None,
+            },
+        )
+        .unwrap();
+    let session = store.session(&session.id).unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| ScrollHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+        scroll: 0.,
+    });
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.scroll = 30.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after.center().y, before.center().y - px(30.));
+    assert_eq!(after.center().x, before.center().x);
 }
