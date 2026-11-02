@@ -57,11 +57,9 @@ impl Render for Comments {
                     .flex_none()
                     .border_b_1()
                     .border_color(cx.theme().colors.border)
-                    .child(
-                        div()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child("Comments"),
-                    )
+                    // Heading carries its own themed color; a bare div would
+                    // fall back to GPUI's black in this separate window.
+                    .child(crate::ely::typography::Heading::new(5, "Comments"))
                     .child(
                         IconButton::new("companion-comments-close", IconName::X)
                             .variant(ButtonVariant::Ghost)

@@ -89,6 +89,8 @@ pub struct AnnotationOverlay {
     /// Measured bounds of the unsaved textbox draft's body, for its grips.
     draft_textbox_bounds: Option<gpui::Bounds<gpui::Pixels>>,
     follow_baselines: std::collections::HashMap<String, followed::Baseline>,
+    /// Drawn notes' scroll anchors, so they move with the content under them.
+    anchors: std::collections::HashMap<String, scrolled::Anchor>,
     annotation_press: Option<gpui::Point<gpui::Pixels>>,
     textbox_bounds: std::collections::HashMap<String, gpui::Bounds<gpui::Pixels>>,
     mentions: mentions::Mentions,
@@ -334,6 +336,7 @@ impl AnnotationOverlay {
             textbox_resize: None,
             draft_textbox_bounds: None,
             follow_baselines: Default::default(),
+            anchors: Default::default(),
             annotation_press: None,
             textbox_bounds: Default::default(),
             mentions: Default::default(),
@@ -382,6 +385,7 @@ impl AnnotationOverlay {
                 self.textbox_resize = None;
                 self.draft_textbox_bounds = None;
                 self.follow_baselines.clear();
+                self.anchors.clear();
                 self.textbox_bounds.clear();
                 self.mentions = Default::default();
                 self.context_request = None;
@@ -518,6 +522,7 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
+        self.commit_scroll(window, cx);
         inspector::close(window, cx);
         self.inspecting = false;
         self.inspection_note = None;
@@ -863,6 +868,7 @@ mod menu;
 #[cfg(all(target_os = "macos", not(test)))]
 #[allow(deprecated, unexpected_cfgs)]
 mod native_menu;
+mod scrolled;
 mod settings;
 mod settings_popup;
 mod surface;

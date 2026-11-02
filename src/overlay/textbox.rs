@@ -569,7 +569,8 @@ impl AnnotationOverlay {
             body = body
                 .on_mouse_down(
                     MouseButton::Left,
-                    cx.listener(|this, event: &gpui::MouseDownEvent, window, _| {
+                    cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
+                        this.commit_scroll(window, cx);
                         this.annotation_press = Some(event.position);
                         window.prevent_default();
                     }),
@@ -740,6 +741,7 @@ impl AnnotationOverlay {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
+                    this.commit_scroll(window, cx);
                     this.annotation_press = Some(event.position);
                     window.prevent_default();
                     cx.stop_propagation();

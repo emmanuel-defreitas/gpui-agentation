@@ -653,7 +653,14 @@ impl AnnotationOverlay {
                     .get(&note.id)
                     .is_some_and(|bounds| bounds.contains(&at))
                     || note.feedback.shape.as_ref().is_some_and(|shape| {
-                        shape.hit((at.x.into(), at.y.into()), viewport(window, cx), 8.0)
+                        // Hit the shape where it is drawn: undo its scroll shift.
+                        self.scroll_shift(note, window, cx).is_some_and(|shift| {
+                            shape.hit(
+                                (f32::from(at.x) - shift.0, f32::from(at.y) - shift.1),
+                                viewport(window, cx),
+                                8.0,
+                            )
+                        })
                     }))
             })
             .map(|note| note.id.clone())
@@ -949,8 +956,10 @@ impl AnnotationOverlay {
                 }
             }
         }
+        self.sync_anchors(window, cx);
         let selected_id = self.draft.as_ref().and_then(|d| d.id.as_deref());
-        let mut shapes: Vec<_> = self
+        // Notes as they appear now: drawn ones follow the content they sit on.
+        let visible: Vec<crate::Annotation> = self
             .session
             .annotations
             .iter()
@@ -960,6 +969,10 @@ impl AnnotationOverlay {
                     AnnotationStatus::Pending | AnnotationStatus::Acknowledged
                 ) || Some(a.id.as_str()) == selected_id
             })
+            .filter_map(|a| self.displayed(a, window, cx))
+            .collect();
+        let mut shapes: Vec<_> = visible
+            .iter()
             .filter_map(|a| a.feedback.shape.clone())
             .collect();
         if let Some(shape) = self
@@ -1018,12 +1031,7 @@ impl AnnotationOverlay {
             .absolute()
             .size_full(),
         );
-        for a in self.session.annotations.iter().filter(|a| {
-            matches!(
-                a.status,
-                AnnotationStatus::Pending | AnnotationStatus::Acknowledged
-            ) || Some(a.id.as_str()) == selected_id
-        }) {
+        for a in &visible {
             if a.feedback.shape.is_none()
                 && !a.feedback.element_path.starts_with("gpui:")
                 && !target::targets(window, cx)
@@ -1320,7 +1328,8 @@ impl AnnotationOverlay {
             })
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, event: &gpui::MouseDownEvent, window, _| {
+                cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
+                    this.commit_scroll(window, cx);
                     this.annotation_press = Some(event.position);
                     window.prevent_default();
                 }),
