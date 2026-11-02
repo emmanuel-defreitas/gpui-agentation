@@ -452,7 +452,11 @@ single click selects the box and reveals its dashed bounding border with six
 grips (four corners, left and right). Side grips change the width, corner grips
 also set the height, and pulling a left or top grip moves the origin while the
 opposite edge stays. Double-click or Enter edits the text. Dragging the body or
-its pin moves both together. Saving does not open a separate comment. Other numbered
+its pin moves both together and keeps the frame within the window. During
+editing, pointer drags select text. Save, Ctrl/Cmd+S, or clicking away commits;
+Cancel or Esc discards the edit. Empty new drafts are discarded on click-away.
+Resizing supports undo/redo; Esc cancels a resize in progress. Saving does not
+open a separate comment. Other numbered
 pins move independently of the underlying shape. Position changes preserve note
 identity, update percentage-x/logical-y fields and support undo/redo.
 

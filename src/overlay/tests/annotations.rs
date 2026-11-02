@@ -1496,3 +1496,163 @@ fn pins_on_a_registered_target_scroll_with_it_while_annotating_is_off(cx: &mut T
     assert_eq!(after.center().y, before.center().y - px(30.));
     assert_eq!(after.center().x, before.center().x);
 }
+
+#[gpui::test]
+fn textbox_editing_keeps_pointer_selection_and_saves_multiline_text(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    cx.simulate_input("Select these words");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    let id = cx.update(|_, cx| overlay.read(cx).session.annotations[0].id.clone());
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.edit(&id, window, cx)));
+    draw(cx);
+    let input = cx.debug_bounds("feedback-textbox-input").unwrap();
+    let start = input.origin + point(px(2.), px(10.));
+    let end = start + point(px(55.), px(0.));
+    cx.simulate_mouse_down(start, gpui::MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(end, Some(gpui::MouseButton::Left), Modifiers::none());
+    cx.simulate_mouse_up(end, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    cx.update(|window, cx| {
+        let this = overlay.read(cx);
+        assert!(
+            this.draft.is_some(),
+            "pointer selection must not dismiss editing"
+        );
+        assert!(
+            this.textbox_drag.is_none(),
+            "selecting text must not move its box"
+        );
+        assert!(!this.input.read(cx).selection().is_empty());
+        assert!(this.input.focus_handle(cx).is_focused(window));
+    });
+    cx.simulate_keystrokes("cmd-a");
+    cx.simulate_input("First line\n\nThird line");
+    draw(cx);
+    let editing_height = cx.debug_bounds("feedback-textbox").unwrap().size.height;
+    let save = cx.debug_bounds("feedback-textbox-save").unwrap();
+    cx.simulate_click(save.center(), Modifiers::none());
+    draw(cx);
+    assert_eq!(
+        cx.debug_bounds("feedback-textbox").unwrap().size.height,
+        editing_height
+    );
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert_eq!(
+            this.store.annotation(&id).unwrap().feedback.comment,
+            "First line\n\nThird line"
+        );
+    });
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.edit(&id, window, cx)));
+    draw(cx);
+    cx.simulate_input(" discarded");
+    let cancel = cx.debug_bounds("feedback-textbox-cancel").unwrap();
+    cx.simulate_click(cancel.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert_eq!(
+            this.store.annotation(&id).unwrap().feedback.comment,
+            "First line\n\nThird line"
+        );
+    });
+}
+
+#[gpui::test]
+fn textbox_outside_click_saves_once_and_empty_drafts_are_discarded(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    cx.simulate_input("Click away to save");
+    outside(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert_eq!(this.session.annotations.len(), 1);
+    });
+    text_draft(&overlay, cx);
+    outside(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert_eq!(this.session.annotations.len(), 1);
+    });
+}
+
+#[gpui::test]
+fn textbox_resize_obeys_minimum_width_undo_and_escape(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    cx.simulate_input("Resize this text without losing its identity");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    let before = cx.update(|_, cx| overlay.read(cx).session.annotations[0].clone());
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| this.select_textbox(&before.id, window, cx))
+    });
+    draw(cx);
+    let handle = cx
+        .debug_bounds("feedback-textbox-resize-right")
+        .unwrap()
+        .center();
+    cx.simulate_mouse_down(handle, gpui::MouseButton::Left, Modifiers::none());
+    let end = handle + point(px(120.), px(0.));
+    cx.simulate_mouse_move(end, Some(gpui::MouseButton::Left), Modifiers::none());
+    draw(cx);
+    cx.simulate_mouse_up(end, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let after = overlay.read(cx).store.annotation(&before.id).unwrap();
+        assert_ne!(after.feedback.shape, before.feedback.shape);
+        assert_eq!(after.index, before.index);
+        assert_eq!(after.feedback.comment, before.feedback.comment);
+    });
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            assert_eq!(this.store.annotation(&before.id).unwrap(), before);
+            this.begin_textbox_resize(
+                Some(&before.id),
+                super::super::textbox::Grip::Right,
+                window,
+                cx,
+            );
+            this.advance_drag(point(px(0.), px(0.)), window, cx);
+        })
+    });
+    draw(cx);
+    assert!(
+        cx.debug_bounds("feedback-textbox").unwrap().size.width
+            >= px(super::super::textbox::MIN_WIDTH)
+    );
+    cx.simulate_keystrokes("escape");
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.textbox_resize.is_none());
+        assert!(this.active);
+        assert_eq!(this.session.annotations[0], before);
+        assert_eq!(this.store.annotation(&before.id).unwrap(), before);
+    });
+}
+
+#[test]
+fn textbox_position_keeps_its_entire_frame_inside_the_window() {
+    use super::super::textbox::constrained_origin;
+    assert_eq!(
+        constrained_origin((1.2, 1.1), (280., 100.), (800., 500.)),
+        (0.65, 0.8)
+    );
+    assert_eq!(
+        constrained_origin((-0.2, -1.), (280., 100.), (800., 500.)),
+        (0., 0.)
+    );
+    assert_eq!(
+        constrained_origin((0.5, 0.5), (280., 100.), (100., 50.)),
+        (0., 0.)
+    );
+}
