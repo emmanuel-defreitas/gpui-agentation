@@ -85,7 +85,7 @@ pub struct AnnotationOverlay {
     future: Vec<(Option<crate::Annotation>, Option<crate::Annotation>)>,
     pin_drag: Option<(crate::Annotation, (f32, f32))>,
     textbox_drag: Option<(crate::Annotation, (f32, f32))>,
-    textbox_resize: Option<crate::Annotation>,
+    textbox_resize: Option<(crate::Annotation, textbox::Grip)>,
     follow_baselines: std::collections::HashMap<String, followed::Baseline>,
     annotation_press: Option<gpui::Point<gpui::Pixels>>,
     textbox_bounds: std::collections::HashMap<String, gpui::Bounds<gpui::Pixels>>,
@@ -430,7 +430,7 @@ impl AnnotationOverlay {
             self.inspecting = true;
             self.review_open = false;
             self.inspection_note = None;
-            inspector::start(window, cx);
+            inspector::start(window, !self.toolbar_hidden, cx);
         } else {
             if !self.active {
                 return;
@@ -827,13 +827,11 @@ impl AnnotationOverlay {
 #[cfg(test)]
 use crate::AnnotationPatch;
 
-#[cfg(agentation_external_inspector)]
-mod anchored;
 mod banner;
 pub mod commands;
 mod followed;
 mod history;
-#[cfg(all(test, agentation_external_inspector))]
+#[cfg(test)]
 #[path = "overlay/inspection.test.rs"]
 mod inspection_tests;
 pub(crate) mod inspector;
@@ -853,8 +851,6 @@ mod toolbar_window;
 
 impl Render for AnnotationOverlay {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        #[cfg(agentation_external_inspector)]
-        self.keep_inspection_anchors(window, cx);
         self.sync_toolbar_window(window, cx);
         let surface = self.surface(window, cx);
         div()

@@ -482,6 +482,7 @@ fn textbox_validation_and_restart_preserve_plain_text() {
         text: "Line 1\nLine 2".into(),
         color: 3,
         width: None,
+        height: None,
     });
     let note = store.add(&session.id, input.clone()).unwrap();
     assert_eq!(
@@ -493,6 +494,7 @@ fn textbox_validation_and_restart_preserve_plain_text() {
         text: "Invalid".into(),
         color: 0,
         width: None,
+        height: None,
     });
     assert!(store.add(&session.id, input).is_err());
 }
@@ -508,6 +510,7 @@ fn api_comment_updates_change_the_visible_textbox_text() {
         text: "Original".into(),
         color: 2,
         width: None,
+        height: None,
     });
     let note = store.add(&session.id, input).unwrap();
     let updated = store

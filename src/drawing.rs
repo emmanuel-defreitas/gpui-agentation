@@ -43,6 +43,9 @@ pub enum AnnotationShape {
         /// Normalized wrap width. `None` sizes the box to its content.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         width: Option<f32>,
+        /// Normalized minimum height. `None` sizes the box to its text.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        height: Option<f32>,
     },
     /// Point marker.
     Pin {
@@ -131,7 +134,13 @@ impl AnnotationShape {
         match self {
             Self::Box { from, to, .. } | Self::Arrow { from, to, .. } => vec![*from, *to],
             Self::Pen { points, .. } => points.clone(),
-            Self::Pin { at, .. } | Self::Text { at, .. } => vec![*at],
+            Self::Pin { at, .. } => vec![*at],
+            Self::Text {
+                at, width, height, ..
+            } => vec![
+                *at,
+                (at.0 + width.unwrap_or(0.0), at.1 + height.unwrap_or(0.0)),
+            ],
         }
     }
 
@@ -165,20 +174,29 @@ impl AnnotationShape {
     pub(crate) fn hit(&self, at: (f32, f32), viewport: (f32, f32), reach: f32) -> bool {
         let scale = |p: (f32, f32)| (p.0 * viewport.0, p.1 * viewport.1);
         if let Self::Text {
-            at: origin, text, ..
+            at: origin,
+            text,
+            width,
+            height,
+            ..
         } = self
         {
             let origin = scale(*origin);
-            let width = text
+            let estimated = text
                 .lines()
                 .map(|line| line.chars().count())
                 .max()
                 .unwrap_or(1) as f32
                 * 9.0;
+            let width = width.map_or(estimated, |width| width * viewport.0);
+            let height = height
+                .map(|height| height * viewport.1)
+                .unwrap_or(0.0)
+                .max(text.lines().count().max(1) as f32 * 22.0);
             return at.0 >= origin.0 - reach
                 && at.0 <= origin.0 + width + reach
                 && at.1 >= origin.1 - reach
-                && at.1 <= origin.1 + text.lines().count().max(1) as f32 * 22.0 + reach;
+                && at.1 <= origin.1 + height + reach;
         }
         if let Self::Pin { at: pin, .. } = self {
             let pin = scale(*pin);
@@ -244,6 +262,42 @@ impl AnnotationShape {
         if let Ok(path) = path.build() {
             window.paint_path(path, color);
         }
+    }
+}
+
+/// Below this many pixels on either axis, a textbox drag is a click: the box
+/// sizes itself to its text instead of keeping a drawn frame.
+pub(crate) const TEXT_BOX_DRAG_THRESHOLD: f32 = 24.0;
+
+/// A textbox from the Textbox tool's press at `start` and release at `end`.
+///
+/// A drag frames a box like Freeform or Sketch: the drawn rectangle becomes its
+/// wrap width and minimum height, in either drag direction. A click places an
+/// auto-sized box at the press.
+pub(crate) fn text_box(
+    start: (f32, f32),
+    end: (f32, f32),
+    viewport: (f32, f32),
+    color: usize,
+) -> AnnotationShape {
+    let dragged = ((end.0 - start.0) * viewport.0).abs() >= TEXT_BOX_DRAG_THRESHOLD
+        && ((end.1 - start.1) * viewport.1).abs() >= TEXT_BOX_DRAG_THRESHOLD;
+    let (at, width, height) = if dragged {
+        let at = (start.0.min(end.0), start.1.min(end.1));
+        (
+            at,
+            Some((start.0 - end.0).abs()),
+            Some((start.1 - end.1).abs()),
+        )
+    } else {
+        (start, None, None)
+    };
+    AnnotationShape::Text {
+        at,
+        text: String::new(),
+        color,
+        width,
+        height,
     }
 }
 
