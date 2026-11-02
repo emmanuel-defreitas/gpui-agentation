@@ -1498,6 +1498,85 @@ fn pins_on_a_registered_target_scroll_with_it_while_annotating_is_off(cx: &mut T
 }
 
 #[gpui::test]
+fn drawn_annotations_scroll_with_the_content_under_them_and_commit_before_editing(
+    cx: &mut TestAppContext,
+) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Drawn scroll", "gpui://drawn-scroll")
+        .unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| ScrollHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+        scroll: 0.,
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    // A Pin-tool comment over the card (40..240 by 100..180), at (140, 140).
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    let id = cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Drawn".into(),
+                        element_path: "drawing:pin".into(),
+                        element: "Pin".into(),
+                        x: 140. / 800. * 100.,
+                        y: 140.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(AnnotationShape::Pin {
+                            at: (140. / 800., 140. / 600.),
+                            color: 0,
+                        }),
+                    },
+                )
+                .unwrap();
+            this.session.annotations.push(note.clone());
+            cx.notify();
+            note.id
+        })
+    });
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.scroll = 30.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(
+        after.center().y,
+        before.center().y - px(30.),
+        "a pin drawn over scrolling content scrolls with it"
+    );
+    assert_eq!(after.center().x, before.center().x);
+    // Editing reads stored coordinates, so the scroll is folded into them first
+    // and the pin does not jump.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.edit(&id, window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        let Some(AnnotationShape::Pin { at, .. }) = stored.feedback.shape else {
+            panic!("pin shape")
+        };
+        assert!((at.1 - 110. / 600.).abs() < 1e-4, "stored y follows scroll");
+        assert!((stored.feedback.y - 110.).abs() < 1e-3);
+    });
+    let edited = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(edited.center().y, after.center().y, "no jump on edit");
+}
+
+#[gpui::test]
 fn textbox_editing_keeps_pointer_selection_and_saves_multiline_text(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
     text_draft(&overlay, cx);

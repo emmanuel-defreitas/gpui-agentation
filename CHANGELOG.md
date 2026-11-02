@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Drawn annotations (pin, box, arrow, pen, textbox) now scroll with the
+  registered host element under them instead of staying fixed to the window.
+  A note anchors where it is first laid out; before an edit, drag, resize or
+  menu reads its stored position, the scroll offset is folded into the note.
+- Give the toolbar room below the annotation switch and make the rule between
+  Inspect and the drawing tools span the rail. The right-click menu's Inspect /
+  Stop row shows the Debug menu's Inspect element shortcut, and the Comments
+  panel title uses the themed heading so it reads in dark mode.
 - Open the inspector in the toolbar window on stock GPUI: the host's native
   content view is kept GPUI's sidebar width wider than the window shows, so the
   sidebar lays out past the right edge and the app keeps its visible width,

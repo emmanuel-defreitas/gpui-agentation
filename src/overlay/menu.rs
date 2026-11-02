@@ -150,6 +150,7 @@ impl AnnotationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.commit_scroll(window, cx);
         if self.store.annotation(id).is_err() {
             return;
         }
@@ -310,7 +311,10 @@ impl AnnotationOverlay {
                 "Inspect"
             },
             INSPECT,
-            "inspect",
+            // The Debug menu's Inspect element binding: unlike the bare `i`
+            // key it also works while inspecting, which is when this row
+            // reads Stop.
+            "devtools",
             true,
         )];
         if self.command_enabled("undo", cx) {
@@ -565,5 +569,110 @@ fn new_submenu<const N: usize>(items: [(&str, i64, &str); N]) -> Row {
                 enabled: true,
             })
             .collect(),
+    }
+}
+
+#[cfg(test)]
+mod row_tests {
+    use super::*;
+    use crate::overlay::tests::draw;
+    use gpui::TestAppContext;
+
+    fn shape() -> crate::AnnotationShape {
+        crate::AnnotationShape::Box {
+            from: (0.1, 0.1),
+            to: (0.2, 0.2),
+            color: 0,
+        }
+    }
+
+    fn summary(rows: &[Row]) -> Vec<(String, Option<String>)> {
+        rows.iter()
+            .map(|row| match row {
+                Row::Item { label, keys, .. } => (
+                    label.to_string(),
+                    keys.as_ref().map(|keys| keys.to_string()),
+                ),
+                Row::Submenu { label, .. } => (label.to_string(), None),
+                Row::Separator => ("-".into(), None),
+            })
+            .collect()
+    }
+
+    #[gpui::test]
+    fn context_menu_rows_follow_the_debug_menu_by_target(cx: &mut TestAppContext) {
+        cx.update(crate::ely::init_for_tests);
+        let (overlay, cx) = cx.add_window_view(|window, cx| {
+            let store = Store::memory();
+            let session = store.ensure_session("Rows", "gpui://rows").unwrap();
+            AnnotationOverlay::new(store, session, 0, window, cx)
+        });
+        draw(cx);
+        let inspect = super::super::commands::shortcut("devtools").map(str::to_owned);
+        assert!(inspect.is_some());
+        // Canvas: Inspect, no Undo/Redo yet, then New.
+        let canvas = cx.update(|_, cx| overlay.read(cx).rows_for(&ContextKind::Tools, cx));
+        assert_eq!(
+            summary(&canvas),
+            vec![
+                ("Inspect".into(), inspect.clone()),
+                ("-".into(), None),
+                ("New".into(), None)
+            ]
+        );
+        // Once a note exists the same menu offers Undo and Redo as applicable.
+        let id = cx.update(|window, cx| {
+            overlay.update(cx, |this, cx| {
+                this.toggle(window, cx);
+                let note = this
+                    .store
+                    .add(
+                        &this.session.id,
+                        AnnotationInput {
+                            inspection: None,
+                            comment: "n".into(),
+                            element_path: "drawing:1".into(),
+                            element: "Box".into(),
+                            x: 10.,
+                            y: 10.,
+                            bounding_box: crate::Rect::default(),
+                            source_file: None,
+                            gpui_configuration: None,
+                            shape: Some(shape()),
+                        },
+                    )
+                    .unwrap();
+                this.record_change(None, Some(note.clone()));
+                this.session.annotations.push(note.clone());
+                note.id
+            })
+        });
+        let canvas = cx.update(|_, cx| overlay.read(cx).rows_for(&ContextKind::Tools, cx));
+        let names: Vec<_> = summary(&canvas)
+            .into_iter()
+            .map(|(label, _)| label)
+            .collect();
+        assert_eq!(names, ["Inspect", "Undo", "-", "New"]);
+        assert_eq!(
+            summary(&canvas)[1].1.as_deref(),
+            super::super::commands::shortcut("undo")
+        );
+        // A note: Color and Delete replace New, and Delete shows its key.
+        let note = cx.update(|_, cx| overlay.read(cx).rows_for(&ContextKind::Note(id), cx));
+        let summary = summary(&note);
+        let names: Vec<_> = summary.iter().map(|(label, _)| label.as_str()).collect();
+        assert_eq!(names, ["Inspect", "Undo", "-", "Color", "Delete"]);
+        assert_eq!(summary[4].1.as_deref(), Some("delete"));
+        // While inspecting, the first row reads Stop and keeps the same key.
+        cx.update(|window, cx| overlay.update(cx, |this, cx| this.choose_tool(None, window, cx)));
+        let stop = cx.update(|_, cx| overlay.read(cx).rows_for(&ContextKind::Tools, cx));
+        assert_eq!(
+            summary_first(&stop),
+            ("Stop inspecting".to_owned(), inspect)
+        );
+    }
+
+    fn summary_first(rows: &[Row]) -> (String, Option<String>) {
+        summary(rows).remove(0)
     }
 }

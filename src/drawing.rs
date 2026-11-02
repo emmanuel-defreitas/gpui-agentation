@@ -130,6 +130,30 @@ impl AnnotationShape {
         }
     }
 
+    /// A copy moved by a normalized delta. Display copies stay unclamped so
+    /// content scrolled partly out of view keeps its shape; stored copies
+    /// clamp so they remain valid.
+    pub(crate) fn translated(&self, dx: f32, dy: f32, clamp: bool) -> Self {
+        let mut moved = self.clone();
+        let shift = |p: &mut (f32, f32)| {
+            p.0 += dx;
+            p.1 += dy;
+            if clamp {
+                p.0 = p.0.clamp(0.0, 1.0);
+                p.1 = p.1.clamp(0.0, 1.0);
+            }
+        };
+        match &mut moved {
+            Self::Box { from, to, .. } | Self::Arrow { from, to, .. } => {
+                shift(from);
+                shift(to);
+            }
+            Self::Pen { points, .. } => points.iter_mut().for_each(shift),
+            Self::Pin { at, .. } | Self::Text { at, .. } => shift(at),
+        }
+        moved
+    }
+
     fn points(&self) -> Vec<(f32, f32)> {
         match self {
             Self::Box { from, to, .. } | Self::Arrow { from, to, .. } => vec![*from, *to],
