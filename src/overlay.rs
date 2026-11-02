@@ -183,7 +183,6 @@ impl AnnotationOverlay {
             TextInput::new(window, cx)
                 .multi_line(1, 12)
                 .max_len(8000)
-                .caret_color(gpui::hsla(0.0, 0.0, 1.0, 1.0))
                 .label("Feedback")
                 .placeholder("")
         });
@@ -466,7 +465,7 @@ impl AnnotationOverlay {
         self.active = false;
         self.draft = None;
         self.pin_drag = None;
-        if self.textbox_drag.take().is_some() {
+        if self.textbox_drag.take().is_some() | self.textbox_resize.take().is_some() {
             if let Ok(session) = self.store.session(&self.session.id) {
                 self.session = session;
             }

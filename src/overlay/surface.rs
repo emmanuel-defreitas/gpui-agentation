@@ -101,7 +101,6 @@ pub(super) fn textbox_input(
     cx: &mut App,
 ) -> gpui::AnyElement {
     let mut field = Input::new(input).render(window, cx).into_any_element();
-    let focused = input.read(cx).focus().is_focused(window);
     if let Some(root) = field.downcast_mut::<gpui::Div>() {
         root.style().refine(
             &gpui::StyleRefinement::default()
@@ -109,7 +108,9 @@ pub(super) fn textbox_input(
                 .text_color(color)
                 .border_0()
                 .rounded_none()
-                .p_0(),
+                .p_0()
+                .text_size(px(16.0))
+                .line_height(px(22.0)),
         );
     }
     div()
@@ -119,7 +120,7 @@ pub(super) fn textbox_input(
         .text_size(px(16.0))
         .line_height(px(22.0))
         .child(field)
-        .when(input.read(cx).text().is_empty() && !focused, |root| {
+        .when(input.read(cx).text().is_empty(), |root| {
             root.child(
                 div()
                     .absolute()
@@ -472,9 +473,11 @@ impl AnnotationOverlay {
             let p = normalized(at, window, cx);
             let after = super::textbox::moved_textbox(
                 &before,
-                (
-                    (p.0 - offset.0).clamp(0.0, 1.0),
-                    (p.1 - offset.1).clamp(0.0, 1.0),
+                self.textbox_drag_position(
+                    &before.id,
+                    (p.0 - offset.0, p.1 - offset.1),
+                    window,
+                    cx,
                 ),
                 viewport(window, cx),
             );
@@ -578,9 +581,11 @@ impl AnnotationOverlay {
             let p = normalized(at, window, cx);
             let after = super::textbox::moved_textbox(
                 before,
-                (
-                    (p.0 - offset.0).clamp(0.0, 1.0),
-                    (p.1 - offset.1).clamp(0.0, 1.0),
+                self.textbox_drag_position(
+                    &before.id,
+                    (p.0 - offset.0, p.1 - offset.1),
+                    window,
+                    cx,
                 ),
                 viewport(window, cx),
             );
@@ -1204,14 +1209,18 @@ impl AnnotationOverlay {
                                 && (this.active || this.draft.is_some())
                             {
                                 this.stroke.clear();
-                                if this.pin_drag.take().is_some()
+                                let dragging = this.pin_drag.take().is_some()
                                     | this.textbox_drag.take().is_some()
-                                {
+                                    | this.textbox_resize.take().is_some();
+                                if dragging {
                                     if let Ok(session) = this.store.session(&this.session.id) {
                                         this.session = session;
                                     }
                                 }
-                                if this.draft.take().is_some() {
+                                if dragging {
+                                    window.focus(&this.focus, cx);
+                                    cx.notify();
+                                } else if this.draft.take().is_some() {
                                     this.return_focus(window, cx);
                                     cx.notify();
                                 } else {

@@ -225,7 +225,8 @@ Point your agent at the exact spot with an arrow, box, or pen stroke.
 - Drag a pin to move it, separately from its drawing.
 - Textbox: drag with the tool to frame a box, or click for one that fits its
   text. Click to select, drag to move, pull a grip on the dashed bounding box to
-  resize, Enter or double-click to edit.
+  resize, Enter or double-click to edit. Save, `Ctrl/Cmd+S`, or clicking away
+  saves; Cancel or Esc discards the edit. Text selection works normally while editing.
 - In a comment, type `@` to pick a note or `#12` to preview pin 12.
   Enter or Tab inserts `@#12`. Esc closes the list.
 - Right-click a note for Edit, Delete, and Color.

@@ -84,8 +84,8 @@ impl Grip {
     }
 }
 
-/// Smallest textbox width, as a share of the content area.
-pub(super) const MIN_WIDTH: f32 = 0.04;
+/// Smallest framed textbox width in pixels.
+pub(super) const MIN_WIDTH: f32 = 128.0;
 
 /// Clicks this close to a selected box, in pixels, still belong to its grips.
 const GRIP_REACH: f32 = 8.0;
@@ -132,6 +132,8 @@ pub(super) struct TextboxResize {
     pub grip: Grip,
 }
 
+pub(super) const DEFAULT_WIDTH: f32 = 280.0;
+
 impl AnnotationOverlay {
     pub(super) fn select_textbox(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
         if !self.dismiss_note(window, cx) {
@@ -167,6 +169,22 @@ impl AnnotationOverlay {
             }
         }
         cx.notify();
+    }
+
+    pub(super) fn textbox_drag_position(
+        &self,
+        id: &str,
+        at: (f32, f32),
+        window: &Window,
+        cx: &App,
+    ) -> (f32, f32) {
+        let size = self
+            .textbox_bounds
+            .get(id)
+            .map_or((DEFAULT_WIDTH, 40.0), |bounds| {
+                (f32::from(bounds.size.width), f32::from(bounds.size.height))
+            });
+        constrained_origin(at, size, viewport(window, cx))
     }
 
     /// Begin resizing from one of a textbox's grips: a saved note by `id`, or
@@ -226,8 +244,9 @@ impl AnnotationOverlay {
         cx: &App,
     ) -> TextFrame {
         let (w, h) = viewport(window, cx);
+        let min_width = (MIN_WIDTH / w.max(1.0)).min(1.0);
         let current_width = origin.width.unwrap_or_else(|| {
-            measured.map_or(MIN_WIDTH, |bounds| {
+            measured.map_or(min_width, |bounds| {
                 f32::from(bounds.size.width) / w.max(1.0)
             })
         });
@@ -242,14 +261,14 @@ impl AnnotationOverlay {
         let (mut left, mut top) = origin.at;
         let (mut right, mut bottom) = (left + current_width, top + current_height);
         if grip.moves_left() {
-            left = pointer.0.clamp(0.0, right - MIN_WIDTH);
+            left = pointer.0.clamp(0.0, (right - min_width).max(0.0));
         } else if grip.moves_right() {
-            right = pointer.0.clamp(left + MIN_WIDTH, 1.0);
+            right = pointer.0.clamp((left + min_width).min(1.0), 1.0);
         }
         if grip.moves_top() {
-            top = pointer.1.clamp(0.0, bottom - min_height);
+            top = pointer.1.clamp(0.0, (bottom - min_height).max(0.0));
         } else if grip.moves_bottom() {
-            bottom = pointer.1.clamp(top + min_height, 1.0);
+            bottom = pointer.1.clamp((top + min_height).min(1.0), 1.0);
         }
         TextFrame {
             at: (left, top),
@@ -489,8 +508,8 @@ impl AnnotationOverlay {
             .control_height(ControlSize::Lg)
             .to_pixels(window.rem_size());
         let left = at.0 * w;
-        let max_w = (w - left).max(f32::from(side));
-        let fixed_w = width.map(|fraction| (fraction * w).clamp(f32::from(side), max_w));
+        let max_w = (w - left).max(1.0);
+        let fixed_w = width.map(|fraction| (fraction * w).clamp(MIN_WIDTH.min(max_w), max_w));
         let min_h = height.map_or(side, |fraction| px(fraction * h).max(side));
         let selected = editing || saved.as_ref().is_some_and(|(_, _, selected)| *selected);
         let owner = cx.entity().downgrade();
@@ -500,7 +519,10 @@ impl AnnotationOverlay {
         let text = saved.as_ref().map(|(_, text, _)| text.clone());
 
         let mut body = div()
-            .id("feedback-textbox-body")
+            .id(format!(
+                "feedback-textbox-body-{}",
+                id.as_deref().unwrap_or("draft")
+            ))
             .debug_selector(|| "feedback-textbox".into())
             .min_h(min_h)
             .px_2()
@@ -528,42 +550,19 @@ impl AnnotationOverlay {
             .flex_col();
         body = match fixed_w {
             Some(fixed) => body.w(px(fixed)),
-            None => body.max_w(px(max_w)),
+            None => body.min_w(px(MIN_WIDTH.min(max_w))).max_w(px(max_w)),
         };
         if editing {
-            // A press outside the box and its grips ends editing: text saves,
-            // an empty box is removed. The picker then leaves the press alone.
-            let press_id = id.clone();
-            body = body
-                .child(textbox_input(&self.input, color, window, cx))
-                .on_mouse_down_out(cx.listener(
-                    move |this, event: &gpui::MouseDownEvent, window, cx| {
-                        if event.button != MouseButton::Left {
-                            return;
-                        }
-                        let own = match &press_id {
-                            Some(id) => this.textbox_bounds.get(id),
-                            None => this.draft_textbox_bounds.as_ref(),
-                        };
-                        if Self::textbox_owns_press(own, event.position)
-                            || this
-                                .mentions
-                                .bounds
-                                .is_some_and(|bounds| bounds.contains(&event.position))
-                        {
-                            return;
-                        }
-                        let dismissed = this.dismiss_note(window, cx);
-                        window.prevent_default();
-                        if !dismissed {
-                            cx.stop_propagation();
-                        }
-                    },
-                ));
+            body = body.child(textbox_input(&self.input, color, window, cx));
         } else if let Some(text) = &text {
-            body = body.children(text.split('\n').map(|line| div().child(line.to_owned())));
+            body = body.children(text.split('\n').map(|line| {
+                div()
+                    .min_h(px(22.0))
+                    .whitespace_normal()
+                    .child(line.to_owned())
+            }));
         }
-        if let Some(id) = &id {
+        if let Some(id) = id.as_ref().filter(|_| !editing) {
             let click_id = id.clone();
             let drag_id = id.clone();
             let menu_id = id.clone();
@@ -607,9 +606,39 @@ impl AnnotationOverlay {
             || "textbox-bounds-draft".to_string(),
             |id| format!("textbox-bounds-{id}"),
         );
+        let press_id = id.clone();
         div().absolute().size_full().child(
             div()
+                .id(format!(
+                    "feedback-textbox-frame-{}",
+                    id.as_deref().unwrap_or("draft")
+                ))
                 .absolute()
+                .when(editing, |frame| {
+                    frame.on_mouse_down_out(cx.listener(
+                        move |this, event: &gpui::MouseDownEvent, window, cx| {
+                            let own = match &press_id {
+                                Some(id) => this.textbox_bounds.get(id),
+                                None => this.draft_textbox_bounds.as_ref(),
+                            };
+                            if Self::textbox_owns_press(own, event.position)
+                                || this
+                                    .mentions
+                                    .bounds
+                                    .is_some_and(|bounds| bounds.contains(&event.position))
+                            {
+                                return;
+                            }
+                            if event.button == MouseButton::Left {
+                                let dismissed = this.dismiss_note(window, cx);
+                                window.prevent_default();
+                                if !dismissed {
+                                    cx.stop_propagation();
+                                }
+                            }
+                        },
+                    ))
+                })
                 .left(px(left))
                 .top(px(at.1 * h))
                 .max_w(px(max_w))
@@ -631,7 +660,52 @@ impl AnnotationOverlay {
                         });
                     })
                     .child(body),
-                ),
+                )
+                .when(editing, |frame| {
+                    frame.child(
+                        div()
+                            .mt_1()
+                            .p_1()
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .gap_1()
+                            .rounded(cx.theme().radius(Radius::Sm))
+                            .bg(cx.theme().colors.surface)
+                            .occlude()
+                            .child(
+                                div()
+                                    .debug_selector(|| "feedback-textbox-cancel".into())
+                                    .child(
+                                        Button::new("textbox-cancel", "Cancel")
+                                            .size(ControlSize::Sm)
+                                            .variant(ButtonVariant::Ghost)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.draft = None;
+                                                this.draft_textbox_bounds = None;
+                                                this.notice.clear();
+                                                this.return_focus(window, cx);
+                                                cx.notify();
+                                            })),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .debug_selector(|| "feedback-textbox-save".into())
+                                    .child(
+                                        Button::new("textbox-save", "Save")
+                                            .size(ControlSize::Sm)
+                                            .variant(ButtonVariant::Primary)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.save(window, cx);
+                                            })),
+                                    ),
+                            )
+                            .when(!self.notice.is_empty(), |row| {
+                                row.child(self.notice.clone())
+                            }),
+                    )
+                }),
         )
     }
 
@@ -663,6 +737,14 @@ impl AnnotationOverlay {
             .occlude()
             .id(format!("feedback-textbox-grip-{name}"))
             .debug_selector(move || format!("feedback-textbox-resize-{name}"))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
+                    this.annotation_press = Some(event.position);
+                    window.prevent_default();
+                    cx.stop_propagation();
+                }),
+            )
             .on_drag(FeedbackDrag { owner: entity }, move |_, _, window, cx| {
                 let _ = drag_owner.update(cx, |this, cx| {
                     this.begin_textbox_resize(resize_id.as_deref(), grip, window, cx);
@@ -691,4 +773,16 @@ pub(super) fn moved_textbox(
         after.feedback.bounding_box.y += delta.1;
     }
     after
+}
+
+/// Keep the whole textbox visible, including its pin and resize handle.
+pub(super) fn constrained_origin(
+    at: (f32, f32),
+    size: (f32, f32),
+    viewport: (f32, f32),
+) -> (f32, f32) {
+    (
+        at.0.clamp(0.0, (1.0 - size.0 / viewport.0.max(1.0)).max(0.0)),
+        at.1.clamp(0.0, (1.0 - size.1 / viewport.1.max(1.0)).max(0.0)),
+    )
 }
