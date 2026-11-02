@@ -171,12 +171,12 @@ More:
 The toolbar is its own window, docked to the right edge of your app. It follows
 your app when you move or resize it.
 
-| Tool | What it does |
-| --- | --- |
-| **Inspect** | Pick an element. Saves its source and properties as a numbered note. |
-| **Box**, **Arrow**, **Pen** | Draw on the live window. |
-| **Comment** | Drop a numbered pin with a note. |
-| **Textbox** | Put plain text on the canvas. |
+| Tool                        | What it does                                                         |
+| --------------------------- | -------------------------------------------------------------------- |
+| **Inspect**                 | Pick an element. Saves its source and properties as a numbered note. |
+| **Box**, **Arrow**, **Pen** | Draw on the live window.                                             |
+| **Comment**                 | Drop a numbered pin with a note.                                     |
+| **Textbox**                 | Click or drag out a frame, then type plain text on the canvas.       |
 
 Drawing tools need the **Annotation mode** switch on. Inspect does not. With
 annotation mode on, right-click the canvas to open the same tools and edits as a
@@ -185,9 +185,16 @@ context menu.
 **Inspect an element**
 
 1. Click **Inspect**, then click an element.
-2. Optional: change width, height, padding, margin, border, or opacity with the sliders.
+2. Optional: change width, height, padding, margin, border, or opacity with the
+   sliders, and the surface or text color with the swatches.
 3. Click the numbered pin to add a comment.
-4. Click **Stop** in the Inspector header to leave Inspect.
+4. Click **Stop** in the Inspector header, or **Stop inspecting** in the toolbar,
+   to leave Inspect.
+
+The inspector panel opens in the toolbar window, which grows to hold it; your
+app's window keeps its size and layout. See
+[External inspector](site/docs/external-inspector.md) for how that works on
+stock GPUI and when the panel falls back to the app window.
 
 Press **Esc** or click elsewhere to pick another element.
 
@@ -206,17 +213,19 @@ Point your agent at the exact spot with an arrow, box, or pen stroke.
 
 **Shortcuts** (annotation mode on)
 
-| Keys | Action |
-| --- | --- |
-| `I` `B` `A` `P` `C` `T` | Pick a tool |
-| `Ctrl/Cmd+S` | Save the draft |
-| `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z` | Undo, redo |
-| `Delete` | Remove the selected note |
+| Keys                             | Action                   |
+| -------------------------------- | ------------------------ |
+| `I` `B` `A` `P` `C` `T`          | Pick a tool              |
+| `Ctrl/Cmd+S`                     | Save the draft           |
+| `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z` | Undo, redo               |
+| `Delete`                         | Remove the selected note |
 
 **Pins, textboxes, mentions**
 
 - Drag a pin to move it, separately from its drawing.
-- Textbox: click to select, drag to move, Enter or double-click to edit.
+- Textbox: drag with the tool to frame a box, or click for one that fits its
+  text. Click to select, drag to move, pull a grip on the dashed bounding box to
+  resize, Enter or double-click to edit.
 - In a comment, type `@` to pick a note or `#12` to preview pin 12.
   Enter or Tab inserts `@#12`. Esc closes the list.
 - Right-click a note for Edit, Delete, and Color.
@@ -253,9 +262,9 @@ _For more examples, please refer to the [Reference](site/docs/reference.md)._
 Two skills help your agent set up Agentation and work through feedback.
 Install them from [skills.sh](https://skills.sh) (needs Node.js 22.20+).
 
-| Skill | Use it to | Try |
-| --- | --- | --- |
-| [gpui-agentation-setup](skills/gpui-agentation-setup/SKILL.md) | Add Agentation to a GPUI app. | "Use gpui-agentation-setup to add development annotations to this app." |
+| Skill                                                              | Use it to                                        | Try                                                                                 |
+| ------------------------------------------------------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| [gpui-agentation-setup](skills/gpui-agentation-setup/SKILL.md)     | Add Agentation to a GPUI app.                    | "Use gpui-agentation-setup to add development annotations to this app."             |
 | [gpui-agentation-explore](skills/gpui-agentation-explore/SKILL.md) | Read your app's feedback over MCP and act on it. | "Use gpui-agentation-explore to summarize pending feedback without changing notes." |
 
 1. From your app's folder, run:

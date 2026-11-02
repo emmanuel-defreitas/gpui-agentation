@@ -4,7 +4,7 @@ use std::{collections::HashMap, fmt};
 
 use gpui::{
     AbsoluteLength, AnyElement, App, AppContext, BorderStyle, Bounds, Context, Corners,
-    DefiniteLength, DivInspectorState, Edges, Entity, FontWeight, Global, Inspector,
+    DefiniteLength, DivInspectorState, Edges, Entity, FontWeight, Global, Hsla, Inspector,
     InspectorElementId, InteractiveElement, IntoElement, Length, ParentElement, Pixels,
     StatefulInteractiveElement, StyleRefinement, Styled, TextAlign, TextRun, Window, WindowId,
     canvas, div, fill, point, prelude::FluentBuilder, quad, size, transparent_black,
@@ -12,7 +12,7 @@ use gpui::{
 
 use crate::{
     buttons::{Button, ButtonVariant},
-    forms::Slider,
+    forms::{ColorPicker, ColorSwatch, Slider, hex, parse_hex},
     primitives::{FocusScope, raise},
     theme::{ActiveTheme, ControlSize, Radius, TextSize},
     typography::{Ellipsis, LEADING, literal, tabular},
@@ -57,7 +57,6 @@ impl Global for InspectorConfiguration {}
 #[derive(Default)]
 struct InspectorTargets {
     windows: HashMap<WindowId, gpui::AnyWindowHandle>,
-    controllers: HashMap<WindowId, gpui::EntityId>,
 }
 impl Global for InspectorTargets {}
 
@@ -68,7 +67,6 @@ pub fn set_inspector_target(view: WindowId, target: Option<gpui::AnyWindowHandle
         targets.windows.insert(view, target);
     } else {
         targets.windows.remove(&view);
-        targets.controllers.remove(&view);
     }
 }
 
@@ -113,6 +111,8 @@ struct StyleEditState {
     selected: Option<InspectorElementId>,
     original_style: Option<StyleRefinement>,
     original_size: Option<gpui::Size<Pixels>>,
+    /// The color row whose picker is open, if any.
+    expanded: Option<ColorTarget>,
 }
 
 impl StyleEditState {
@@ -128,6 +128,7 @@ impl StyleEditState {
         self.selected = Some(id);
         self.original_style = Some(style.clone());
         self.original_size = Some(size);
+        self.expanded = None;
         true
     }
 
@@ -149,6 +150,79 @@ enum EditableStyle {
     Margin,
     Border,
     Opacity,
+}
+
+/// A color a box writes: its surface, or the text it sets for its children.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ColorTarget {
+    Background,
+    Text,
+}
+
+impl ColorTarget {
+    const ALL: [Self; 2] = [Self::Background, Self::Text];
+
+    fn property(self) -> &'static str {
+        match self {
+            Self::Background => "Background",
+            Self::Text => "Text color",
+        }
+    }
+
+    fn from_property(property: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|target| target.property() == property)
+    }
+
+    fn control(self) -> &'static str {
+        match self {
+            Self::Background => "ely-inspector-background",
+            Self::Text => "ely-inspector-text-color",
+        }
+    }
+
+    /// The solid color written, if any. Gradients and inherited colors read as `None`.
+    fn read(self, style: &StyleRefinement) -> Option<Hsla> {
+        match self {
+            Self::Background => style
+                .background
+                .as_ref()
+                .and_then(|fill| fill.color())
+                .and_then(|background| background.as_solid()),
+            Self::Text => style.text.color,
+        }
+    }
+
+    fn write(self, style: &mut StyleRefinement, color: Hsla) {
+        match self {
+            Self::Background => style.background = Some(color.into()),
+            Self::Text => style.text.color = Some(color),
+        }
+    }
+
+    fn rust(self, color: Hsla) -> String {
+        let method = match self {
+            Self::Background => "bg",
+            Self::Text => "text_color",
+        };
+        format!("  .{method}({})", rust_color(color))
+    }
+}
+
+/// `none` for an unwritten color, else its hex as the picker shows it.
+fn describe_color(color: Option<Hsla>) -> String {
+    color.map_or_else(|| "none".to_string(), |color| hex(color.to_rgb()))
+}
+
+/// The gpui constructor for a color: `rgb(0xrrggbb)`, or `rgba(0xrrggbbaa)` when translucent.
+pub fn rust_color(color: Hsla) -> String {
+    let rgba = color.to_rgb();
+    let byte = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u32;
+    let (r, g, b, a) = (byte(rgba.r), byte(rgba.g), byte(rgba.b), byte(rgba.a));
+    if a == 255 {
+        format!("rgb(0x{:06x})", (r << 16) | (g << 8) | b)
+    } else {
+        format!("rgba(0x{:08x})", (r << 24) | (g << 16) | (b << 8) | a)
+    }
 }
 
 /// One side of a box as written: pixels, `auto`, or a share of the parent's width.
@@ -563,6 +637,17 @@ fn style_configuration(
         number(after),
         format!("  .opacity({after:.1})"),
     );
+    for target in ColorTarget::ALL {
+        let (before, after) = (target.read(original), target.read(current));
+        if let Some(after_color) = after.filter(|_| before != after) {
+            changed(
+                target.property(),
+                describe_color(before),
+                describe_color(after),
+                target.rust(after_color),
+            );
+        }
+    }
     if changes.is_empty() {
         return None;
     }
@@ -631,12 +716,49 @@ fn apply_edit(
     }
 }
 
+fn apply_color(
+    id: &InspectorElementId,
+    target: ColorTarget,
+    color: Hsla,
+    edits: &Entity<StyleEditState>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let host = inspector_target(window, cx);
+    if host != window.window_handle() {
+        let _ = host.update(cx, |_, window, cx| {
+            apply_color(id, target, color, edits, window, cx)
+        });
+        window.refresh();
+        return;
+    }
+    let rem = window.rem_size();
+    let mut current = None;
+    let _ = window.with_inspector_state::<DivInspectorState, _>(Some(id), cx, |state, _| {
+        if let Some(state) = state {
+            target.write(&mut state.base_style, color);
+            current = Some((*state.base_style).clone());
+        }
+    });
+    if let Some(current) = current {
+        publish_configuration(id, &current, edits, rem, window, cx);
+        window.refresh();
+    }
+}
+
 /// Restore a saved note's overrides after its live element has captured a baseline.
 pub fn restore_inspector_configuration(id: &InspectorElementId, configuration: InspectorStyleConfiguration, window: &mut Window, cx: &mut App) {
     let mut applied = false;
     let _ = window.with_inspector_state::<DivInspectorState, _>(Some(id), cx, |state, _| {
         let Some(state) = state else { return; };
         for change in &configuration.changes {
+            if let Some(target) = ColorTarget::from_property(&change.property) {
+                if let Ok(color) = parse_hex(&change.after) {
+                    target.write(&mut state.base_style, color.into());
+                    applied = true;
+                }
+                continue;
+            }
             let edit = match change.property.as_str() {
                 "Width" => EditableStyle::Width, "Height" => EditableStyle::Height,
                 "Padding" => EditableStyle::Padding, "Margin" => EditableStyle::Margin,
@@ -734,6 +856,87 @@ fn edit_row(
                 .text_size(theme.text_size(TextSize::Xs))
                 .child(shown),
         )
+        .into_any_element()
+}
+
+/// A color row: its name, a swatch that opens the picker, and the hex it reads.
+/// `fallback` seeds the picker when the box writes no color of its own.
+fn color_row(
+    label: &'static str,
+    target: ColorTarget,
+    current: Option<Hsla>,
+    fallback: Hsla,
+    selected: InspectorElementId,
+    edits: Entity<StyleEditState>,
+    cx: &App,
+) -> AnyElement {
+    let theme = cx.theme();
+    let control = target.control();
+    let expanded = edits.read(cx).expanded == Some(target);
+    let shown = current.unwrap_or(fallback);
+    let toggle = edits.clone();
+    let picker_id = selected.clone();
+    let picker_edits = edits.clone();
+    div()
+        .debug_selector(move || format!("inspector-config-{control}"))
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_3()
+                .h(theme.control_height(ControlSize::Md))
+                .child(
+                    div()
+                        .w_16()
+                        .flex_none()
+                        .text_color(theme.colors.fg_muted)
+                        .child(label),
+                )
+                .child(
+                    div()
+                        .debug_selector(move || format!("inspector-swatch-{control}"))
+                        .child(
+                            ColorSwatch::new(format!("{control}-{selected:?}"), shown)
+                                .size(ControlSize::Sm)
+                                .selected(expanded)
+                                .tooltip(if expanded {
+                                    "Close the picker"
+                                } else {
+                                    "Pick a color"
+                                })
+                                .on_click(move |window, cx| {
+                                    toggle.update(cx, |edits, _| {
+                                        edits.expanded =
+                                            (edits.expanded != Some(target)).then_some(target);
+                                    });
+                                    window.refresh();
+                                }),
+                        ),
+                )
+                .child(
+                    tabular(div())
+                        .flex_1()
+                        .min_w_0()
+                        .text_right()
+                        .text_size(theme.text_size(TextSize::Xs))
+                        .child(describe_color(current)),
+                ),
+        )
+        .when(expanded, |row| {
+            row.child(
+                div()
+                    .debug_selector(move || format!("inspector-picker-{control}"))
+                    .child(
+                        ColorPicker::new(format!("{control}-picker-{picker_id:?}"), shown)
+                            .on_change(move |color, window, cx| {
+                                apply_color(&picker_id, target, color, &picker_edits, window, cx)
+                            }),
+                    ),
+            )
+        })
         .into_any_element()
 }
 
@@ -852,6 +1055,24 @@ fn configuration_panel(
             1,
             EditableStyle::Opacity,
         ))
+        .child(color_row(
+            "Surface",
+            ColorTarget::Background,
+            ColorTarget::Background.read(&state.base_style),
+            theme.colors.surface,
+            id.clone(),
+            edits.clone(),
+            cx,
+        ))
+        .child(color_row(
+            "Text",
+            ColorTarget::Text,
+            ColorTarget::Text.read(&state.base_style),
+            theme.colors.fg,
+            id.clone(),
+            edits.clone(),
+            cx,
+        ))
         .children((!changes.is_empty()).then(|| {
             div()
                 .flex()
@@ -923,13 +1144,6 @@ pub fn inspector_panel_with_header(
     let source_path = place
         .as_ref()
         .map(|(location, _)| source::breadcrumb(location, window, cx));
-    #[cfg(agentation_external_inspector)]
-    {
-        let controller_id = cx.entity_id();
-        cx.default_global::<InspectorTargets>()
-            .controllers
-            .insert(window.window_handle().window_id(), controller_id);
-    }
     let states = inspector.render_inspector_states(window, cx);
     let footer = footer(inspector, window, cx);
     let focus = window
@@ -1049,84 +1263,70 @@ pub fn install_inspector(cx: &mut App) {
         inspector_panel(inspector, window, cx, |_, _, _| None)
     }));
     cx.register_inspector_element(move |_window, cx| {
-        #[cfg(agentation_external_inspector)]
-        let controller_id = cx
-            .try_global::<InspectorTargets>()
-            .and_then(|targets| {
-                targets
-                    .controllers
-                    .get(&_window.window_handle().window_id())
-            })
-            .copied();
         // Each inspector owns its baseline; windows must never share edits.
         let edits = cx.new(|_| StyleEditState::default());
         move |id, state: &DivInspectorState, window: &mut Window, cx: &mut App| {
-            let target = inspector_target(window, cx);
-            #[cfg(agentation_external_inspector)]
-            let active = target == window.window_handle()
-                || target
-                    .update(cx, |_, host, _| {
-                        host.inspector_entity()
-                            .is_some_and(|active| Some(active.entity_id()) == controller_id)
-                    })
-                    .unwrap_or(false);
-            #[cfg(not(agentation_external_inspector))]
-            let active = true;
-            if active {
-                let target_id = target.window_id();
-                if edits.update(cx, |edits, _| {
-                    edits.select(id.clone(), &state.base_style, state.bounds.size)
-                }) {
-                    let configuration = cx.global_mut::<InspectorConfiguration>();
-                    configuration.selections.remove(&target_id);
-                    configuration.configurations.remove(&target_id);
-                }
-                cx.global_mut::<InspectorConfiguration>().selections.insert(
-                    target_id,
-                    InspectorSelection {
-                        id: id.clone(),
-                        bounds: state.bounds,
-                        properties: {
-                            let rem = window.rem_size();
-                            let written = layers(&state.base_style, rem);
-                            let sides = |values: [Side; 4]| {
-                                values.map(|value| value.to_string()).join(" / ")
-                            };
-                            std::collections::BTreeMap::from([
-                                (
-                                    "Width".into(),
-                                    format!(
-                                        "{} px",
-                                        number(length_pixels(
-                                            state.base_style.size.width,
-                                            state.bounds.size.width,
-                                            rem
-                                        ))
-                                    ),
-                                ),
-                                (
-                                    "Height".into(),
-                                    format!(
-                                        "{} px",
-                                        number(length_pixels(
-                                            state.base_style.size.height,
-                                            state.bounds.size.height,
-                                            rem
-                                        ))
-                                    ),
-                                ),
-                                ("Padding".into(), sides(written.padding)),
-                                ("Margin".into(), sides(written.margin)),
-                                ("Border".into(), sides(written.border)),
-                                (
-                                    "Opacity".into(),
-                                    number(state.base_style.opacity.unwrap_or(1.)),
-                                ),
-                            ])
-                        },
-                    },
-                );
+            let target_id = inspector_target(window, cx).window_id();
+            if edits.update(cx, |edits, _| {
+                edits.select(id.clone(), &state.base_style, state.bounds.size)
+            }) {
+                let configuration = cx.global_mut::<InspectorConfiguration>();
+                configuration.selections.remove(&target_id);
+                configuration.configurations.remove(&target_id);
             }
+            cx.global_mut::<InspectorConfiguration>().selections.insert(
+                target_id,
+                InspectorSelection {
+                    id: id.clone(),
+                    bounds: state.bounds,
+                    properties: {
+                        let rem = window.rem_size();
+                        let written = layers(&state.base_style, rem);
+                        let sides = |values: [Side; 4]| {
+                            values.map(|value| value.to_string()).join(" / ")
+                        };
+                        std::collections::BTreeMap::from([
+                            (
+                                "Width".into(),
+                                format!(
+                                    "{} px",
+                                    number(length_pixels(
+                                        state.base_style.size.width,
+                                        state.bounds.size.width,
+                                        rem
+                                    ))
+                                ),
+                            ),
+                            (
+                                "Height".into(),
+                                format!(
+                                    "{} px",
+                                    number(length_pixels(
+                                        state.base_style.size.height,
+                                        state.bounds.size.height,
+                                        rem
+                                    ))
+                                ),
+                            ),
+                            ("Padding".into(), sides(written.padding)),
+                            ("Margin".into(), sides(written.margin)),
+                            ("Border".into(), sides(written.border)),
+                            (
+                                "Opacity".into(),
+                                number(state.base_style.opacity.unwrap_or(1.)),
+                            ),
+                            (
+                                "Background".into(),
+                                describe_color(ColorTarget::Background.read(&state.base_style)),
+                            ),
+                            (
+                                "Text color".into(),
+                                describe_color(ColorTarget::Text.read(&state.base_style)),
+                            ),
+                        ])
+                    },
+                },
+            );
             div()
                 .flex()
                 .flex_col()
