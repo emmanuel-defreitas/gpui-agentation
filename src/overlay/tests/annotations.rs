@@ -2,7 +2,7 @@
 use super::super::mentions::{Motion, query};
 use super::*;
 use crate::{AnnotationShape, ToolbarPosition, ely::media::Tool};
-use gpui::{Modifiers, TestAppContext, VisualTestContext, point, px};
+use gpui::{Modifiers, TestAppContext, VisualTestContext, point, px, size};
 
 fn click_toolbar(
     overlay: &Entity<AnnotationOverlay>,
@@ -686,6 +686,136 @@ fn textbox_pin_selection_pointer_drag_and_context_actions_preserve_identity(
             overlay.read(cx).store.annotation(&before.id).unwrap(),
             before
         )
+    });
+}
+
+#[gpui::test]
+fn textbox_tool_frames_a_box_by_dragging_and_grips_resize_it(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    cx.simulate_resize(size(px(1000.), px(800.)));
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            if !this.active {
+                this.toggle(window, cx);
+            }
+            this.choose_tool(Some(Tool::Select), window, cx);
+        })
+    });
+    draw(cx);
+    // Drag out a frame on the picker, as in Freeform: a dashed preview follows.
+    let (start, end) = (point(px(100.), px(100.)), point(px(400.), px(260.)));
+    cx.simulate_mouse_move(start, None, Modifiers::none());
+    cx.simulate_mouse_down(start, gpui::MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(end, Some(gpui::MouseButton::Left), Modifiers::none());
+    draw(cx);
+    let preview = cx
+        .debug_bounds("feedback-textbox-frame")
+        .expect("dashed frame while dragging");
+    assert_eq!(preview.origin, start);
+    assert_eq!(preview.size, size(px(300.), px(160.)));
+    cx.simulate_mouse_up(end, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("feedback-textbox-frame").is_none());
+    cx.update(|_, cx| {
+        let draft = overlay
+            .read(cx)
+            .draft
+            .as_ref()
+            .expect("inline textbox draft");
+        let Some(AnnotationShape::Text {
+            at, width, height, ..
+        }) = &draft.shape
+        else {
+            panic!("textbox draft");
+        };
+        assert!((at.0 - 0.1).abs() < 1e-5 && (at.1 - 0.125).abs() < 1e-5);
+        assert!((width.unwrap() - 0.3).abs() < 1e-5);
+        assert!((height.unwrap() - 0.2).abs() < 1e-5);
+    });
+    let body = cx.debug_bounds("feedback-textbox").unwrap();
+    assert_eq!(body.size.width, px(300.), "the frame fixes the wrap width");
+    assert!(
+        body.size.height >= px(160.),
+        "the frame sets the minimum height"
+    );
+    cx.simulate_input("Framed");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    let saved = cx.update(|_, cx| overlay.read(cx).session.annotations[0].clone());
+    // At rest no grips show; selecting the box reveals its bounding box and grips.
+    assert!(cx.debug_bounds("feedback-textbox-resize-left").is_none());
+    let body = cx.debug_bounds("feedback-textbox").unwrap();
+    cx.simulate_click(body.center(), Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("feedback-textbox-selected").is_some());
+    for grip in [
+        "feedback-textbox-resize-top-left",
+        "feedback-textbox-resize-top-right",
+        "feedback-textbox-resize-bottom-left",
+        "feedback-textbox-resize-bottom-right",
+        "feedback-textbox-resize-left",
+        "feedback-textbox-resize-right",
+    ] {
+        assert!(cx.debug_bounds(grip).is_some(), "{grip}");
+    }
+    let left = cx.debug_bounds("feedback-textbox-resize-left").unwrap();
+    assert_eq!(left.center().x, body.left());
+    // Pulling the left grip moves the origin and keeps the right edge in place.
+    let from = left.center();
+    let to = from - point(px(50.), px(0.));
+    cx.simulate_mouse_move(from, None, Modifiers::none());
+    cx.simulate_mouse_down(from, gpui::MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(to, Some(gpui::MouseButton::Left), Modifiers::none());
+    draw(cx);
+    cx.simulate_mouse_up(to, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let after = overlay.read(cx).store.annotation(&saved.id).unwrap();
+        let Some(AnnotationShape::Text {
+            at, width, height, ..
+        }) = &after.feedback.shape
+        else {
+            panic!("textbox");
+        };
+        assert!((at.0 - 0.05).abs() < 1e-4, "origin follows the left grip");
+        assert!(
+            (width.unwrap() - 0.35).abs() < 1e-4,
+            "width grows by the pull"
+        );
+        assert!(
+            (height.unwrap() - 0.2).abs() < 1e-5,
+            "a side grip leaves height"
+        );
+        assert_eq!(after.index, saved.index);
+    });
+    // A corner grip also sets the minimum height, and undo restores the frame.
+    let corner = cx
+        .debug_bounds("feedback-textbox-resize-bottom-right")
+        .unwrap();
+    let from = corner.center();
+    let to = from + point(px(0.), px(80.));
+    cx.simulate_mouse_move(from, None, Modifiers::none());
+    cx.simulate_mouse_down(from, gpui::MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(to, Some(gpui::MouseButton::Left), Modifiers::none());
+    draw(cx);
+    cx.simulate_mouse_up(to, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let after = overlay.read(cx).store.annotation(&saved.id).unwrap();
+        let Some(AnnotationShape::Text { height, .. }) = &after.feedback.shape else {
+            panic!("textbox");
+        };
+        assert!(
+            (height.unwrap() - 0.3).abs() < 1e-3,
+            "corner grip grows height"
+        );
+    });
+    cx.simulate_keystrokes("ctrl-z");
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|_, cx| {
+        assert_eq!(overlay.read(cx).store.annotation(&saved.id).unwrap(), saved);
     });
 }
 
