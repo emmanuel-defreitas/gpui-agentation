@@ -352,7 +352,7 @@ impl AnnotationOverlay {
     ) {
         if tag == EL_COMMENT {
             // Mirror Inspect: outline the element, pin its center, open the editor.
-            let size = viewport(window);
+            let size = viewport(window, cx);
             let center = (
                 target.bounds.x + target.bounds.width / 2.0,
                 target.bounds.y + target.bounds.height / 2.0,

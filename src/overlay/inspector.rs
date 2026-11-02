@@ -1,10 +1,18 @@
-//! Native picking and element-anchored inspection annotations.
+//! Native picking and inspection annotations on stock GPUI.
+//!
+//! GPUI draws its inspector as a fixed-width sidebar inside the inspected
+//! window and lays the app out in what remains. Nothing public turns that off,
+//! so the host's native content view is kept that much wider than the window
+//! shows: GPUI lays the sidebar out past the right edge, where it is never
+//! seen, and the app keeps its whole visible width. The companion window then
+//! renders the same `Inspector` entity as its own panel, so the toolbar grows
+//! while inspecting and the consumer does not move.
 use super::*;
 use crate::ely::{
     buttons::{Button, ButtonVariant},
     tooling,
 };
-use gpui::{Global, Inspector, WeakEntity, WindowId};
+use gpui::{Global, Inspector, InspectorElementId, Pixels, WeakEntity, WindowId, rems};
 use std::collections::HashMap;
 
 #[derive(Default)]
@@ -14,6 +22,18 @@ struct Sidebar {
     overlay: WeakEntity<AnnotationOverlay>,
     inspector: Option<WeakEntity<Inspector>>,
     presented: bool,
+    /// Set while this crate has GPUI's inspector turned on for the window.
+    opened: bool,
+    /// The reserved sidebar width, kept out of sight while the inspector is on.
+    margin: Option<toolbar_window::HostMargin>,
+    /// The selection the companion was last told about.
+    announced: Option<Option<InspectorElementId>>,
+}
+
+/// The sidebar GPUI reserves at the window's right while its inspector is on.
+/// Mirrors `Window::draw_roots` in `gpui-pre 0.3.8`.
+pub(super) fn sidebar_width(window: &Window) -> Pixels {
+    rems(30.0).to_pixels(window.rem_size())
 }
 
 pub(crate) fn install(cx: &mut App) {
@@ -23,18 +43,64 @@ pub(crate) fn install(cx: &mut App) {
     tooling::install_inspector(cx);
     cx.set_global(Sidebars::default());
     cx.set_inspector_renderer(Box::new(|inspector, window, cx| {
-        #[cfg(agentation_external_inspector)]
-        let rendered_id = cx.entity_id();
         let target = tooling::inspector_target(window, cx);
         let native_owner = cx.entity().downgrade();
-        let owner = cx
+        let in_host = target == window.window_handle();
+        let active = inspector.active_element_id().cloned();
+        let (owner, external, changed) = cx
             .global_mut::<Sidebars>()
             .0
             .get_mut(&target.window_id())
             .map(|sidebar| {
                 sidebar.inspector = Some(native_owner);
-                sidebar.overlay.clone()
+                let external = sidebar
+                    .margin
+                    .as_ref()
+                    .is_some_and(|margin| margin.is_hidden());
+                let changed = in_host && external && sidebar.announced.as_ref() != Some(&active);
+                if changed {
+                    sidebar.announced = Some(active);
+                }
+                (Some(sidebar.overlay.clone()), external, changed)
+            })
+            .unwrap_or((None, false, false));
+        if changed {
+            // The companion shows this entity; wake it when the pick changes.
+            cx.notify();
+        }
+        if in_host && external {
+            // The sidebar lies past the window's edge: sync the selection for
+            // the annotation and, once picked, outline the element in the app.
+            // The panel itself renders in the companion.
+            let color = owner.and_then(|owner| {
+                owner
+                    .update(cx, |this, cx| {
+                        this.sync_inspector_selection(inspector, window, cx);
+                        cx.theme().colors.chart[this.color]
+                    })
+                    .ok()
             });
+            let outline = (!inspector.is_picking())
+                .then(|| tooling::inspector_selection(window, cx))
+                .flatten()
+                .filter(|selection| Some(&selection.id) == inspector.active_element_id())
+                .zip(color)
+                .map(|(selection, color)| (selection.bounds, color));
+            // GPUI lays this element out in the hidden strip; the quad takes
+            // window coordinates and the root mask is the whole viewport.
+            return gpui::canvas(
+                |_, _, _| {},
+                move |_, _, window, _| {
+                    if let Some((bounds, color)) = outline {
+                        window.paint_quad(
+                            gpui::outline(bounds, color, gpui::BorderStyle::Solid)
+                                .border_widths(gpui::px(2.)),
+                        );
+                    }
+                },
+            )
+            .into_any_element();
+        }
         let toggle_owner = owner.clone();
         // Ely already titles the panel "Inspector"; the header is only Stop.
         let header = div()
@@ -62,33 +128,30 @@ pub(crate) fn install(cx: &mut App) {
             cx,
             Some(header),
             |inspector, window, cx| {
-                #[cfg(agentation_external_inspector)]
-                if target != window.window_handle() {
-                    let _ = target.update(cx, |_, host, cx| {
-                        if host
-                            .inspector_entity()
-                            .is_none_or(|active| active.entity_id() != rendered_id)
-                            || !is_open(host, cx)
-                        {
-                            return;
-                        }
-                        if let Some(owner) = owner {
-                            let _ = owner.update(cx, |this, cx| {
-                                this.sync_inspector_selection(inspector, host, cx)
-                            });
-                        }
-                    });
-                    return None;
-                }
-                if let Some(owner) = owner {
-                    let _ = owner.update(cx, |this, cx| {
-                        this.sync_inspector_selection(inspector, window, cx)
-                    });
+                if in_host {
+                    if let Some(owner) = owner {
+                        let _ = owner.update(cx, |this, cx| {
+                            this.sync_inspector_selection(inspector, window, cx)
+                        });
+                    }
                 }
                 None
             },
         )
     }));
+}
+
+/// The host's live inspector entity, for the companion to render.
+pub(super) fn entity(window: &Window, cx: &App) -> Option<Entity<Inspector>> {
+    native_inspector(window, cx)
+}
+
+/// Whether the panel renders in the companion, with GPUI's sidebar out of sight.
+pub(super) fn is_external(window: &Window, cx: &App) -> bool {
+    cx.try_global::<Sidebars>()
+        .and_then(|sidebars| sidebars.0.get(&window.window_handle().window_id()))
+        .and_then(|sidebar| sidebar.margin.as_ref())
+        .is_some_and(|margin| margin.is_hidden())
 }
 
 pub(super) fn register(owner: WeakEntity<AnnotationOverlay>, window: &Window, cx: &mut App) {
@@ -99,6 +162,9 @@ pub(super) fn register(owner: WeakEntity<AnnotationOverlay>, window: &Window, cx
             overlay: owner,
             inspector: None,
             presented: false,
+            opened: false,
+            margin: None,
+            announced: None,
         },
     );
 }
@@ -109,13 +175,16 @@ pub(super) fn is_open(window: &Window, cx: &App) -> bool {
         .is_some_and(|sidebar| sidebar.presented)
 }
 
+/// Whether GPUI's inspector sidebar currently takes width from this window.
+pub(super) fn sidebar_open(window: &Window, cx: &App) -> bool {
+    window.is_inspector_picking(cx)
+        || cx
+            .try_global::<Sidebars>()
+            .and_then(|sidebars| sidebars.0.get(&window.window_handle().window_id()))
+            .is_some_and(|sidebar| sidebar.opened)
+}
+
 fn native_inspector(window: &Window, cx: &App) -> Option<Entity<Inspector>> {
-    #[cfg(agentation_external_inspector)]
-    {
-        let _ = cx;
-        window.inspector_entity()
-    }
-    #[cfg(not(agentation_external_inspector))]
     cx.try_global::<Sidebars>()?
         .0
         .get(&window.window_handle().window_id())?
@@ -138,36 +207,59 @@ pub(super) fn resume_picking(window: &mut Window, cx: &mut App) {
     }
 }
 
-fn present(window: &Window, presented: bool, cx: &mut App) {
-    if let Some(sidebar) = cx
-        .global_mut::<Sidebars>()
+fn sidebar_mut<'a>(window: &Window, cx: &'a mut App) -> Option<&'a mut Sidebar> {
+    cx.global_mut::<Sidebars>()
         .0
         .get_mut(&window.window_handle().window_id())
-    {
+}
+
+fn present(window: &Window, presented: bool, cx: &mut App) {
+    if let Some(sidebar) = sidebar_mut(window, cx) {
         sidebar.presented = presented;
     }
 }
 
-pub(super) fn start(window: &mut Window, cx: &mut App) {
+/// Turn picking on. With `companion`, the panel renders in the toolbar window
+/// and GPUI's sidebar is kept out of sight; without it (toolbar hidden, or a
+/// window filling its display, where the companion does not show) the panel
+/// stays inside the host.
+pub(super) fn start(window: &mut Window, companion: bool, cx: &mut App) {
     present(window, true, cx);
-    #[cfg(agentation_external_inspector)]
-    window.set_inspector_external(true);
     if let Some(inspector) = native_inspector(window, cx) {
         inspector.update(cx, |inspector, cx| {
             inspector.start_picking();
             cx.notify();
         });
         window.refresh();
-    } else {
-        tooling::clear_inspector_selection(window, cx);
-        window.toggle_inspector(cx);
+        return;
+    }
+    // Already toggled on and awaiting its first draw: toggling again would
+    // close it and widen the window twice.
+    if sidebar_mut(window, cx).is_some_and(|sidebar| sidebar.opened) {
+        return;
+    }
+    tooling::clear_inspector_selection(window, cx);
+    window.toggle_inspector(cx);
+    let margin = (companion && !toolbar_window::fills_display(window))
+        .then(|| toolbar_window::HostMargin::reserve(window, sidebar_width(window), cx));
+    if let Some(sidebar) = sidebar_mut(window, cx) {
+        sidebar.opened = true;
+        sidebar.margin = margin;
+        sidebar.announced = None;
     }
 }
 
 pub(super) fn close(window: &mut Window, cx: &mut App) {
-    present(window, false, cx);
-    if native_inspector(window, cx).is_some() || window.is_inspector_picking(cx) {
+    let (opened, margin) = sidebar_mut(window, cx).map_or((false, None), |sidebar| {
+        sidebar.presented = false;
+        sidebar.announced = None;
+        (std::mem::take(&mut sidebar.opened), sidebar.margin.take())
+    });
+    if opened || native_inspector(window, cx).is_some() || window.is_inspector_picking(cx) {
         window.toggle_inspector(cx);
+    }
+    if let Some(margin) = margin {
+        margin.release(cx);
     }
     tooling::clear_inspector_selection(window, cx);
 }
@@ -216,23 +308,9 @@ impl AnnotationOverlay {
         cx.notify();
     }
 
-    #[cfg(agentation_external_inspector)]
-    pub(super) fn keep_inspection_anchors(&self, window: &mut Window, cx: &mut App) {
-        if window.inspector_entity().is_none()
-            && self
-                .session
-                .annotations
-                .iter()
-                .any(|note| note.feedback.inspection.is_some())
-        {
-            window.set_inspector_external(true);
-            window.toggle_inspector(cx);
-            if let Some(inspector) = window.inspector_entity() {
-                inspector.update(cx, |inspector, _| inspector.stop_picking());
-            }
-        }
-    }
-
+    /// Resume a saved inspection. Stock GPUI cannot reselect an element by
+    /// identity, so picking reopens and the next pick of that element continues
+    /// the note with its saved overrides.
     pub(super) fn open_inspection(
         &mut self,
         id: &str,
@@ -248,32 +326,16 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
-        #[cfg(agentation_external_inspector)]
-        {
-            self.keep_inspection_anchors(window, cx);
-            if !window.select_inspection_anchor(&note.feedback.element_path, cx) {
-                self.notice = "This element is not available in the current view.".into();
-                cx.notify();
-                return;
-            }
-            present(window, true, cx);
-            self.inspecting = true;
-            self.inspected_id = window
-                .inspector_entity()
-                .and_then(|inspector| inspector.read(cx).active_element_id().cloned());
-            self.restore_configuration = note.feedback.gpui_configuration.clone();
-            self.review_open = false;
-            self.inspection_note = Some(note.id.clone());
-            self.selected_note = Some(note.id);
-            self.notice.clear();
-            cx.notify();
-        }
-        #[cfg(not(agentation_external_inspector))]
-        {
-            self.notice =
-                "Reopening an anchored element requires the external inspector build.".into();
-            cx.notify();
-        }
+        self.review_open = false;
+        self.inspecting = true;
+        self.inspected_id = None;
+        self.inspected_configuration = None;
+        self.restore_configuration = None;
+        self.inspection_note = Some(note.id.clone());
+        self.selected_note = Some(note.id);
+        self.notice = "Pick the element again to continue this inspection.".into();
+        inspector::start(window, !self.toolbar_hidden, cx);
+        cx.notify();
     }
 
     fn sync_inspector_selection(
@@ -290,6 +352,16 @@ impl AnnotationOverlay {
         else {
             return false;
         };
+        // GPUI's own sidebar is inspectable while picking; a pick that lands
+        // there is noise, so picking simply resumes.
+        let (content_width, _) = surface::viewport(window, cx);
+        if f32::from(selection.bounds.origin.x) >= content_width {
+            let host = window.window_handle();
+            cx.defer(move |cx| {
+                let _ = host.update(cx, |_, window, cx| resume_picking(window, cx));
+            });
+            return false;
+        }
         if let Some(configuration) = self.restore_configuration.take() {
             let id = selection.id.clone();
             let owner = cx.entity().downgrade();
@@ -375,7 +447,7 @@ impl AnnotationOverlay {
                 width: bounds.size.width.into(),
                 height: bounds.size.height.into(),
             };
-            let (w, _) = surface::viewport(window);
+            let (w, _) = surface::viewport(window, cx);
             let feedback = AnnotationInput {
                 inspection: Some(snapshot),
                 comment: existing

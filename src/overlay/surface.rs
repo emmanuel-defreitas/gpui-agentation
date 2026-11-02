@@ -156,13 +156,21 @@ pub(super) fn row_action(button: impl IntoElement) -> gpui::Div {
         .child(button)
 }
 
-pub(super) fn viewport(window: &Window) -> (f32, f32) {
+/// The app's content area in window pixels. While GPUI's inspector is open it
+/// owns a sidebar at the window's right, which annotations must not cover and
+/// normalized coordinates must not stretch into.
+pub(super) fn viewport(window: &Window, cx: &App) -> (f32, f32) {
     let size = window.viewport_size();
-    (size.width.into(), size.height.into())
+    let width = if inspector::sidebar_open(window, cx) {
+        (size.width - inspector::sidebar_width(window)).max(px(0.))
+    } else {
+        size.width
+    };
+    (width.into(), size.height.into())
 }
 
-fn normalized(at: gpui::Point<gpui::Pixels>, window: &Window) -> (f32, f32) {
-    let (w, h) = viewport(window);
+fn normalized(at: gpui::Point<gpui::Pixels>, window: &Window, cx: &App) -> (f32, f32) {
+    let (w, h) = viewport(window, cx);
     (
         (f32::from(at.x) / w.max(1.0)).clamp(0.0, 1.0),
         (f32::from(at.y) / h.max(1.0)).clamp(0.0, 1.0),
@@ -448,7 +456,7 @@ impl AnnotationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(before) = self.textbox_resize.take() {
+        if let Some((before, _)) = self.textbox_resize.take() {
             let after = self
                 .session
                 .annotations
@@ -470,14 +478,14 @@ impl AnnotationOverlay {
             return;
         }
         if let Some((before, offset)) = self.textbox_drag.take() {
-            let p = normalized(at, window);
+            let p = normalized(at, window, cx);
             let after = super::textbox::moved_textbox(
                 &before,
                 (
                     (p.0 - offset.0).clamp(0.0, 1.0),
                     (p.1 - offset.1).clamp(0.0, 1.0),
                 ),
-                viewport(window),
+                viewport(window, cx),
             );
             if before != after {
                 match self.store.replace_note(Some(&before), Some(&after)) {
@@ -495,12 +503,12 @@ impl AnnotationOverlay {
             // The dropped spot is the new anchor; re-seed it from the target's current position.
             self.follow_baselines.remove(&before.id);
             let mut after = before.clone();
-            let p = normalized(at, window);
+            let p = normalized(at, window, cx);
             let p = (
                 (p.0 - offset.0).clamp(0.0, 1.0),
                 (p.1 - offset.1).clamp(0.0, 1.0),
             );
-            let (_, h) = viewport(window);
+            let (_, h) = viewport(window, cx);
             after.feedback.x = p.0 * 100.0;
             after.feedback.y = p.1 * h;
             if let Some(AnnotationShape::Pin { at, .. }) = &mut after.feedback.shape {
@@ -527,19 +535,20 @@ impl AnnotationOverlay {
             return;
         };
         let shape = if tool == Tool::Select && !points.is_empty() {
-            Some(AnnotationShape::Text {
-                at: points[0],
-                text: String::new(),
-                color: self.color,
-                width: None,
-            })
+            // A drag frames the box; a click places one sized to its text.
+            Some(crate::drawing::text_box(
+                points[0],
+                normalized(at, window, cx),
+                viewport(window, cx),
+                self.color,
+            ))
         } else {
-            crate::drawing::finish_shape(tool, points, normalized(at, window), self.color)
+            crate::drawing::finish_shape(tool, points, normalized(at, window, cx), self.color)
         };
         let Some(shape) = shape else {
             return;
         };
-        let (w, h) = viewport(window);
+        let (w, h) = viewport(window, cx);
         let bounds = shape.bounds(w, h);
         self.draft = Some(Draft {
             index: None,
@@ -570,28 +579,28 @@ impl AnnotationOverlay {
         window: &Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(before) = &self.textbox_resize {
-            let id = before.id.clone();
-            if let Some(AnnotationShape::Text { at: origin, .. }) = before.feedback.shape.as_ref() {
-                let left = origin.0;
-                let p = normalized(at, window);
-                let width = (p.0 - left).clamp(0.04, (1.0 - left).max(0.04));
-                if let Some(note) = self.session.annotations.iter_mut().find(|n| n.id == id) {
-                    if let Some(AnnotationShape::Text { width: w, .. }) = &mut note.feedback.shape {
-                        *w = Some(width);
-                    }
+        if let Some((before, grip)) = &self.textbox_resize {
+            let pointer = normalized(at, window, cx);
+            if let Some(after) = self.resized_textbox(before, *grip, pointer, window, cx) {
+                if let Some(note) = self
+                    .session
+                    .annotations
+                    .iter_mut()
+                    .find(|n| n.id == before.id)
+                {
+                    *note = after;
                 }
                 cx.notify();
             }
         } else if let Some((before, offset)) = &self.textbox_drag {
-            let p = normalized(at, window);
+            let p = normalized(at, window, cx);
             let after = super::textbox::moved_textbox(
                 before,
                 (
                     (p.0 - offset.0).clamp(0.0, 1.0),
                     (p.1 - offset.1).clamp(0.0, 1.0),
                 ),
-                viewport(window),
+                viewport(window, cx),
             );
             if let Some(note) = self
                 .session
@@ -603,7 +612,7 @@ impl AnnotationOverlay {
             }
             cx.notify();
         } else if let Some((before, offset)) = &self.pin_drag {
-            let p = normalized(at, window);
+            let p = normalized(at, window, cx);
             let p = (
                 (p.0 - offset.0).clamp(0.0, 1.0),
                 (p.1 - offset.1).clamp(0.0, 1.0),
@@ -623,7 +632,7 @@ impl AnnotationOverlay {
             cx.notify();
         } else if !self.stroke.is_empty() && self.stroke.len() < 4096 {
             self.pointer = Some((at.x.into(), at.y.into()));
-            let next = normalized(at, window);
+            let next = normalized(at, window, cx);
             if self.stroke.last() != Some(&next) {
                 self.stroke.push(next);
                 cx.notify();
@@ -643,7 +652,7 @@ impl AnnotationOverlay {
         }
     }
 
-    fn shape_at(&self, at: gpui::Point<gpui::Pixels>, window: &Window) -> Option<String> {
+    fn shape_at(&self, at: gpui::Point<gpui::Pixels>, window: &Window, cx: &App) -> Option<String> {
         self.session
             .annotations
             .iter()
@@ -652,41 +661,19 @@ impl AnnotationOverlay {
                 matches!(
                     note.status,
                     AnnotationStatus::Pending | AnnotationStatus::Acknowledged
-                ) && ({
-                    #[cfg(agentation_external_inspector)]
-                    if note.feedback.inspection.is_some() {
-                        return window
-                            .inspection_anchor(&note.feedback.element_path)
-                            .is_some_and(|(_, b)| {
-                                let x = f32::from(at.x);
-                                let y = f32::from(at.y);
-                                let r = Rect {
-                                    x: b.origin.x.into(),
-                                    y: b.origin.y.into(),
-                                    width: b.size.width.into(),
-                                    height: b.size.height.into(),
-                                };
-                                r.contains(x, y)
-                                    && ((x - r.x).abs() <= 6.
-                                        || (y - r.y).abs() <= 6.
-                                        || (x - r.x - r.width).abs() <= 6.
-                                        || (y - r.y - r.height).abs() <= 6.)
-                            });
-                    }
-                    false
-                } || self
+                ) && (self
                     .textbox_bounds
                     .get(&note.id)
                     .is_some_and(|bounds| bounds.contains(&at))
                     || note.feedback.shape.as_ref().is_some_and(|shape| {
-                        shape.hit((at.x.into(), at.y.into()), viewport(window), 8.0)
+                        shape.hit((at.x.into(), at.y.into()), viewport(window, cx), 8.0)
                     }))
             })
             .map(|note| note.id.clone())
     }
 
     fn panel(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let (w, h) = viewport(window);
+        let (w, h) = viewport(window, cx);
         let annotation = if let Some(draft) = &self.draft {
             let mut bounds = if let Some(shape) = &draft.shape {
                 shape.bounds(w, h)
@@ -843,7 +830,7 @@ impl AnnotationOverlay {
             return div().into_any_element();
         }
         let active = self.active || self.draft.is_some();
-        let (w, h) = viewport(window);
+        let (w, h) = viewport(window, cx);
         let owner = cx.entity_id();
         let start_drag = cx.entity().downgrade();
         let mut layer = div().absolute().size_full();
@@ -901,16 +888,16 @@ impl AnnotationOverlay {
                         if window.default_prevented() || this.draft.is_some() {
                             return;
                         }
-                        if let Some(id) = this.shape_at(event.position, window) {
+                        if let Some(id) = this.shape_at(event.position, window, cx) {
                             this.activate_annotation(&id, window, cx);
                             return;
                         }
                         if this.tool.is_some() {
-                            this.stroke = vec![normalized(event.position, window)];
+                            this.stroke = vec![normalized(event.position, window, cx)];
                             cx.notify();
                             return;
                         }
-                        let size = viewport(window);
+                        let size = viewport(window, cx);
                         let at = (f32::from(event.position.x), f32::from(event.position.y));
                         if this.tool.is_none() {
                             if let Some(target) = target::pick(window, cx, at.0, at.1) {
@@ -935,7 +922,7 @@ impl AnnotationOverlay {
                     MouseButton::Right,
                     cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
                         cx.stop_propagation();
-                        if let Some(id) = this.shape_at(event.position, window) {
+                        if let Some(id) = this.shape_at(event.position, window, cx) {
                             this.show_annotation_menu(&id, event.position, window, cx);
                         } else {
                             this.open_canvas_menu(event.position, window, cx);
@@ -995,6 +982,33 @@ impl AnnotationOverlay {
                 shapes.push(sketch);
             }
         }
+        // The Textbox tool frames its box while dragging, as Freeform does.
+        if self.tool == Some(Tool::Select) && self.draft.is_none() {
+            if let (Some(start), Some(end)) = (self.stroke.first(), self.stroke.last()) {
+                let frame = crate::drawing::text_box(*start, *end, (w, h), self.color);
+                if let AnnotationShape::Text {
+                    at,
+                    width: Some(width),
+                    height: Some(height),
+                    ..
+                } = frame
+                {
+                    layer = layer.child(
+                        div()
+                            .debug_selector(|| "feedback-textbox-frame".into())
+                            .absolute()
+                            .left(px(at.0 * w))
+                            .top(px(at.1 * h))
+                            .w(px(width * w))
+                            .h(px(height * h))
+                            .border_1()
+                            .border_dashed()
+                            .border_color(cx.theme().colors.chart[self.color])
+                            .rounded(cx.theme().radius(Radius::Sm)),
+                    );
+                }
+            }
+        }
         let colors = cx.theme().colors.chart;
         let media = cx.theme().media();
         let stroke = f32::from(media.mark_stroke.to_pixels(window.rem_size()));
@@ -1023,17 +1037,6 @@ impl AnnotationOverlay {
                     .iter()
                     .any(|t| t.id == a.feedback.element_path)
             {
-                continue;
-            }
-            #[cfg(agentation_external_inspector)]
-            if a.feedback.inspection.is_some() {
-                layer = layer.child(super::anchored::AnchorMark {
-                    key: a.feedback.element_path.clone(),
-                    marker: self
-                        .marker(&a.id, a.index, Rect::default(), window, cx)
-                        .into_any_element(),
-                    color: cx.theme().colors.chart[a.annotation_color()],
-                });
                 continue;
             }
             let bounds = Rect {
@@ -1111,7 +1114,7 @@ impl AnnotationOverlay {
                             if this.settings_open || this.review_open {
                                 return;
                             }
-                            if let Some(id) = this.shape_at(event.position, window) {
+                            if let Some(id) = this.shape_at(event.position, window, cx) {
                                 this.show_annotation_menu(&id, event.position, window, cx);
                                 cx.stop_propagation();
                             } else if this.active {
@@ -1134,7 +1137,8 @@ impl AnnotationOverlay {
                             root.when(self.over_shape, |root| root.cursor_pointer())
                                 .on_mouse_move(cx.listener(
                                     |this, event: &gpui::MouseMoveEvent, window, cx| {
-                                        let over = this.shape_at(event.position, window).is_some();
+                                        let over =
+                                            this.shape_at(event.position, window, cx).is_some();
                                         if this.over_shape != over {
                                             this.over_shape = over;
                                             cx.notify();
@@ -1145,7 +1149,8 @@ impl AnnotationOverlay {
                                     MouseButton::Left,
                                     cx.listener(
                                         |this, event: &gpui::MouseDownEvent, window, cx| {
-                                            if let Some(id) = this.shape_at(event.position, window)
+                                            if let Some(id) =
+                                                this.shape_at(event.position, window, cx)
                                             {
                                                 this.activate_annotation(&id, window, cx);
                                                 cx.stop_propagation();
@@ -1298,12 +1303,13 @@ impl AnnotationOverlay {
                             this.advance_drag(window.mouse_position(), window, cx);
                             return;
                         }
-                        let (_, h) = viewport(window);
+                        let (_, h) = viewport(window, cx);
                         let p = normalized(
                             this.annotation_press
                                 .take()
                                 .unwrap_or(window.mouse_position()),
                             window,
+                            cx,
                         );
                         let offset = (
                             p.0 - note.feedback.x / 100.0,
@@ -1341,7 +1347,12 @@ impl AnnotationOverlay {
                     }
                 }),
             );
-        let at = centered_panel(center, (side.into(), side.into()), viewport(window), 0.0);
+        let at = centered_panel(
+            center,
+            (side.into(), side.into()),
+            viewport(window, cx),
+            0.0,
+        );
         div()
             .absolute()
             .left(px(at.0))

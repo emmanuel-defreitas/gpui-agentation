@@ -25,8 +25,23 @@ impl Render for Host {
             }))
     }
 }
+/// The host's visible size; the hidden margin adds GPUI's sidebar to the viewport.
+const HOST: gpui::Size<gpui::Pixels> = size(px(900.), px(650.));
+
 fn draw(cx: &mut VisualTestContext) {
     cx.run_until_parked();
+    // Test windows have no native content view to oversize: emulate the hidden
+    // margin by widening the viewport by the sidebar while GPUI's inspector is on.
+    let wanted = cx.update(|window, cx| {
+        let mut wanted = HOST;
+        if inspector::sidebar_open(window, cx) {
+            wanted.width += inspector::sidebar_width(window);
+        }
+        wanted
+    });
+    if cx.update(|window, _| window.viewport_size()) != wanted {
+        cx.simulate_resize(wanted);
+    }
     cx.update(|window, cx| window.draw(cx).clear(cx));
     cx.run_until_parked();
 }
@@ -46,7 +61,10 @@ fn setup(
     &mut VisualTestContext,
 ) {
     cx.update(crate::ely::init_for_tests);
-    cx.update(|cx| crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true));
+    cx.update(|cx| {
+        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        cx.set_global(toolbar_window::SimulateHiddenMargin);
+    });
     let (host, cx) = cx.add_window_view(|window, cx| {
         let store = Store::memory();
         let session = store
@@ -59,7 +77,7 @@ fn setup(
         }
     });
     cx.update(|window, _| window.activate_window());
-    cx.simulate_resize(size(px(900.), px(650.)));
+    cx.simulate_resize(HOST);
     draw(cx);
     let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
     cx.update(|window, cx| overlay.update(cx, |this, cx| this.choose_tool(None, window, cx)));
@@ -92,18 +110,16 @@ fn inspection_annotation_autosaves_properties_reopens_and_accepts_optional_comme
         assert_eq!(note.index, 1);
         assert!(note.feedback.comment.is_empty());
         assert!(note.feedback.gpui_configuration.is_none());
-        assert_eq!(
-            note.feedback.inspection.as_ref().unwrap().properties.len(),
-            6
-        );
+        let properties = &note.feedback.inspection.as_ref().unwrap().properties;
+        assert_eq!(properties.len(), 8);
+        assert_eq!(properties["Background"], "none");
+        assert_eq!(properties["Text color"], "none");
         note
     });
+    // The panel lives in the companion; the host draws nothing in GPUI's sidebar.
+    assert!(cx.debug_bounds("inspector-header").is_none());
     let mut palette = tools(&overlay, cx);
-    assert!(
-        palette
-            .debug_bounds("external-inspector-feedback")
-            .is_none()
-    );
+    assert!(palette.debug_bounds("inspector-header").is_some());
     assert!(palette.debug_bounds("feedback-toolbar-close").is_none());
     let track = palette
         .debug_bounds("inspector-slider-ely-inspector-opacity")
@@ -157,8 +173,20 @@ fn inspection_annotation_autosaves_properties_reopens_and_accepts_optional_comme
         })
     });
     draw(cx);
-    let mut palette = tools(&overlay, cx);
-    draw(&mut palette);
+    // Stock GPUI cannot reselect by identity: reopening re-enters picking and
+    // the next pick of the same element resumes the note.
+    cx.update(|window, cx| {
+        let this = overlay.read(cx);
+        assert!(this.inspecting);
+        assert!(window.is_inspector_picking(cx));
+        assert_eq!(this.inspection_note.as_deref(), Some(original.id.as_str()));
+        assert!(this.notice.contains("Pick the element again"));
+    });
+    let bounds = cx.debug_bounds("inspection-target").unwrap();
+    cx.simulate_mouse_move(bounds.center(), None, Modifiers::none());
+    draw(cx);
+    cx.simulate_click(bounds.center(), Modifiers::none());
+    draw(cx);
     draw(cx);
     cx.update(|_, cx| {
         let this = overlay.read(cx);
@@ -175,6 +203,7 @@ fn inspection_annotation_autosaves_properties_reopens_and_accepts_optional_comme
             "reopening preserves saved overrides"
         );
     });
+    let mut palette = tools(&overlay, cx);
     let reset = palette.debug_bounds("inspector-reset").unwrap();
     assert!(reset.size.width > px(0.));
     cx.update(|window, cx| {
@@ -192,10 +221,11 @@ fn inspection_annotation_autosaves_properties_reopens_and_accepts_optional_comme
     draw(cx);
     cx.simulate_mouse_move(target.center(), None, Modifiers::none());
     draw(cx);
+    // GPUI swallows host clicks while picking; the companion's Inspect button
+    // reads "Stop inspecting" and ends it.
     let mut palette = tools(&overlay, cx);
-    let stop = palette.debug_bounds("feedback-inspect-stop").unwrap();
+    let stop = palette.debug_bounds("companion-tool-i").unwrap();
     palette.simulate_click(stop.center(), Modifiers::none());
-    draw(&mut palette);
     draw(cx);
     cx.update(|window, cx| {
         assert!(!overlay.read(cx).inspecting);
@@ -225,10 +255,10 @@ fn fresh_inspection_pick_preserves_saved_overrides(cx: &mut TestAppContext) {
     });
     draw(cx);
     let bounds = cx.debug_bounds("inspection-target").unwrap();
+    cx.simulate_mouse_move(bounds.center(), None, Modifiers::none());
+    draw(cx);
     cx.simulate_click(bounds.center(), Modifiers::none());
     draw(cx);
-    let mut palette = tools(&overlay, cx);
-    draw(&mut palette);
     draw(cx);
     cx.update(|_, cx| {
         assert_eq!(overlay.read(cx).session.annotations.len(), 1);
@@ -256,7 +286,8 @@ fn selected_inspection_reenters_picking_on_click_away_or_escape(cx: &mut TestApp
         overlay.update(cx, |this, cx| this.toggle(window, cx));
         assert!(overlay.read(cx).active);
     });
-    cx.simulate_click(point(px(850.), px(620.)), Modifiers::none());
+    // Empty app content, away from the element and outside GPUI's sidebar.
+    cx.simulate_click(point(px(380.), px(600.)), Modifiers::none());
     draw(cx);
     cx.update(|window, cx| {
         assert!(overlay.read(cx).inspecting);
@@ -283,10 +314,11 @@ fn selected_inspection_reenters_picking_on_click_away_or_escape(cx: &mut TestApp
         assert!(overlay.read(cx).inspecting);
         assert!(window.is_inspector_picking(cx));
     });
+    // GPUI swallows host clicks while picking; the companion's Inspect button
+    // reads "Stop inspecting" and ends it.
     let mut palette = tools(&overlay, cx);
-    let stop = palette.debug_bounds("feedback-inspect-stop").unwrap();
+    let stop = palette.debug_bounds("companion-tool-i").unwrap();
     palette.simulate_click(stop.center(), Modifiers::none());
-    draw(&mut palette);
     draw(cx);
     cx.update(|window, cx| {
         assert!(!overlay.read(cx).inspecting);
@@ -345,21 +377,13 @@ fn editing_an_older_inspection_keeps_undo_transactions_valid(cx: &mut TestAppCon
 }
 
 #[gpui::test]
-fn inspection_annotation_follows_element_layout_and_hides_when_element_disappears(
-    cx: &mut TestAppContext,
-) {
+fn inspection_pin_stays_where_the_element_was_inspected(cx: &mut TestAppContext) {
     let (host, overlay, cx) = setup(cx);
     cx.update(|window, cx| overlay.update(cx, |this, cx| this.stop_inspection(window, cx)));
     draw(cx);
-    let selected_bounds = cx.debug_bounds("inspection-target").unwrap();
-    cx.simulate_click(
-        point(selected_bounds.left() + px(1.), selected_bounds.center().y),
-        Modifiers::none(),
-    );
-    draw(cx);
-    cx.update(|_, cx| assert!(overlay.read(cx).inspecting));
-    cx.update(|window, cx| overlay.update(cx, |this, cx| this.stop_inspection(window, cx)));
-    draw(cx);
+    let inspected = cx.debug_bounds("inspection-target").unwrap();
+    let pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert!(inspected.contains(&pin.center()), "pin sits on the element");
     cx.update(|_, cx| {
         host.update(cx, |host, cx| {
             host.offset = 180.;
@@ -367,29 +391,14 @@ fn inspection_annotation_follows_element_layout_and_hides_when_element_disappear
         })
     });
     draw(cx);
-    let bounds = cx.debug_bounds("inspection-target").unwrap();
-    let pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    // Stock GPUI exposes no element identity outside picking, so the pin keeps
+    // the saved position rather than following the moved element.
     assert_eq!(
-        pin.center(),
-        bounds.center(),
-        "pin follows current element layout"
+        cx.debug_bounds("feedback-marker-number-1")
+            .unwrap()
+            .center(),
+        pin.center()
     );
-    cx.update(|_, cx| {
-        host.update(cx, |host, cx| {
-            host.shown = false;
-            cx.notify();
-        })
-    });
-    draw(cx);
-    assert!(cx.debug_bounds("feedback-marker-number-1").is_none());
-    cx.update(|window, cx| {
-        overlay.update(cx, |this, cx| {
-            let id = this.session.annotations[0].id.clone();
-            this.open_inspection(&id, window, cx);
-            assert!(!this.inspecting);
-            assert!(this.notice.contains("not available"));
-        })
-    });
 }
 
 #[gpui::test]
@@ -407,7 +416,7 @@ fn inspection_annotation_comments_use_companion_and_drawing_switch_is_independen
     cx.update(|window, cx| overlay.update(cx, |this, cx| this.dismiss_sheet(window, cx)));
     draw(cx);
     let mut palette = tools(&overlay, cx);
-    assert!(palette.debug_bounds("external-inspector-panel").is_none());
+    assert!(palette.debug_bounds("companion-panel").is_none());
     let arrow = palette.debug_bounds("companion-tool-a").unwrap();
     palette.simulate_click(arrow.center(), Modifiers::none());
     draw(&mut palette);
