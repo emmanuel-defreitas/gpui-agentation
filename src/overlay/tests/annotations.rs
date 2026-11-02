@@ -1576,6 +1576,92 @@ fn drawn_annotations_scroll_with_the_content_under_them_and_commit_before_editin
     assert_eq!(edited.center().y, after.center().y, "no jump on edit");
 }
 
+struct PageHost {
+    overlay: Entity<AnnotationOverlay>,
+}
+
+impl gpui::Render for PageHost {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::begin_frame(window, cx);
+        // Like the example app: cards registered inside a real scroll container,
+        // with padding and gaps where no target lies.
+        div()
+            .size_full()
+            .child(
+                div()
+                    .id("page-scroll")
+                    .size_full()
+                    .overflow_y_scroll()
+                    .child(
+                        div()
+                            .p_6()
+                            .flex()
+                            .flex_col()
+                            .gap_5()
+                            .child(crate::target("one", "One", div().w_full().h(px(500.))))
+                            .child(crate::target("two", "Two", div().w_full().h(px(500.)))),
+                    ),
+            )
+            .child(self.overlay.clone())
+    }
+}
+
+#[gpui::test]
+fn a_pin_between_cards_scrolls_with_a_real_scroll_container(cx: &mut TestAppContext) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Page scroll", "gpui://page-scroll")
+        .unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| PageHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    // The gap between the cards: no target contains this point.
+    cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Gap".into(),
+                        element_path: "drawing:gap".into(),
+                        element: "Pin".into(),
+                        x: 100. / 800. * 100.,
+                        y: 534.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(AnnotationShape::Pin {
+                            at: (100. / 800., 534. / 600.),
+                            color: 0,
+                        }),
+                    },
+                )
+                .unwrap();
+            this.session.annotations.push(note);
+            cx.notify();
+        })
+    });
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.simulate_event(gpui::ScrollWheelEvent {
+        position: point(px(100.), px(100.)),
+        delta: gpui::ScrollDelta::Pixels(point(px(0.), px(-30.))),
+        modifiers: Modifiers::none(),
+        touch_phase: gpui::TouchPhase::Moved,
+    });
+    draw(cx);
+    draw(cx);
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after.center().y, before.center().y - px(30.));
+}
+
 #[gpui::test]
 fn textbox_editing_keeps_pointer_selection_and_saves_multiline_text(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);

@@ -41,7 +41,7 @@ impl AnnotationOverlay {
                 continue;
             };
             let bounds = shape.bounds(w, h);
-            let anchor = target::pick(
+            let anchor = target::nearest(
                 window,
                 cx,
                 bounds.x + bounds.width / 2.0,
