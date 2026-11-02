@@ -3,7 +3,6 @@
 //! every menu — pin, shape, element, and tools — looks like a macOS menu.
 use super::commands::AnnotationCommand;
 use super::surface::viewport;
-use super::toolbar_window::TOOLS;
 use super::*;
 use crate::ely::menus::{ContextMenu, Menu, MenuItem};
 use gpui::{AnyElement, Pixels, Point, SharedString};
@@ -33,6 +32,7 @@ pub(super) enum ContextKind {
 pub(super) struct SubItem {
     pub label: SharedString,
     pub tag: i64,
+    pub keys: Option<SharedString>,
     pub checked: bool,
     pub enabled: bool,
 }
@@ -42,6 +42,7 @@ pub(super) enum Row {
     Item {
         label: SharedString,
         tag: i64,
+        keys: Option<SharedString>,
         checked: bool,
         enabled: bool,
     },
@@ -52,23 +53,21 @@ pub(super) enum Row {
     Separator,
 }
 
-fn item(label: impl Into<SharedString>, tag: i64) -> Row {
+fn command_item(label: impl Into<SharedString>, tag: i64, command: &str, enabled: bool) -> Row {
     Row::Item {
         label: label.into(),
         tag,
-        checked: false,
-        enabled: true,
-    }
-}
-
-fn disabled(label: impl Into<SharedString>, tag: i64, enabled: bool) -> Row {
-    Row::Item {
-        label: label.into(),
-        tag,
+        keys: super::commands::shortcut(command).map(Into::into),
         checked: false,
         enabled,
     }
 }
+
+const INSPECT: i64 = 100;
+const UNDO: i64 = 101;
+const REDO: i64 = 102;
+const DELETE: i64 = 2;
+const COLOR: i64 = 10; // Color(i) == COLOR + i
 
 fn color_submenu(selected: usize, tag_of: impl Fn(usize) -> i64) -> Row {
     Row::Submenu {
@@ -79,6 +78,7 @@ fn color_submenu(selected: usize, tag_of: impl Fn(usize) -> i64) -> Row {
             .map(|(color, name)| SubItem {
                 label: name.into(),
                 tag: tag_of(color),
+                keys: None,
                 checked: selected == color,
                 enabled: true,
             })
@@ -88,11 +88,9 @@ fn color_submenu(selected: usize, tag_of: impl Fn(usize) -> i64) -> Row {
 
 // Note-menu tags.
 const EDIT: i64 = 1;
-const DELETE: i64 = 2;
 const COPY: i64 = 3;
 const DUPLICATE: i64 = 4;
 const COMMENT: i64 = 5;
-const COLOR: i64 = 10; // Color(i) == COLOR + i
 
 fn note_action(tag: i64) -> Option<NoteAction> {
     Some(match tag {
@@ -187,6 +185,9 @@ impl AnnotationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.active {
+            return;
+        }
         match crate::target::pick(window, cx, f32::from(at.x), f32::from(at.y)) {
             Some(target) => self.show_element_menu(target, at, window, cx),
             None => self.show_tools_menu(at, window, cx),
@@ -200,6 +201,9 @@ impl AnnotationOverlay {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.active {
+            return;
+        }
         #[cfg(all(target_os = "macos", not(test)))]
         {
             let rows = self.rows_for(&kind, cx);
@@ -234,6 +238,39 @@ impl AnnotationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        match tag {
+            INSPECT => {
+                self.dispatch_command(
+                    &AnnotationCommand {
+                        name: if self.inspecting { "stop" } else { "inspect" }.into(),
+                    },
+                    window,
+                    cx,
+                );
+                return;
+            }
+            UNDO => {
+                self.dispatch_command(
+                    &AnnotationCommand {
+                        name: "undo".into(),
+                    },
+                    window,
+                    cx,
+                );
+                return;
+            }
+            REDO => {
+                self.dispatch_command(
+                    &AnnotationCommand {
+                        name: "redo".into(),
+                    },
+                    window,
+                    cx,
+                );
+                return;
+            }
+            _ => {}
+        }
         match kind {
             ContextKind::Note(id) => {
                 if let Some(action) = note_action(tag) {
@@ -256,91 +293,45 @@ impl AnnotationOverlay {
     }
 
     fn rows_for(&self, kind: &ContextKind, cx: &App) -> Vec<Row> {
-        match kind {
+        let mut rows = self.common_rows(cx);
+        rows.extend(match kind {
             ContextKind::Note(id) => self.note_rows(id),
             ContextKind::Element(_) => element_rows(),
-            ContextKind::Tools => self.tool_rows(cx),
+            ContextKind::Tools => tools_rows(),
+        });
+        rows
+    }
+
+    fn common_rows(&self, cx: &App) -> Vec<Row> {
+        let mut rows = vec![command_item(
+            if self.inspecting {
+                "Stop inspecting"
+            } else {
+                "Inspect"
+            },
+            INSPECT,
+            "inspect",
+            true,
+        )];
+        if self.command_enabled("undo", cx) {
+            rows.push(command_item("Undo", UNDO, "undo", true));
         }
+        if self.command_enabled("redo", cx) {
+            rows.push(command_item("Redo", REDO, "redo", true));
+        }
+        rows.push(Row::Separator);
+        rows
     }
 
     fn note_rows(&self, id: &str) -> Vec<Row> {
         let note = self.store.annotation(id).ok();
-        let shape = note.as_ref().and_then(|n| n.feedback.shape.clone());
         let selected = note
             .as_ref()
             .map_or(self.color, crate::Annotation::annotation_color);
-        let is_shape = matches!(
-            shape,
-            Some(
-                crate::AnnotationShape::Box { .. }
-                    | crate::AnnotationShape::Arrow { .. }
-                    | crate::AnnotationShape::Pen { .. }
-                    | crate::AnnotationShape::Text { .. }
-            )
-        );
-        if is_shape {
-            vec![
-                color_submenu(selected, |c| COLOR + c as i64),
-                Row::Separator,
-                item("Delete", DELETE),
-                item("Duplicate", DUPLICATE),
-                item("Comment…", COMMENT),
-            ]
-        } else {
-            vec![
-                item("Edit…", EDIT),
-                item("Delete", DELETE),
-                item("Copy", COPY),
-            ]
-        }
-    }
-
-    fn tool_rows(&self, cx: &App) -> Vec<Row> {
-        let selected = self.active_tool_command();
-        let mut rows = Vec::new();
-        for (index, (_, _, label, command)) in TOOLS.iter().enumerate() {
-            let tag = index as i64 + 1;
-            let checked = *command == selected;
-            rows.push(Row::Item {
-                label: (*label).into(),
-                tag,
-                checked,
-                enabled: true,
-            });
-            if *command == "inspect" {
-                rows.push(Row::Separator);
-            }
-        }
-        rows.push(Row::Separator);
-        rows.push(color_submenu(self.color, |c| 20 + c as i64));
-        rows.push(Row::Separator);
-        rows.push(disabled("Undo", 10, self.command_enabled("undo", cx)));
-        rows.push(disabled("Redo", 11, self.command_enabled("redo", cx)));
-        rows.push(disabled(
-            "Save feedback",
-            12,
-            self.command_enabled("save", cx),
-        ));
-        rows.push(disabled(
-            "Delete annotation",
-            13,
-            self.command_enabled("delete", cx),
-        ));
-        rows.push(Row::Separator);
-        rows.push(item("Comments…", 14));
-        rows
-    }
-
-    /// The command name of the active tool, so its menu row shows as checked.
-    fn active_tool_command(&self) -> &'static str {
-        if self.inspecting {
-            return "inspect";
-        }
-        TOOLS
-            .iter()
-            .find(|(tool, _, _, _)| tool.is_some() && *tool == self.tool)
-            .map(|(_, _, _, command)| *command)
-            .unwrap_or("inspect")
+        vec![
+            color_submenu(selected, |c| COLOR + c as i64),
+            command_item("Delete", DELETE, "delete", true),
+        ]
     }
 
     fn element_action(
@@ -507,6 +498,7 @@ where
             Row::Item {
                 label,
                 tag,
+                keys,
                 checked,
                 enabled,
             } => {
@@ -515,16 +507,23 @@ where
                 } else {
                     MenuItem::new(label.clone())
                 };
+                let row = if let Some(keys) = keys {
+                    row.keys(keys.clone())
+                } else {
+                    row
+                };
                 menu.item(row.disabled(!*enabled).on_click(make(*tag)))
             }
             Row::Submenu { label, items } => {
                 let mut submenu = Menu::new();
                 for sub in items {
-                    submenu = submenu.item(
-                        MenuItem::radio(sub.label.clone(), sub.checked)
-                            .disabled(!sub.enabled)
-                            .on_click(make(sub.tag)),
-                    );
+                    let row = MenuItem::radio(sub.label.clone(), sub.checked);
+                    let row = if let Some(keys) = &sub.keys {
+                        row.keys(keys.clone())
+                    } else {
+                        row
+                    };
+                    submenu = submenu.item(row.disabled(!sub.enabled).on_click(make(sub.tag)));
                 }
                 menu.item(MenuItem::submenu(label.clone(), submenu))
             }
@@ -534,12 +533,37 @@ where
 }
 
 fn element_rows() -> Vec<Row> {
-    vec![
-        item("Comment", EL_COMMENT),
-        Row::Separator,
-        item("Box", EL_BOX),
-        item("Arrow", EL_ARROW),
-        item("Pen", EL_PEN),
-        item("Textbox", EL_TEXT),
-    ]
+    vec![new_submenu([
+        ("Comment", EL_COMMENT, "comment"),
+        ("Box", EL_BOX, "box"),
+        ("Arrow", EL_ARROW, "arrow"),
+        ("Pen", EL_PEN, "pen"),
+        ("Textbox", EL_TEXT, "text"),
+    ])]
+}
+
+fn tools_rows() -> Vec<Row> {
+    vec![new_submenu([
+        ("Box", 2, "box"),
+        ("Arrow", 3, "arrow"),
+        ("Pen", 4, "pen"),
+        ("Comment", 5, "comment"),
+        ("Textbox", 6, "text"),
+    ])]
+}
+
+fn new_submenu<const N: usize>(items: [(&str, i64, &str); N]) -> Row {
+    Row::Submenu {
+        label: "New".into(),
+        items: items
+            .into_iter()
+            .map(|(label, tag, command)| SubItem {
+                label: label.into(),
+                tag,
+                keys: super::commands::shortcut(command).map(Into::into),
+                checked: false,
+                enabled: true,
+            })
+            .collect(),
+    }
 }

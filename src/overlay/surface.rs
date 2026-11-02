@@ -113,6 +113,7 @@ pub(super) fn textbox_input(
         );
     }
     div()
+        .debug_selector(|| "feedback-textbox-input".into())
         .relative()
         .w_full()
         .text_size(px(16.0))
@@ -450,31 +451,21 @@ pub(super) fn notes_body(
 }
 
 impl AnnotationOverlay {
+    fn annotation_interaction_started(&self) -> bool {
+        self.draft.is_some()
+            || !self.stroke.is_empty()
+            || self.pin_drag.is_some()
+            || self.textbox_drag.is_some()
+            || self.textbox_resize.is_some()
+    }
+
     pub(super) fn finish_stroke(
         &mut self,
         at: gpui::Point<gpui::Pixels>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some((before, _)) = self.textbox_resize.take() {
-            let after = self
-                .session
-                .annotations
-                .iter()
-                .find(|n| n.id == before.id)
-                .cloned();
-            if let Some(after) = after {
-                if before != after {
-                    match self.store.replace_note(Some(&before), Some(&after)) {
-                        Ok(()) => self.record_change(Some(before), Some(after)),
-                        Err(error) => self.notice = error.to_string(),
-                    }
-                }
-            }
-            if let Ok(session) = self.store.session(&self.session.id) {
-                self.session = session;
-            }
-            cx.notify();
+        if self.finish_textbox_resize(cx) {
             return;
         }
         if let Some((before, offset)) = self.textbox_drag.take() {
@@ -550,6 +541,7 @@ impl AnnotationOverlay {
         };
         let (w, h) = viewport(window, cx);
         let bounds = shape.bounds(w, h);
+        self.draft_textbox_bounds = None;
         self.draft = Some(Draft {
             index: None,
             editing: true,
@@ -579,19 +571,9 @@ impl AnnotationOverlay {
         window: &Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some((before, grip)) = &self.textbox_resize {
+        if self.textbox_resize.is_some() {
             let pointer = normalized(at, window, cx);
-            if let Some(after) = self.resized_textbox(before, *grip, pointer, window, cx) {
-                if let Some(note) = self
-                    .session
-                    .annotations
-                    .iter_mut()
-                    .find(|n| n.id == before.id)
-                {
-                    *note = after;
-                }
-                cx.notify();
-            }
+            self.advance_textbox_resize(pointer, window, cx);
         } else if let Some((before, offset)) = &self.textbox_drag {
             let p = normalized(at, window, cx);
             let after = super::textbox::moved_textbox(
@@ -842,13 +824,19 @@ impl AnnotationOverlay {
                 .w_full()
                 .top_0()
                 .bottom_0()
-                .occlude()
+                .when(self.annotation_interaction_started(), |picker| {
+                    picker.occlude()
+                })
                 .cursor(if self.draft.is_some() {
                     CursorStyle::Arrow
                 } else {
                     tool_cursor(self.tool)
                 })
-                .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                .on_scroll_wheel(cx.listener(|this, _, _, cx| {
+                    if this.annotation_interaction_started() {
+                        cx.stop_propagation();
+                    }
+                }))
                 .on_hover(cx.listener(|this, hovered, _, cx| {
                     if !hovered && this.draft.is_none() && this.hovered.take().is_some() {
                         cx.notify();

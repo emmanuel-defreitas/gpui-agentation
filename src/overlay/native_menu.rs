@@ -47,11 +47,51 @@ unsafe fn string(text: &str) -> id {
 
 // Tags are shifted by one so the untouched default (0) reads as "no choice":
 // every real tag is stored as `tag + 1` and decoded back on the way out.
-unsafe fn entry(label: &str, tag: i64, checked: bool, enabled: bool, target: id) -> id {
+fn key_equivalent(keys: Option<&str>) -> (&'static str, usize) {
+    let Some(keys) = keys else {
+        return ("", 0);
+    };
+    let parts: Vec<_> = keys.split('-').collect();
+    let modifiers = parts[..parts.len().saturating_sub(1)]
+        .iter()
+        .fold(0, |mask, part| {
+            mask | match *part {
+                "cmd" => 1 << 20,
+                "shift" => 1 << 17,
+                "ctrl" => 1 << 18,
+                "alt" => 1 << 19,
+                _ => 0,
+            }
+        });
+    let key = match parts.last().copied().unwrap_or_default() {
+        "delete" | "backspace" => "\u{8}",
+        "i" => "i",
+        "b" => "b",
+        "a" => "a",
+        "p" => "p",
+        "c" => "c",
+        "t" => "t",
+        "z" => "z",
+        "s" => "s",
+        _ => "",
+    };
+    (key, modifiers)
+}
+
+unsafe fn entry(
+    label: &str,
+    tag: i64,
+    keys: Option<&str>,
+    checked: bool,
+    enabled: bool,
+    target: id,
+) -> id {
     unsafe {
+        let (key, modifiers) = key_equivalent(keys);
         let item = NSMenuItem::alloc(nil)
-            .initWithTitle_action_keyEquivalent_(string(label), sel!(agentationPick:), string(""))
+            .initWithTitle_action_keyEquivalent_(string(label), sel!(agentationPick:), string(key))
             .autorelease();
+        let _: () = msg_send![item, setKeyEquivalentModifierMask: modifiers];
         item.setTarget_(target);
         let _: () = msg_send![item, setTag: (tag + 1) as isize];
         let _: () = msg_send![item, setState: if checked { 1isize } else { 0isize }];
@@ -88,9 +128,17 @@ impl Popup {
                     Row::Item {
                         label,
                         tag,
+                        keys,
                         checked,
                         enabled,
-                    } => menu.addItem_(entry(label, *tag, *checked, *enabled, target)),
+                    } => menu.addItem_(entry(
+                        label,
+                        *tag,
+                        keys.as_deref(),
+                        *checked,
+                        *enabled,
+                        target,
+                    )),
                     Row::Submenu { label, items } => {
                         let submenu = NSMenu::new(nil).autorelease();
                         submenu.setAutoenablesItems(NO);
@@ -98,6 +146,7 @@ impl Popup {
                             submenu.addItem_(entry(
                                 &item.label,
                                 item.tag,
+                                item.keys.as_deref(),
                                 item.checked,
                                 item.enabled,
                                 target,

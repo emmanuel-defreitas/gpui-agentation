@@ -87,6 +87,51 @@ impl Grip {
 /// Smallest textbox width, as a share of the content area.
 pub(super) const MIN_WIDTH: f32 = 0.04;
 
+/// Clicks this close to a selected box, in pixels, still belong to its grips.
+const GRIP_REACH: f32 = 8.0;
+
+/// A textbox's normalized geometry: its top-left corner and, when framed, its
+/// wrap width and minimum height.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct TextFrame {
+    pub at: (f32, f32),
+    pub width: Option<f32>,
+    pub height: Option<f32>,
+}
+
+impl TextFrame {
+    fn of(shape: &AnnotationShape) -> Option<Self> {
+        match shape {
+            AnnotationShape::Text {
+                at, width, height, ..
+            } => Some(Self {
+                at: *at,
+                width: *width,
+                height: *height,
+            }),
+            _ => None,
+        }
+    }
+
+    fn write(self, shape: &mut AnnotationShape) {
+        if let AnnotationShape::Text {
+            at, width, height, ..
+        } = shape
+        {
+            *at = self.at;
+            *width = self.width;
+            *height = self.height;
+        }
+    }
+}
+
+/// A grip being pulled: on a saved note (kept for undo) or on the unsaved draft.
+pub(super) struct TextboxResize {
+    pub note: Option<Annotation>,
+    pub origin: TextFrame,
+    pub grip: Grip,
+}
+
 impl AnnotationOverlay {
     pub(super) fn select_textbox(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
         if !self.dismiss_note(window, cx) {
@@ -124,49 +169,69 @@ impl AnnotationOverlay {
         cx.notify();
     }
 
-    /// Begin resizing from one of the selected textbox's grips.
+    /// Begin resizing from one of a textbox's grips: a saved note by `id`, or
+    /// the unsaved draft with `None`. Editing continues through the resize.
     pub(super) fn begin_textbox_resize(
         &mut self,
-        id: &str,
+        id: Option<&str>,
         grip: Grip,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.dismiss_note(window, cx) {
+        let Some(id) = id else {
+            if let Some(origin) = self
+                .draft
+                .as_ref()
+                .filter(|draft| draft.id.is_none())
+                .and_then(|draft| draft.shape.as_ref())
+                .and_then(TextFrame::of)
+            {
+                self.textbox_resize = Some(TextboxResize {
+                    note: None,
+                    origin,
+                    grip,
+                });
+                cx.notify();
+            }
+            return;
+        };
+        let editing_this = self
+            .draft
+            .as_ref()
+            .is_some_and(|draft| draft.id.as_deref() == Some(id));
+        if !editing_this && !self.dismiss_note(window, cx) {
             return;
         }
         if let Ok(note) = self.store.annotation(id) {
-            if matches!(note.feedback.shape, Some(AnnotationShape::Text { .. })) {
+            if let Some(origin) = note.feedback.shape.as_ref().and_then(TextFrame::of) {
                 self.selected_note = Some(id.into());
-                self.textbox_resize = Some((note, grip));
+                self.textbox_resize = Some(TextboxResize {
+                    note: Some(note),
+                    origin,
+                    grip,
+                });
             }
         }
         cx.notify();
     }
 
-    /// The textbox as it stands with `grip` pulled to `pointer` (normalized).
-    pub(super) fn resized_textbox(
-        &self,
-        before: &Annotation,
+    /// `origin` with `grip` pulled to `pointer` (normalized). `measured` is the
+    /// box's current size on screen, for sides the frame leaves to its text.
+    pub(super) fn resized_frame(
+        origin: TextFrame,
+        measured: Option<&Bounds<Pixels>>,
         grip: Grip,
         pointer: (f32, f32),
         window: &Window,
         cx: &App,
-    ) -> Option<Annotation> {
-        let AnnotationShape::Text {
-            at, width, height, ..
-        } = before.feedback.shape.as_ref()?
-        else {
-            return None;
-        };
+    ) -> TextFrame {
         let (w, h) = viewport(window, cx);
-        let measured = self.textbox_bounds.get(&before.id);
-        let current_width = width.unwrap_or_else(|| {
+        let current_width = origin.width.unwrap_or_else(|| {
             measured.map_or(MIN_WIDTH, |bounds| {
                 f32::from(bounds.size.width) / w.max(1.0)
             })
         });
-        let current_height = height.unwrap_or_else(|| {
+        let current_height = origin.height.unwrap_or_else(|| {
             measured.map_or(0.0, |bounds| f32::from(bounds.size.height) / h.max(1.0))
         });
         let min_height = f32::from(
@@ -174,7 +239,7 @@ impl AnnotationOverlay {
                 .control_height(ControlSize::Lg)
                 .to_pixels(window.rem_size()),
         ) / h.max(1.0);
-        let (mut left, mut top) = *at;
+        let (mut left, mut top) = origin.at;
         let (mut right, mut bottom) = (left + current_width, top + current_height);
         if grip.moves_left() {
             left = pointer.0.clamp(0.0, right - MIN_WIDTH);
@@ -186,14 +251,109 @@ impl AnnotationOverlay {
         } else if grip.moves_bottom() {
             bottom = pointer.1.clamp(top + min_height, 1.0);
         }
-        let mut after = moved_textbox(before, (left, top), (w, h));
-        if let Some(AnnotationShape::Text { width, height, .. }) = &mut after.feedback.shape {
-            *width = Some(right - left);
-            if grip.moves_top() || grip.moves_bottom() {
-                *height = Some(bottom - top);
+        TextFrame {
+            at: (left, top),
+            width: Some(right - left),
+            height: if grip.moves_top() || grip.moves_bottom() {
+                Some(bottom - top)
+            } else {
+                origin.height
+            },
+        }
+    }
+
+    /// Apply the grip's current pointer to whatever is being resized.
+    pub(super) fn advance_textbox_resize(
+        &mut self,
+        pointer: (f32, f32),
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(resize) = &self.textbox_resize else {
+            return;
+        };
+        let (grip, origin) = (resize.grip, resize.origin);
+        match &resize.note {
+            Some(before) => {
+                let measured = self.textbox_bounds.get(&before.id);
+                let frame = Self::resized_frame(origin, measured, grip, pointer, window, cx);
+                let mut after = moved_textbox(before, frame.at, viewport(window, cx));
+                if let Some(shape) = &mut after.feedback.shape {
+                    frame.write(shape);
+                }
+                if let Some(note) = self
+                    .session
+                    .annotations
+                    .iter_mut()
+                    .find(|n| n.id == before.id)
+                {
+                    *note = after;
+                }
+            }
+            None => {
+                let measured = self.draft_textbox_bounds.as_ref();
+                let frame = Self::resized_frame(origin, measured, grip, pointer, window, cx);
+                let (w, h) = viewport(window, cx);
+                if let Some(draft) = self.draft.as_mut().filter(|draft| draft.id.is_none()) {
+                    if let Some(shape) = &mut draft.shape {
+                        frame.write(shape);
+                        let bounds = shape.bounds(w, h);
+                        draft.target.bounds = bounds;
+                        draft.x = (bounds.x + bounds.width / 2.0) / w.max(1.0) * 100.0;
+                        draft.y = bounds.y + bounds.height / 2.0;
+                    }
+                }
             }
         }
-        Some(after)
+        cx.notify();
+    }
+
+    /// Finish a grip drag: a saved note records the change; the draft keeps it.
+    pub(super) fn finish_textbox_resize(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(resize) = self.textbox_resize.take() else {
+            return false;
+        };
+        if let Some(before) = resize.note {
+            let after = self
+                .session
+                .annotations
+                .iter()
+                .find(|n| n.id == before.id)
+                .cloned();
+            if let Some(after) = after {
+                if before != after {
+                    match self.store.replace_note(Some(&before), Some(&after)) {
+                        Ok(()) => {
+                            // Editing continues on the resized frame, not the old one.
+                            if let Some(draft) = self
+                                .draft
+                                .as_mut()
+                                .filter(|draft| draft.id.as_deref() == Some(after.id.as_str()))
+                            {
+                                draft.shape = after.feedback.shape.clone();
+                            }
+                            self.record_change(Some(before), Some(after));
+                        }
+                        Err(error) => self.notice = error.to_string(),
+                    }
+                }
+            }
+            if let Ok(session) = self.store.session(&self.session.id) {
+                self.session = session;
+            }
+        }
+        cx.notify();
+        true
+    }
+
+    /// Whether a press at `at` belongs to the box or its grips, so it must not
+    /// end editing.
+    fn textbox_owns_press(bounds: Option<&Bounds<Pixels>>, at: Point<Pixels>) -> bool {
+        bounds.is_some_and(|bounds| {
+            bounds
+                .extend(gpui::Edges::all(px(GRIP_REACH)))
+                .contains(&at)
+        })
     }
 
     /// The inline editor for a brand-new, still-unsaved textbox draft. Keeps the
@@ -214,8 +374,19 @@ impl AnnotationOverlay {
             return None; // Saved textboxes render through `textbox` instead.
         }
         let color = cx.theme().colors.chart[draft.color];
+        let frame = self.textbox_frame(at, *width, *height, color, true, None, window, cx);
+        let mut grips = Vec::new();
+        if let Some(bounds) = self.draft_textbox_bounds {
+            for grip in Grip::ALL {
+                grips.push(self.resize_grip(None, grip, bounds, color, cx));
+            }
+        }
         Some(
-            self.textbox_frame(at, *width, *height, color, true, None, window, cx)
+            div()
+                .absolute()
+                .size_full()
+                .child(frame)
+                .children(grips)
                 .into_any_element(),
         )
     }
@@ -257,6 +428,8 @@ impl AnnotationOverlay {
             window,
             cx,
         );
+        // The pin sits above the box's left edge, like a tag, so the text
+        // starts at the box's own padding.
         div()
             .absolute()
             .size_full()
@@ -266,7 +439,7 @@ impl AnnotationOverlay {
                 note.index,
                 Rect {
                     x: at.0 * w + f32::from(side) / 2.0,
-                    y: at.1 * h + f32::from(side) / 2.0,
+                    y: at.1 * h - f32::from(side) / 2.0 - 4.0,
                     width: 0.0,
                     height: 0.0,
                 },
@@ -285,7 +458,7 @@ impl AnnotationOverlay {
                     layer.children(
                         Grip::ALL
                             .into_iter()
-                            .map(|grip| self.resize_grip(&note.id, grip, *bounds, color, cx)),
+                            .map(|grip| self.resize_grip(Some(&note.id), grip, *bounds, color, cx)),
                     )
                 } else {
                     layer
@@ -330,8 +503,7 @@ impl AnnotationOverlay {
             .id("feedback-textbox-body")
             .debug_selector(|| "feedback-textbox".into())
             .min_h(min_h)
-            .pl(side + gpui::rems(0.5).to_pixels(window.rem_size()))
-            .pr_1()
+            .px_2()
             .py_1()
             .border_1()
             .border_dashed()
@@ -359,7 +531,35 @@ impl AnnotationOverlay {
             None => body.max_w(px(max_w)),
         };
         if editing {
-            body = body.child(textbox_input(&self.input, color, window, cx));
+            // A press outside the box and its grips ends editing: text saves,
+            // an empty box is removed. The picker then leaves the press alone.
+            let press_id = id.clone();
+            body = body
+                .child(textbox_input(&self.input, color, window, cx))
+                .on_mouse_down_out(cx.listener(
+                    move |this, event: &gpui::MouseDownEvent, window, cx| {
+                        if event.button != MouseButton::Left {
+                            return;
+                        }
+                        let own = match &press_id {
+                            Some(id) => this.textbox_bounds.get(id),
+                            None => this.draft_textbox_bounds.as_ref(),
+                        };
+                        if Self::textbox_owns_press(own, event.position)
+                            || this
+                                .mentions
+                                .bounds
+                                .is_some_and(|bounds| bounds.contains(&event.position))
+                        {
+                            return;
+                        }
+                        let dismissed = this.dismiss_note(window, cx);
+                        window.prevent_default();
+                        if !dismissed {
+                            cx.stop_propagation();
+                        }
+                    },
+                ));
         } else if let Some(text) = &text {
             body = body.children(text.split('\n').map(|line| div().child(line.to_owned())));
         }
@@ -415,25 +615,30 @@ impl AnnotationOverlay {
                 .max_w(px(max_w))
                 .child(
                     Measure::new(measure_key, move |bounds, _, cx| {
-                        if let Some(measure_id) = &measure_id {
-                            let measure_id = measure_id.clone();
-                            let _ = owner.update(cx, |this, cx| {
-                                if this.textbox_bounds.get(&measure_id) != Some(&bounds) {
+                        let _ = owner.update(cx, |this, cx| match &measure_id {
+                            Some(measure_id) => {
+                                if this.textbox_bounds.get(measure_id) != Some(&bounds) {
                                     this.textbox_bounds.insert(measure_id.clone(), bounds);
                                     cx.notify();
                                 }
-                            });
-                        }
+                            }
+                            None => {
+                                if this.draft_textbox_bounds != Some(bounds) {
+                                    this.draft_textbox_bounds = Some(bounds);
+                                    cx.notify();
+                                }
+                            }
+                        });
                     })
                     .child(body),
                 ),
         )
     }
 
-    /// One grip on the selected textbox's bounding box.
+    /// One grip on a textbox's bounding box; `None` is the unsaved draft.
     fn resize_grip(
         &self,
-        id: &str,
+        id: Option<&str>,
         grip: Grip,
         bounds: Bounds<Pixels>,
         color: gpui::Hsla,
@@ -442,7 +647,7 @@ impl AnnotationOverlay {
         const SIZE: f32 = 10.0;
         let drag_owner = cx.entity().downgrade();
         let entity = cx.entity_id();
-        let resize_id = id.to_owned();
+        let resize_id = id.map(str::to_owned);
         let at = grip.center(bounds);
         let name = grip.name();
         div()
@@ -460,7 +665,7 @@ impl AnnotationOverlay {
             .debug_selector(move || format!("feedback-textbox-resize-{name}"))
             .on_drag(FeedbackDrag { owner: entity }, move |_, _, window, cx| {
                 let _ = drag_owner.update(cx, |this, cx| {
-                    this.begin_textbox_resize(&resize_id, grip, window, cx);
+                    this.begin_textbox_resize(resize_id.as_deref(), grip, window, cx);
                     this.advance_drag(window.mouse_position(), window, cx);
                 });
                 cx.new(|_| EmptyView)

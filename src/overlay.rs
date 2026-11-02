@@ -85,7 +85,9 @@ pub struct AnnotationOverlay {
     future: Vec<(Option<crate::Annotation>, Option<crate::Annotation>)>,
     pin_drag: Option<(crate::Annotation, (f32, f32))>,
     textbox_drag: Option<(crate::Annotation, (f32, f32))>,
-    textbox_resize: Option<(crate::Annotation, textbox::Grip)>,
+    textbox_resize: Option<textbox::TextboxResize>,
+    /// Measured bounds of the unsaved textbox draft's body, for its grips.
+    draft_textbox_bounds: Option<gpui::Bounds<gpui::Pixels>>,
     follow_baselines: std::collections::HashMap<String, followed::Baseline>,
     annotation_press: Option<gpui::Point<gpui::Pixels>>,
     textbox_bounds: std::collections::HashMap<String, gpui::Bounds<gpui::Pixels>>,
@@ -331,6 +333,7 @@ impl AnnotationOverlay {
             pin_drag: None,
             textbox_drag: None,
             textbox_resize: None,
+            draft_textbox_bounds: None,
             follow_baselines: Default::default(),
             annotation_press: None,
             textbox_bounds: Default::default(),
@@ -378,6 +381,7 @@ impl AnnotationOverlay {
                 self.pin_drag = None;
                 self.textbox_drag = None;
                 self.textbox_resize = None;
+                self.draft_textbox_bounds = None;
                 self.follow_baselines.clear();
                 self.textbox_bounds.clear();
                 self.mentions = Default::default();
@@ -403,6 +407,10 @@ impl AnnotationOverlay {
         self.stroke.clear();
         self.pointer = None;
         self.hovered = None;
+        if !self.active {
+            self.context = None;
+            self.context_request = None;
+        }
         if self.active {
             self.previous_focus = window.focused(cx);
             window.focus(&self.focus, cx);
@@ -567,6 +575,22 @@ impl AnnotationOverlay {
             return true;
         };
         let comment = self.input.read(cx).text().trim();
+        // An emptied textbox has nothing to show: leaving it removes it, as in
+        // Freeform, rather than failing to save blank text.
+        if draft.editing
+            && comment.is_empty()
+            && matches!(draft.shape, Some(crate::AnnotationShape::Text { .. }))
+        {
+            if let Some(id) = draft.id.clone() {
+                return self.delete(&id, window, cx);
+            }
+            self.draft = None;
+            self.draft_textbox_bounds = None;
+            self.notice.clear();
+            self.return_focus(window, cx);
+            cx.notify();
+            return true;
+        }
         let changed = (draft.editing || self.inspected_id.is_some())
             && comment != draft.original_comment.trim();
         if changed

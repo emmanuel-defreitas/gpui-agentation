@@ -489,6 +489,7 @@ impl Render for ToolbarWindow {
                     .child(
                         div()
                             .debug_selector(|| "feedback-annotation-toggle".into())
+                            .pb_1()
                             .child(
                                 Switch::new("feedback-mode-switch", self.state.active)
                                     .name("Annotation mode")
@@ -498,7 +499,7 @@ impl Render for ToolbarWindow {
                                     }),
                             ),
                     )
-                    .children(TOOLS.into_iter().enumerate().map(
+                    .children(TOOLS.into_iter().enumerate().flat_map(
                         |(index, (tool, icon, label, command))| {
                             // GPUI swallows every mouse event in the host while
                             // picking, so the way out of Inspect lives here.
@@ -512,19 +513,29 @@ impl Render for ToolbarWindow {
                                 "companion-tool-{}",
                                 surface::tool_shortcut(tool).to_ascii_lowercase()
                             );
-                            div()
-                                .debug_selector(move || selector.clone())
-                                .child(self.button(
-                                    ("feedback-tool", index),
-                                    label,
-                                    icon,
-                                    command,
-                                    (inspect && inspecting)
-                                        || (self.state.active
-                                            && !inspecting
-                                            && self.state.tool == tool),
-                                    cx,
-                                ))
+                            let button =
+                                div()
+                                    .debug_selector(move || selector.clone())
+                                    .child(self.button(
+                                        ("feedback-tool", index),
+                                        label,
+                                        icon,
+                                        command,
+                                        (inspect && inspecting)
+                                            || (self.state.active
+                                                && !inspecting
+                                                && self.state.tool == tool),
+                                        cx,
+                                    ));
+                            let divider = (index == 0).then(|| {
+                                div()
+                                    .w_full()
+                                    .px_1()
+                                    .py_1()
+                                    .debug_selector(|| "feedback-tool-divider".into())
+                                    .child(Divider::horizontal())
+                            });
+                            std::iter::once(button).chain(divider)
                         },
                     )),
             );

@@ -249,13 +249,18 @@ fn companion_is_permanent_vertical_and_changes_mode_in_the_host(cx: &mut TestApp
     assert!(cx.debug_bounds("feedback-banner").is_none());
     let mut tools = toolbar(&overlay, cx);
     let inspect = tools.debug_bounds("companion-tool-i").unwrap();
+    let toggle = tools.debug_bounds("feedback-annotation-toggle").unwrap();
+    let divider = tools.debug_bounds("feedback-tool-divider").unwrap();
     let box_tool = tools.debug_bounds("companion-tool-b").unwrap();
     let comments = tools.debug_bounds("feedback-floating-comments").unwrap();
     let settings = tools
         .debug_bounds("feedback-settings-trigger-target")
         .unwrap();
     assert!(tools.debug_bounds("feedback-toolbar-close").is_none());
+    assert!(toggle.bottom() <= inspect.top());
     assert!(inspect.bottom() <= box_tool.top());
+    assert!(inspect.bottom() <= divider.top());
+    assert!(divider.bottom() <= box_tool.top());
     assert!(comments.bottom() <= settings.top());
     // Disabled drawing tools must not enable annotation mode.
     tools.simulate_click(box_tool.center(), Modifiers::none());
