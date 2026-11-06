@@ -133,6 +133,56 @@ fn note_editor_should_flip_above_when_the_annotation_is_near_the_bottom() {
 }
 
 #[test]
+fn textbox_click_places_an_auto_sized_box_and_a_drag_frames_one() {
+    let viewport = (1000.0, 800.0);
+    let clicked = text_box((0.2, 0.4), (0.21, 0.41), viewport, 1);
+    assert_eq!(
+        clicked,
+        AnnotationShape::Text {
+            at: (0.2, 0.4),
+            text: String::new(),
+            color: 1,
+            width: None,
+            height: None,
+        }
+    );
+    // A reverse drag frames the same box as a forward one.
+    let framed = text_box((0.6, 0.5), (0.2, 0.3), viewport, 1);
+    let AnnotationShape::Text {
+        at, width, height, ..
+    } = &framed
+    else {
+        panic!("textbox");
+    };
+    assert_eq!(*at, (0.2, 0.3));
+    assert!((width.unwrap() - 0.4).abs() < 1e-6);
+    assert!((height.unwrap() - 0.2).abs() < 1e-6);
+    let bounds = framed.bounds(viewport.0, viewport.1);
+    assert!((bounds.width - 400.0).abs() < 0.01 && (bounds.height - 160.0).abs() < 0.01);
+    // A drag that is short on one axis is still a click.
+    assert!(matches!(
+        text_box((0.2, 0.4), (0.6, 0.41), viewport, 1),
+        AnnotationShape::Text {
+            width: None,
+            height: None,
+            ..
+        }
+    ));
+    // The frame hit-tests across its drawn area, not only its text.
+    let mut framed = framed;
+    if let AnnotationShape::Text { text, .. } = &mut framed {
+        *text = "Hi".into();
+    }
+    assert!(framed.hit((550.0, 380.0), viewport, 0.0));
+    assert!(!framed.hit((650.0, 380.0), viewport, 0.0));
+    let json = serde_json::to_string(&framed).unwrap();
+    assert_eq!(
+        serde_json::from_str::<AnnotationShape>(&json).unwrap(),
+        framed
+    );
+}
+
+#[test]
 fn note_editor_should_stay_in_the_viewport_when_neither_side_has_room() {
     let bounds = Rect {
         x: 900.0,

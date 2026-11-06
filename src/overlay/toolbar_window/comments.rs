@@ -45,6 +45,7 @@ impl Render for Comments {
             .min_h_0()
             .border_l_1()
             .border_color(cx.theme().colors.border)
+            .text_color(cx.theme().colors.fg)
             .child(
                 div()
                     .debug_selector(|| "feedback-sheet-header".into())

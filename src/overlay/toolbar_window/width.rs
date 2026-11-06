@@ -1,8 +1,8 @@
-//! Interruptible native-window width transitions for the external inspector.
+//! Interruptible native-window width transitions for the companion's panels.
 use super::*;
 use crate::ely::motion;
 
-pub(super) struct WidthAnimation {
+pub(in crate::overlay) struct WidthAnimation {
     pub current: Pixels,
     target: Pixels,
     visible: bool,

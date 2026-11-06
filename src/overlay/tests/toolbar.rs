@@ -68,7 +68,10 @@ fn inspect_command_should_open_the_single_sidebar(cx: &mut TestAppContext) {
         })
     });
     draw(cx);
+    // GPUI draws the inspector in the host window; the host grows to hold it.
     assert!(cx.debug_bounds("inspector-picking-true").is_some());
+    let mut tools = toolbar(&overlay, cx);
+    assert!(tools.debug_bounds("inspector-picking-true").is_none());
     assert!(cx.debug_bounds("banner-devtools").is_none());
     assert!(cx.debug_bounds("floating-devtools").is_none());
     assert!(cx.debug_bounds("feedback-picker").is_none());
@@ -246,13 +249,18 @@ fn companion_is_permanent_vertical_and_changes_mode_in_the_host(cx: &mut TestApp
     assert!(cx.debug_bounds("feedback-banner").is_none());
     let mut tools = toolbar(&overlay, cx);
     let inspect = tools.debug_bounds("companion-tool-i").unwrap();
+    let toggle = tools.debug_bounds("feedback-annotation-toggle").unwrap();
+    let divider = tools.debug_bounds("feedback-tool-divider").unwrap();
     let box_tool = tools.debug_bounds("companion-tool-b").unwrap();
     let comments = tools.debug_bounds("feedback-floating-comments").unwrap();
     let settings = tools
         .debug_bounds("feedback-settings-trigger-target")
         .unwrap();
     assert!(tools.debug_bounds("feedback-toolbar-close").is_none());
+    assert!(toggle.bottom() <= inspect.top());
     assert!(inspect.bottom() <= box_tool.top());
+    assert!(inspect.bottom() <= divider.top());
+    assert!(divider.bottom() <= box_tool.top());
     assert!(comments.bottom() <= settings.top());
     // Disabled drawing tools must not enable annotation mode.
     tools.simulate_click(box_tool.center(), Modifiers::none());
@@ -264,10 +272,12 @@ fn companion_is_permanent_vertical_and_changes_mode_in_the_host(cx: &mut TestApp
         assert!(window.is_inspector_picking(cx));
         assert!(!overlay.read(cx).active);
     });
+    // While inspecting, the Inspect button stays as the way out: GPUI swallows
+    // host clicks during picking, so Stop must live in the companion.
     let mut tools = toolbar(&overlay, cx);
-    assert!(tools.debug_bounds("companion-tool-i").is_none());
+    let stop = tools.debug_bounds("companion-tool-i").unwrap();
     assert!(tools.debug_bounds("companion-tool-b").is_some());
-    cx.update(|window, cx| overlay.update(cx, |this, cx| this.stop_inspection(window, cx)));
+    tools.simulate_click(stop.center(), Modifiers::none());
     draw(cx);
     cx.update(|window, cx| {
         assert!(!window.is_inspector_picking(cx));
@@ -428,4 +438,156 @@ fn inspect_should_use_normal_cursor_and_arrow_drawing_should_use_crosshair() {
         tool_cursor(Some(crate::ely::media::Tool::Arrow)),
         gpui::CursorStyle::Crosshair
     );
+}
+
+struct HostWithMatchingToolbarIds {
+    overlay: Entity<AnnotationOverlay>,
+}
+
+impl Render for HostWithMatchingToolbarIds {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .size_full()
+            .child(
+                div()
+                    .id("feedback-floating-toolbar")
+                    .size(gpui::px(100.))
+                    .child(
+                        div()
+                            .id(("feedback-tool", 1usize))
+                            .size(gpui::px(80.))
+                            .debug_selector(|| "host-matching-toolbar-id".into()),
+                    ),
+            )
+            .child(self.overlay.clone())
+    }
+}
+
+#[gpui::test]
+fn host_elements_with_matching_toolbar_ids_should_remain_inspectable(cx: &mut TestAppContext) {
+    cx.update(crate::ely::init_for_tests);
+    let (host, cx) = cx.add_window_view(|window, cx| {
+        let store = Store::memory();
+        let session = store.ensure_session("Host IDs", "gpui://ids").unwrap();
+        HostWithMatchingToolbarIds {
+            overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+        }
+    });
+    let overlay = cx.update(|window, cx| {
+        window.activate_window();
+        let overlay = host.read(cx).overlay.clone();
+        overlay.update(cx, |this, cx| {
+            this.set_toolbar_position(crate::ToolbarPosition::Floating, cx);
+            this.tool = Some(Tool::Pen);
+            this.choose_tool(None, window, cx);
+        });
+        overlay
+    });
+    draw(cx);
+    let target = cx.debug_bounds("host-matching-toolbar-id").unwrap();
+    cx.simulate_mouse_move(target.center(), None, Modifiers::none());
+    cx.simulate_click(target.center(), Modifiers::none());
+    draw(cx);
+    // The inspector panel renders in the host window, which syncs the selection.
+    draw(cx);
+    cx.update(|window, cx| {
+        let this = overlay.read(cx);
+        assert_eq!(
+            this.tool,
+            Some(Tool::Pen),
+            "a host element with a toolbar-like id must not change the tool"
+        );
+        assert!(this.inspected_id.is_some());
+        assert_eq!(this.session.annotations.len(), 1);
+        assert!(this.session.annotations[0].feedback.inspection.is_some());
+        assert!(inspector::is_open(window, cx));
+        assert!(!window.is_inspector_picking(cx));
+    });
+}
+
+#[gpui::test]
+fn without_a_native_margin_the_panel_stays_in_the_host_and_the_window_keeps_its_size(
+    cx: &mut TestAppContext,
+) {
+    let (overlay, cx) = setup(cx);
+    let before = cx.update(|window, _| window.bounds());
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.choose_tool(None, window, cx)));
+    draw(cx);
+    cx.update(|window, cx| {
+        assert!(window.is_inspector_picking(cx));
+        assert!(!inspector::is_external(window, cx));
+        assert_eq!(window.bounds(), before);
+    });
+    assert!(cx.debug_bounds("inspector-header").is_some());
+    let mut tools = toolbar(&overlay, cx);
+    assert!(tools.debug_bounds("companion-panel").is_none());
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.close(window, cx)));
+    draw(cx);
+    cx.update(|window, cx| assert!(!window.is_inspector_picking(cx)));
+}
+
+/// The companion after TestWindow::resize, which skips the native resize
+/// callback: deliver it so its viewport matches the requested width.
+fn grown_toolbar(
+    overlay: &Entity<AnnotationOverlay>,
+    cx: &mut VisualTestContext,
+) -> VisualTestContext {
+    let mut tools = toolbar(overlay, cx);
+    let requested = tools.update(|window, _| window.bounds().size);
+    tools.simulate_resize(requested);
+    draw(&mut tools);
+    tools
+}
+
+#[gpui::test]
+fn with_the_sidebar_out_of_sight_the_companion_renders_the_inspector(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    cx.update(|_, cx| {
+        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        cx.set_global(super::super::toolbar_window::SimulateHiddenMargin);
+    });
+    let narrow = {
+        let mut tools = toolbar(&overlay, cx);
+        tools.update(|window, _| window.bounds().size.width)
+    };
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.choose_tool(None, window, cx)));
+    draw(cx);
+    draw(cx);
+    cx.update(|window, cx| {
+        assert!(window.is_inspector_picking(cx));
+        assert!(inspector::is_external(window, cx));
+    });
+    // The host draws nothing in GPUI's sidebar; the companion shows the panel.
+    assert!(cx.debug_bounds("inspector-header").is_none());
+    let mut tools = grown_toolbar(&overlay, cx);
+    assert!(tools.debug_bounds("companion-panel").is_some());
+    assert!(tools.debug_bounds("inspector-picking-true").is_some());
+    tools.update(|window, _| assert_eq!(window.bounds().size.width, narrow + px(420.)));
+    // Picking an element in the host updates the companion and records a note.
+    let host = cx.debug_bounds("feedback-inline-root").unwrap();
+    let at = point(host.left() + px(40.), host.top() + px(40.));
+    cx.simulate_mouse_move(at, None, Modifiers::none());
+    cx.simulate_click(at, Modifiers::none());
+    draw(cx);
+    draw(cx);
+    let mut tools = grown_toolbar(&overlay, cx);
+    assert!(tools.debug_bounds("inspector-picking-false").is_some());
+    assert!(tools.debug_bounds("feedback-inspect-stop").is_some());
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.inspected_id.is_some());
+        assert_eq!(this.session.annotations.len(), 1);
+    });
+    // Stop from the companion's panel header closes the panel.
+    let stop = tools.debug_bounds("feedback-inspect-stop").unwrap();
+    tools.simulate_click(stop.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|window, cx| {
+        assert!(!overlay.read(cx).inspecting);
+        assert!(!window.is_inspector_picking(cx));
+        assert!(!inspector::is_external(window, cx));
+    });
+    let mut tools = toolbar(&overlay, cx);
+    assert!(tools.debug_bounds("companion-panel").is_none());
+    tools.update(|window, _| assert_eq!(window.bounds().size.width, narrow));
 }

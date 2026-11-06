@@ -36,7 +36,9 @@ gpui-agentation = { version = "0.6.0", default-features = false, features = ["na
 
 Keep `gpui-pre =0.3.8`. Source and assets for Ely revision
 `da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721` are bundled. Agentation’s internal
-Ely globals are independent of host Ely globals. Development uses Rust 1.98.1.
+Ely globals are independent of host Ely globals. When Agentation creates its own theme, its toolbar, inspector and
+Settings follow the operating system's light or dark setting and switch live.
+A host that already initialized Ely keeps control of the theme. Development uses Rust 1.98.1.
 
 ## Toolbar and editor
 
@@ -55,8 +57,10 @@ Minimizing, fullscreen, or filling the usable screen hides the companion until t
 consumer is restored. Closing the consumer closes the companion. Other backends
 use GPUI window placement and may reopen the companion on a position change.
 
-**Inspect** uses the consumer's native picker and sidebar. It becomes **Stop**
-while inspecting, and drawing controls hide. The toolbar stays outside the
+**Inspect** uses the consumer's native picker. Its panel opens in the toolbar
+window, which grows by 420 px; the app keeps its size because GPUI's sidebar is
+kept past the window's edge (see [external inspector](external-inspector.md)).
+The Inspect button reads **Stop inspecting** while inspecting. The toolbar stays outside the
 consumer's inspectable element tree in every mode. **Box**, **Arrow**, and **Pen**
 draw over the live consumer; the selecting click does not activate its controls.
 Inspect uses the normal arrow cursor; drawing tools use a crosshair with an Ely glyph.
@@ -197,10 +201,13 @@ focus scope. Those are lower-level integrations; don't mount both root paths.
 
 **Inspect** uses GPUI's native picker. Selecting an element creates or updates a
 numbered inspection annotation (IA) with its source and a snapshot of the
-displayed properties, including unchanged values. The IA's border follows its
-element; clicking the border reopens the inspector. Width, height, padding,
-margin, border, and opacity can be previewed with Ely sliders and save into the
-same annotation as they change. Clicking its numbered pin opens the optional
+displayed properties, including unchanged values. Its numbered pin sits where
+the element was when inspected; reopening the IA from the Comments list
+re-enters picking, and picking the same element continues it. Width, height, padding,
+margin, border, and opacity can be previewed with Ely sliders, and the surface
+(background) and text colors with Ely color pickers; all save into the same
+annotation as they change, with `.bg(rgb(..))` and `.text_color(rgb(..))` lines
+in the suggested Rust. Clicking its numbered pin opens the optional
 comment editor. Both the comment and property snapshot appear in the notes,
 Markdown clipboard, and MCP response. Saved `gpuiConfiguration` retains style
 overrides and suggested Rust builder calls. Re-picking an existing IA restores
@@ -240,19 +247,19 @@ MCP clients connect to `/mcp` on the same listener; no plugin is installed or
 configured automatically. Existing third-party `agentation-mcp` tools are not
 assumed to be wire-compatible.
 
-| Method | Endpoint | Response |
-| --- | --- | --- |
-| GET | `/health`, `/status` | Health or server revision/session count |
-| GET, POST | `/sessions` | List sessions or create/reuse `{appName, url}` |
-| GET | `/sessions/:id` | Session including all annotations and threads |
-| POST | `/sessions/:id/annotations` | Create feedback from `AnnotationInput` |
-| GET | `/annotations/:id` | One annotation |
-| PATCH | `/annotations/:id` | Update `{comment?, status?}` |
-| DELETE | `/annotations/:id` | Delete one note |
-| POST | `/annotations/:id/thread` | Append `{role, message}` |
-| GET | `/pending`, `/sessions/:id/pending` | `{count, annotations}` for pending notes |
-| GET | `/sessions/:id/markdown` | Copyable Markdown |
-| GET | `/events`, `/sessions/:id/events` | SSE stream |
+| Method    | Endpoint                            | Response                                       |
+| --------- | ----------------------------------- | ---------------------------------------------- |
+| GET       | `/health`, `/status`                | Health or server revision/session count        |
+| GET, POST | `/sessions`                         | List sessions or create/reuse `{appName, url}` |
+| GET       | `/sessions/:id`                     | Session including all annotations and threads  |
+| POST      | `/sessions/:id/annotations`         | Create feedback from `AnnotationInput`         |
+| GET       | `/annotations/:id`                  | One annotation                                 |
+| PATCH     | `/annotations/:id`                  | Update `{comment?, status?}`                   |
+| DELETE    | `/annotations/:id`                  | Delete one note                                |
+| POST      | `/annotations/:id/thread`           | Append `{role, message}`                       |
+| GET       | `/pending`, `/sessions/:id/pending` | `{count, annotations}` for pending notes       |
+| GET       | `/sessions/:id/markdown`            | Copyable Markdown                              |
+| GET       | `/events`, `/sessions/:id/events`   | SSE stream                                     |
 
 Statuses are `pending`, `acknowledged`, `resolved`, and `dismissed`. Acknowledge
 after reading, reply with progress or questions, and resolve after verifying the
@@ -358,14 +365,14 @@ All connections retain the loopback binding, native-client origin/host checks,
 and 32 KiB request limit. No credential is required. Stop the host app to close
 the endpoint. Release builds expose neither the MCP nor annotation API.
 
-| Tool | Purpose |
-| --- | --- |
-| `annotation_sessions` | List routes and their annotations |
-| `annotation_pending` | Read pending notes, optionally by `sessionId` |
-| `annotation_get` | Read an annotation by `id` |
-| `annotation_update` | Update `comment` or lifecycle `status` by `id` |
-| `annotation_reply` | Append an agent `message` by `id` |
-| `annotation_markdown` | Read Markdown by `sessionId` |
+| Tool                  | Purpose                                        |
+| --------------------- | ---------------------------------------------- |
+| `annotation_sessions` | List routes and their annotations              |
+| `annotation_pending`  | Read pending notes, optionally by `sessionId`  |
+| `annotation_get`      | Read an annotation by `id`                     |
+| `annotation_update`   | Update `comment` or lifecycle `status` by `id` |
+| `annotation_reply`    | Append an agent `message` by `id`              |
+| `annotation_markdown` | Read Markdown by `sessionId`                   |
 
 Agents should acknowledge notes before working, reply with progress, and
 resolve only after verification. Notes and their text are user feedback,
@@ -436,10 +443,20 @@ history is bounded to 100 local operations per window and resets on navigation.
 An undo that conflicts with an external edit or reply is rejected without
 changing the annotation.
 
-Textboxes store an `AnnotationShape::Text { at, text, color }`, render at 16
-logical pixels, and begin with a numbered pin. A single click selects the
-bounding box; double-click or Enter edits the text. Dragging the body or its pin
-moves both together. Saving does not open a separate comment. Other numbered
+Textboxes store an `AnnotationShape::Text { at, text, color, width, height }`,
+render at 16 logical pixels, and begin with a numbered pin. They follow
+Freeform and Sketch: dragging the Textbox tool frames a box whose rectangle
+becomes its wrap `width` and minimum `height`, while a click (under 24 px on
+either axis) places a box sized to its text. At rest only the text shows; a
+single click selects the box and reveals its dashed bounding border with six
+grips (four corners, left and right). Side grips change the width, corner grips
+also set the height, and pulling a left or top grip moves the origin while the
+opposite edge stays. Double-click or Enter edits the text. Dragging the body or
+its pin moves both together and keeps the frame within the window. During
+editing, pointer drags select text. Save, Ctrl/Cmd+S, or clicking away commits;
+Cancel or Esc discards the edit. Empty new drafts are discarded on click-away.
+Resizing supports undo/redo; Esc cancels a resize in progress. Saving does not
+open a separate comment. Other numbered
 pins move independently of the underlying shape. Position changes preserve note
 identity, update percentage-x/logical-y fields and support undo/redo.
 
@@ -486,12 +503,12 @@ retained as compatibility aliases that show the same companion; `None` hides it.
 
 Additional menu shortcuts use Command+Option on macOS and Control+Alt elsewhere:
 
-| Keys after those modifiers | Command |
-| --- | --- |
-| A / H | Annotation mode / toolbar visibility |
-| F / B | Show companion (legacy placement shortcuts) |
-| C / S | Comments / Settings |
-| M | Start/stop MCP |
+| Keys after those modifiers | Command                                     |
+| -------------------------- | ------------------------------------------- |
+| A / H                      | Annotation mode / toolbar visibility        |
+| F / B                      | Show companion (legacy placement shortcuts) |
+| C / S                      | Comments / Settings                         |
+| M                          | Start/stop MCP                              |
 
 Comments and Settings show/hide with the same command. Report an Issue opens the
 repository's bug-report template; Star on GitHub opens its repository page.

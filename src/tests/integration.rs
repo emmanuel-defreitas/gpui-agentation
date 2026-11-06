@@ -138,6 +138,79 @@ fn inspector_visually_edits_and_publishes_selected_gpui_configuration(cx: &mut T
 }
 
 #[gpui::test]
+fn inspector_edits_surface_and_text_colors_and_reset_reverts_them(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        crate::ely::init_for_tests(cx);
+        init(cx).unwrap();
+    });
+    let (_, cx) = cx.add_window_view(|_, _| InspectorSample);
+    cx.update(|window, cx| window.toggle_inspector(cx));
+    cx.run_until_parked();
+    let sample = cx.debug_bounds("inspector-sample").unwrap();
+    cx.simulate_mouse_move(sample.center(), None, Modifiers::none());
+    cx.simulate_click(sample.center(), Modifiers::none());
+    redraw(cx);
+    cx.update(|window, cx| {
+        let selection = crate::ely::tooling::inspector_selection(window, cx).unwrap();
+        assert_eq!(selection.properties["Background"], "none");
+        assert_eq!(selection.properties["Text color"], "none");
+    });
+    // The picker stays closed until its swatch is clicked.
+    assert!(
+        cx.debug_bounds("inspector-picker-ely-inspector-background")
+            .is_none()
+    );
+    let swatch = cx
+        .debug_bounds("inspector-swatch-ely-inspector-background")
+        .expect("surface swatch");
+    cx.simulate_click(swatch.center(), Modifiers::none());
+    redraw(cx);
+    let picker = cx
+        .debug_bounds("inspector-picker-ely-inspector-background")
+        .expect("surface picker opens");
+    // Press inside the saturation/value plane at the picker's top.
+    cx.simulate_click(
+        gpui::point(picker.center().x, picker.top() + px(24.)),
+        Modifiers::none(),
+    );
+    redraw(cx);
+    cx.update(|window, cx| {
+        let configuration = crate::ely::tooling::active_inspector_configuration(window, cx)
+            .expect("a color edit publishes a configuration");
+        let background = configuration
+            .changes
+            .iter()
+            .find(|change| change.property == "Background")
+            .expect("background change");
+        assert_eq!(background.before, "none");
+        assert!(background.after.starts_with('#'));
+        assert!(configuration.rust.contains(".bg(rgb") || configuration.rust.contains(".bg(rgba"));
+        let selection = crate::ely::tooling::inspector_selection(window, cx).unwrap();
+        assert_eq!(selection.properties["Background"], background.after);
+    });
+    let reset = cx.debug_bounds("inspector-reset").unwrap();
+    cx.simulate_click(reset.center(), Modifiers::none());
+    redraw(cx);
+    cx.update(|window, cx| {
+        assert!(crate::ely::tooling::active_inspector_configuration(window, cx).is_none());
+        let selection = crate::ely::tooling::inspector_selection(window, cx).unwrap();
+        assert_eq!(selection.properties["Background"], "none");
+    });
+}
+
+#[test]
+fn rust_color_constructors_follow_gpui_hex_conventions() {
+    assert_eq!(
+        crate::ely::tooling::rust_color(gpui::rgb(0x336699).into()),
+        "rgb(0x336699)"
+    );
+    assert_eq!(
+        crate::ely::tooling::rust_color(gpui::rgba(0x33669980).into()),
+        "rgba(0x33669980)"
+    );
+}
+
+#[gpui::test]
 fn mounting_requires_initialization_and_preserves_existing_host_focus(cx: &mut TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
     let (_, cx) = cx.add_window_view(|window, cx| {
@@ -323,4 +396,40 @@ fn failed_editor_launch_should_copy_source_and_finish_inline_feedback(cx: &mut T
             "src/overlay.rs:42:7"
         );
     });
+}
+
+fn mount_in_light_window(cx: &mut TestAppContext) -> &mut VisualTestContext {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("notes.json");
+    let (_, cx) = cx.add_window_view(|window, cx| {
+        let tools = Agentation::mount("Appearance", "gpui://appearance", path, 0, window, cx);
+        assert!(tools.is_ok());
+        std::mem::forget(tools);
+        InspectorSample
+    });
+    cx
+}
+
+#[gpui::test]
+fn mounted_tools_adopt_the_window_appearance_when_agentation_owns_the_theme(
+    cx: &mut TestAppContext,
+) {
+    cx.update(init_for_tests);
+    assert!(cx.update(|cx| cx.has_global::<FollowSystemAppearance>()));
+    // A stale dark theme is replaced by the (light) appearance of the window.
+    cx.update(|cx| Theme::set_mode_now(Mode::Dark, cx));
+    let cx = mount_in_light_window(cx);
+    cx.update(|_, cx| assert!(!cx.theme().is_dark()));
+}
+
+#[gpui::test]
+fn mounted_tools_leave_a_host_owned_theme_alone(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        crate::ely::init_for_tests(cx);
+        Theme::set_mode_now(Mode::Dark, cx);
+        init_for_tests(cx);
+        assert!(!cx.has_global::<FollowSystemAppearance>());
+    });
+    let cx = mount_in_light_window(cx);
+    cx.update(|_, cx| assert!(cx.theme().is_dark()));
 }

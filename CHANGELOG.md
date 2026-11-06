@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+- Open the inspector in the toolbar window on stock GPUI: the host's native
+  content view is kept GPUI's sidebar width wider than the window shows, so the
+  sidebar lays out past the right edge and the app keeps its visible width,
+  while the companion renders the inspector entity and grows by its panel. The
+  patched GPUI copy, `scripts/inspector-poc.py`, the
+  `agentation_external_inspector` cfg, and the `example-stock` and
+  `test-external` targets are gone; `make example` is plain `cargo run`. With
+  the toolbar hidden or a window filling its display, the panel stays in-window.
+- Keep the toolbar's Inspect button while inspecting as **Stop inspecting**:
+  GPUI swallows host clicks during picking, so the exit lives outside the host.
+  Picks that land on an in-window sidebar resume picking instead of selecting it.
+- Reopening a saved inspection restarts picking; picking the same element
+  continues the note. Inspection pins keep the position where the element was
+  inspected rather than following later layout changes.
+- Edit the surface (background) and text color of a picked element with Ely
+  color pickers. Changes publish as `Background` and `Text color` overrides with
+  `.bg(rgb(..))` / `.text_color(rgb(..))` lines; snapshots gain both properties.
+- Rework textboxes after Freeform and Sketch: drag the Textbox tool to frame a
+  box (click still places an auto-sized one), the dashed bounding box shows only
+  while selected or editing, and six grips resize it from either side or corner.
+  `AnnotationShape::Text` gains an optional `height`; existing notes read as before.
+- Open the companion window after the overlay update that requested it, so the
+  window's first draw never reads the overlay while it is being updated.
+
 ## 0.6.0 (2026-10-25)
 
 - Correct the intended release number from 6.0.0 to 0.6.0. The mistaken 6.0.0

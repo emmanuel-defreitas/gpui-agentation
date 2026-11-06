@@ -1,7 +1,7 @@
 # One package, two uses
 
 The package name is `gpui-agentation`; the native Rust library remains
-`gpui_agentation`. Version 0.3.0 bundles unchanged Ely source and assets in
+`gpui_agentation`. Version 0.3.0 bundles pinned Ely source and assets in
 the same package. See [provenance and build adaptation](ely-distribution.md).
 There is no dependency on gpui-agentation-ely. The MCP-only default does not
 compile bundled Ely or enable its native dependencies.

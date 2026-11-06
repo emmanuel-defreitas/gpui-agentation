@@ -484,6 +484,14 @@ impl Store {
         Ok(output)
     }
 
+    /// One annotation rendered as Markdown, for a right-click "Copy".
+    pub fn note_markdown(&self, id: &str) -> Result<String, Error> {
+        let note = self.annotation(id)?;
+        let mut output = format!("Route: {}\n", note.url);
+        append_annotations(&mut output, std::slice::from_ref(&note))?;
+        Ok(output)
+    }
+
     fn mutate<T>(
         &self,
         operation: impl FnOnce(

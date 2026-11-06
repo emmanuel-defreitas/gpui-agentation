@@ -1,10 +1,13 @@
 //! Application startup and window-level focus ownership for native hosts.
 use std::{borrow::Cow, path::PathBuf};
 
-use crate::ely::{primitives::FocusScope, theme::Theme};
+use crate::ely::{
+    primitives::FocusScope,
+    theme::{Mode, Theme},
+};
 use gpui::{
     AnyElement, App, AssetSource, Entity, FocusHandle, Global, InteractiveElement, IntoElement,
-    ParentElement, SharedString, Styled, Window, div,
+    ParentElement, SharedString, Styled, Subscription, Window, div,
 };
 
 use crate::{AnnotationOverlay, Error, begin_frame, target};
@@ -106,6 +109,7 @@ pub fn init(cx: &mut App) -> gpui::Result<()> {
                     "Agentation initialization failed; configure Application::with_assets(gpui_agentation::Assets), or Assets::before(host_assets): {error}"
                 ))
             })?;
+            cx.set_global(FollowSystemAppearance);
         }
         crate::overlay::inspector::install(cx);
         cx.set_global(Initialized);
@@ -121,6 +125,7 @@ pub fn init_for_tests(cx: &mut App) {
     if !cx.has_global::<Initialized>() {
         if !cx.has_global::<Theme>() {
             crate::ely::init_for_tests(cx);
+            cx.set_global(FollowSystemAppearance);
         }
         crate::overlay::inspector::install(cx);
         cx.set_global(Initialized);
@@ -135,7 +140,13 @@ pub fn init_for_tests(cx: &mut App) {
 pub struct Agentation {
     overlay: Entity<AnnotationOverlay>,
     focus: FocusHandle,
+    _appearance: Option<Subscription>,
 }
+
+/// Set when Agentation created the theme itself, so its tools follow the OS
+/// light/dark setting. A host that already initialized Ely keeps control.
+struct FollowSystemAppearance;
+impl Global for FollowSystemAppearance {}
 
 impl Agentation {
     /// Mount tools for a window after [`init`], using a local store and port.
@@ -160,7 +171,17 @@ impl Agentation {
         if window.focused(cx).is_none() {
             window.focus(&focus, cx);
         }
-        Ok(Self { overlay, focus })
+        let appearance = cx.has_global::<FollowSystemAppearance>().then(|| {
+            Theme::set_mode_now(Mode::from(window.appearance()), cx);
+            window.observe_window_appearance(|window, cx| {
+                Theme::set_mode(Mode::from(window.appearance()), cx)
+            })
+        });
+        Ok(Self {
+            overlay,
+            focus,
+            _appearance: appearance,
+        })
     }
 
     /// Render one screen and own its root focus handling; the toolbar is a companion window.

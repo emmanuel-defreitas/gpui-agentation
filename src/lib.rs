@@ -15,7 +15,7 @@ mod overlay;
 mod store;
 mod target;
 
-/// Bundled components from the exact pinned Ely revision.
+/// Bundled components based on the pinned Ely revision and recorded local patches.
 ///
 /// These types and globals belong to Agentation, independently of any host Ely crate.
 #[allow(missing_docs, deprecated, unexpected_cfgs, clippy::all)]

@@ -85,11 +85,15 @@ pub struct AnnotationOverlay {
     future: Vec<(Option<crate::Annotation>, Option<crate::Annotation>)>,
     pin_drag: Option<(crate::Annotation, (f32, f32))>,
     textbox_drag: Option<(crate::Annotation, (f32, f32))>,
+    textbox_resize: Option<textbox::TextboxResize>,
+    /// Measured bounds of the unsaved textbox draft's body, for its grips.
+    draft_textbox_bounds: Option<gpui::Bounds<gpui::Pixels>>,
+    follow_baselines: std::collections::HashMap<String, followed::Baseline>,
     annotation_press: Option<gpui::Point<gpui::Pixels>>,
     textbox_bounds: std::collections::HashMap<String, gpui::Bounds<gpui::Pixels>>,
     mentions: mentions::Mentions,
     context_request: Option<(u64, gpui::Point<gpui::Pixels>)>,
-    context_note: Option<String>,
+    context: Option<menu::ContextKind>,
     context_number: u64,
     settings_open: bool,
     review_open: bool,
@@ -179,7 +183,6 @@ impl AnnotationOverlay {
             TextInput::new(window, cx)
                 .multi_line(1, 12)
                 .max_len(8000)
-                .caret_color(gpui::hsla(0.0, 0.0, 1.0, 1.0))
                 .label("Feedback")
                 .placeholder("")
         });
@@ -328,11 +331,14 @@ impl AnnotationOverlay {
             future: vec![],
             pin_drag: None,
             textbox_drag: None,
+            textbox_resize: None,
+            draft_textbox_bounds: None,
+            follow_baselines: Default::default(),
             annotation_press: None,
             textbox_bounds: Default::default(),
             mentions: Default::default(),
             context_request: None,
-            context_note: None,
+            context: None,
             context_number: 0,
             settings_open: false,
             review_open: false,
@@ -373,10 +379,13 @@ impl AnnotationOverlay {
                 self.selected_note = None;
                 self.pin_drag = None;
                 self.textbox_drag = None;
+                self.textbox_resize = None;
+                self.draft_textbox_bounds = None;
+                self.follow_baselines.clear();
                 self.textbox_bounds.clear();
                 self.mentions = Default::default();
                 self.context_request = None;
-                self.context_note = None;
+                self.context = None;
                 self.draft = None;
                 self.return_focus(window, cx);
                 self.stroke.clear();
@@ -397,6 +406,10 @@ impl AnnotationOverlay {
         self.stroke.clear();
         self.pointer = None;
         self.hovered = None;
+        if !self.active {
+            self.context = None;
+            self.context_request = None;
+        }
         if self.active {
             self.previous_focus = window.focused(cx);
             window.focus(&self.focus, cx);
@@ -424,7 +437,7 @@ impl AnnotationOverlay {
             self.inspecting = true;
             self.review_open = false;
             self.inspection_note = None;
-            inspector::start(window, cx);
+            inspector::start(window, !self.toolbar_hidden, cx);
         } else {
             if !self.active {
                 return;
@@ -452,7 +465,7 @@ impl AnnotationOverlay {
         self.active = false;
         self.draft = None;
         self.pin_drag = None;
-        if self.textbox_drag.take().is_some() {
+        if self.textbox_drag.take().is_some() | self.textbox_resize.take().is_some() {
             if let Ok(session) = self.store.session(&self.session.id) {
                 self.session = session;
             }
@@ -561,6 +574,22 @@ impl AnnotationOverlay {
             return true;
         };
         let comment = self.input.read(cx).text().trim();
+        // An emptied textbox has nothing to show: leaving it removes it, as in
+        // Freeform, rather than failing to save blank text.
+        if draft.editing
+            && comment.is_empty()
+            && matches!(draft.shape, Some(crate::AnnotationShape::Text { .. }))
+        {
+            if let Some(id) = draft.id.clone() {
+                return self.delete(&id, window, cx);
+            }
+            self.draft = None;
+            self.draft_textbox_bounds = None;
+            self.notice.clear();
+            self.return_focus(window, cx);
+            cx.notify();
+            return true;
+        }
         let changed = (draft.editing || self.inspected_id.is_some())
             && comment != draft.original_comment.trim();
         if changed
@@ -821,13 +850,19 @@ impl AnnotationOverlay {
 #[cfg(test)]
 use crate::AnnotationPatch;
 
-mod annotation_menu;
 mod banner;
 pub mod commands;
+mod followed;
 mod history;
-
+#[cfg(test)]
+#[path = "overlay/inspection.test.rs"]
+mod inspection_tests;
 pub(crate) mod inspector;
 mod mentions;
+mod menu;
+#[cfg(all(target_os = "macos", not(test)))]
+#[allow(deprecated, unexpected_cfgs)]
+mod native_menu;
 mod settings;
 mod settings_popup;
 mod surface;

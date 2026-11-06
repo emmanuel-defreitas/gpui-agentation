@@ -16,6 +16,7 @@ pub use inspector::{
     InspectorSelection, InspectorStyleChange, InspectorStyleConfiguration,
     active_inspector_configuration, clear_inspector_selection, inspector_panel, inspector_panel_with_header,
     inspector_selection, inspector_target, install_inspector, restore_inspector_configuration,
+    rust_color,
 };
 #[cfg(debug_assertions)]
 pub use inspector::set_inspector_target;

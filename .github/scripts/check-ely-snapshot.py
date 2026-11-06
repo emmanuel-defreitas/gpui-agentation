@@ -1,4 +1,4 @@
-"""Verify the immutable Ely runtime snapshot and its packaging-only changes."""
+"""Verify the pinned Ely baseline and explicitly recorded local patches."""
 import argparse
 import hashlib
 import json
@@ -13,6 +13,10 @@ args = parser.parse_args()
 root = Path(__file__).resolve().parents[2]
 snapshot = root / "vendor/ely"
 provenance = json.loads((snapshot / "UPSTREAM.json").read_text())
+patches = json.loads((snapshot / "LOCAL_PATCHES.json").read_text())
+assert patches["base_revision"] == REVISION, "Local patches target a different Ely revision"
+assert patches["description"].strip(), "Local patches require a description"
+assert all(name.startswith("src/") and ".." not in Path(name).parts for name in patches["files"]), "Local patches must name Ely source files"
 assert provenance["revision"] == REVISION, "Unexpected Ely revision"
 original = (snapshot / "Cargo.upstream.toml").read_bytes()
 assert hashlib.sha256(original).hexdigest() == provenance["manifest_sha256"], "Original manifest changed"
@@ -48,15 +52,16 @@ assert agentation["features"]["mcp"] == ["dep:reqwest", "dep:serde_json"]
 assert agentation["dependencies"]["gpui"]["version"] == "=0.3.8"
 assert agentation["dependencies"]["gpui_platform"]["version"] == "=0.3.8"
 files = {p.relative_to(snapshot).as_posix() for folder in ("src", "assets") for p in (snapshot / folder).rglob("*") if p.is_file()} | {"LICENSE"}
-assert files == set(provenance["files"]), "Snapshot file inventory changed"
-for name, expected in provenance["files"].items():
-    assert hashlib.sha256((snapshot / name).read_bytes()).hexdigest() == expected, f"Changed upstream file: {name}"
+expected_files = provenance["files"] | patches["files"]
+assert files == set(expected_files), "Snapshot file inventory changed"
+for name, expected in expected_files.items():
+    assert hashlib.sha256((snapshot / name).read_bytes()).hexdigest() == expected, f"Changed bundled file: {name}"
 if args.upstream:
     def git(*arguments):
         return subprocess.check_output(["git", "-C", str(args.upstream), *arguments])
     assert git("show", f"{REVISION}:Cargo.toml") == original, "Upstream manifest mismatch"
     names = set(git("ls-tree", "-r", "--name-only", REVISION, "src", "assets", "LICENSE").decode().splitlines())
-    assert names == files, "Upstream inventory mismatch"
+    assert names == set(provenance["files"]), "Upstream inventory mismatch"
     # One archive operation avoids spawning a process per source file.
     import io
     import tarfile
@@ -64,4 +69,4 @@ if args.upstream:
         for entry in archive:
             if entry.isfile():
                 assert hashlib.sha256(archive.extractfile(entry).read()).hexdigest() == provenance["files"][entry.name], f"Upstream mismatch: {entry.name}"
-print(f"Verified {len(files)} bundled Ely files at {REVISION}; native-only dependencies and GPUI pins preserved")
+print(f"Verified {len(files)} bundled Ely files against {REVISION} and {len(patches['files'])} recorded local patches; native-only dependencies and GPUI pins preserved")
