@@ -1,10 +1,13 @@
 //! Application startup and window-level focus ownership for native hosts.
 use std::{borrow::Cow, path::PathBuf};
 
-use crate::ely::{primitives::FocusScope, theme::Theme};
+use crate::ely::{
+    primitives::FocusScope,
+    theme::{Mode, Theme},
+};
 use gpui::{
     AnyElement, App, AssetSource, Entity, FocusHandle, Global, InteractiveElement, IntoElement,
-    ParentElement, SharedString, Styled, Window, div,
+    ParentElement, SharedString, Styled, Subscription, Window, div,
 };
 
 use crate::{AnnotationOverlay, Error, begin_frame, target};
@@ -27,6 +30,24 @@ impl AssetSource for Assets {
         if path == "agentation/mcp.svg" {
             return Ok(Some(Cow::Borrowed(include_bytes!("assets/mcp.svg"))));
         }
+        if let Some(name) = path.strip_prefix("agentation/menubar/") {
+            let asset: Option<&'static [u8]> = match name {
+                "brand.svg" => Some(include_bytes!("assets/menubar/brand.svg")),
+                "crates.png" => Some(include_bytes!("assets/menubar/crates.png")),
+                "github.svg" => Some(include_bytes!("assets/menubar/github.svg")),
+                "mcp.svg" => Some(include_bytes!("assets/menubar/mcp.svg")),
+                "copy.svg" => Some(include_bytes!("assets/menubar/copy.svg")),
+                _ => None,
+            };
+            if let Some(asset) = asset {
+                return Ok(Some(Cow::Borrowed(asset)));
+            }
+        }
+        if path == "agentation/mark.svg" {
+            return Ok(Some(Cow::Borrowed(include_bytes!(
+                "../site/docs/assets/mark.svg"
+            ))));
+        }
         crate::ely::Assets.load(path)
     }
 
@@ -34,6 +55,21 @@ impl AssetSource for Assets {
         let mut paths = crate::ely::Assets.list(path)?;
         if "agentation/mcp.svg".starts_with(path) {
             paths.push("agentation/mcp.svg".into());
+        }
+        if "agentation/mark.svg".starts_with(path) {
+            paths.push("agentation/mark.svg".into());
+        }
+        for name in [
+            "brand.svg",
+            "crates.png",
+            "github.svg",
+            "mcp.svg",
+            "copy.svg",
+        ] {
+            let asset = format!("agentation/menubar/{name}");
+            if asset.starts_with(path) {
+                paths.push(asset.into());
+            }
         }
         Ok(paths)
     }
@@ -73,7 +109,9 @@ pub fn init(cx: &mut App) -> gpui::Result<()> {
                     "Agentation initialization failed; configure Application::with_assets(gpui_agentation::Assets), or Assets::before(host_assets): {error}"
                 ))
             })?;
+            cx.set_global(FollowSystemAppearance);
         }
+        crate::overlay::inspector::install(cx);
         cx.set_global(Initialized);
     }
     Ok(())
@@ -87,7 +125,9 @@ pub fn init_for_tests(cx: &mut App) {
     if !cx.has_global::<Initialized>() {
         if !cx.has_global::<Theme>() {
             crate::ely::init_for_tests(cx);
+            cx.set_global(FollowSystemAppearance);
         }
+        crate::overlay::inspector::install(cx);
         cx.set_global(Initialized);
     }
 }
@@ -100,7 +140,13 @@ pub fn init_for_tests(cx: &mut App) {
 pub struct Agentation {
     overlay: Entity<AnnotationOverlay>,
     focus: FocusHandle,
+    _appearance: Option<Subscription>,
 }
+
+/// Set when Agentation created the theme itself, so its tools follow the OS
+/// light/dark setting. A host that already initialized Ely keeps control.
+struct FollowSystemAppearance;
+impl Global for FollowSystemAppearance {}
 
 impl Agentation {
     /// Mount tools for a window after [`init`], using a local store and port.
@@ -125,10 +171,20 @@ impl Agentation {
         if window.focused(cx).is_none() {
             window.focus(&focus, cx);
         }
-        Ok(Self { overlay, focus })
+        let appearance = cx.has_global::<FollowSystemAppearance>().then(|| {
+            Theme::set_mode_now(Mode::from(window.appearance()), cx);
+            window.observe_window_appearance(|window, cx| {
+                Theme::set_mode(Mode::from(window.appearance()), cx)
+            })
+        });
+        Ok(Self {
+            overlay,
+            focus,
+            _appearance: appearance,
+        })
     }
 
-    /// Render one screen below the toolbar and own its root focus handling.
+    /// Render one screen and own its root focus handling; the toolbar is a companion window.
     ///
     /// Call once per window render, below custom chrome and outside content
     /// padding/scrolling. The content should fill the remaining column space.
@@ -176,5 +232,5 @@ impl Agentation {
 }
 
 #[cfg(test)]
-#[path = "integration.test.rs"]
+#[path = "tests/integration.rs"]
 mod tests;

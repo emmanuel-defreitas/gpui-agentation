@@ -16,18 +16,46 @@ impl AnnotationOverlay {
         self.future.clear();
     }
 
+    pub(super) fn record_inspection_change(
+        &mut self,
+        before: crate::Annotation,
+        after: crate::Annotation,
+    ) {
+        if let Some((_, Some(last))) = self.history.last_mut()
+            && last.id == after.id
+        {
+            *last = after;
+            self.future.clear();
+        } else {
+            self.record_change(Some(before), Some(after));
+        }
+    }
+
     pub(super) fn undo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.inspecting {
+            self.stop_inspection(window, cx);
+        }
         if !self.dismiss_note(window, cx) {
             return;
         }
+        self.commit_scroll(window, cx);
         let Some((before, after)) = self.history.last().cloned() else {
             return;
         };
+        let kept = self.anchors_of(
+            &[
+                before.as_ref().map(|note| note.id.as_str()),
+                after.as_ref().map(|note| note.id.as_str()),
+            ],
+            window,
+            cx,
+        );
         match self.store.replace_note(after.as_ref(), before.as_ref()) {
             Ok(()) => {
                 self.history.pop();
                 self.future.push((before, after));
                 self.refresh_notes();
+                self.restore_anchors(kept);
             }
             Err(error) => self.notice = error.to_string(),
         }
@@ -38,14 +66,24 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
+        self.commit_scroll(window, cx);
         let Some((before, after)) = self.future.last().cloned() else {
             return;
         };
+        let kept = self.anchors_of(
+            &[
+                before.as_ref().map(|note| note.id.as_str()),
+                after.as_ref().map(|note| note.id.as_str()),
+            ],
+            window,
+            cx,
+        );
         match self.store.replace_note(before.as_ref(), after.as_ref()) {
             Ok(()) => {
                 self.future.pop();
                 self.history.push((before, after));
                 self.refresh_notes();
+                self.restore_anchors(kept);
             }
             Err(error) => self.notice = error.to_string(),
         }

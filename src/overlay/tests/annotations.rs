@@ -1,0 +1,2247 @@
+//! Annotation editing, pins, drawing tools, shortcuts and @-mentions.
+use super::super::mentions::{Motion, query};
+use super::*;
+use crate::{AnnotationShape, ToolbarPosition, ely::media::Tool};
+use gpui::{Modifiers, TestAppContext, VisualTestContext, point, px, size};
+
+fn click_toolbar(
+    overlay: &Entity<AnnotationOverlay>,
+    selector: &'static str,
+    cx: &mut VisualTestContext,
+) {
+    cx.update(|window, cx| {
+        window.activate_window();
+        overlay.update(cx, |this, cx| this.sync_toolbar_window(window, cx));
+    });
+    draw(cx);
+    let handle = cx.update(|_, cx| overlay.read(cx).companion_toolbar.unwrap());
+    let mut tools = VisualTestContext::from_window(handle.into(), &cx.cx);
+    draw(&mut tools);
+    let selector = if selector == "banner-notes" {
+        "feedback-floating-comments"
+    } else {
+        selector
+    };
+    let target = tools.debug_bounds(selector).unwrap();
+    tools.simulate_click(target.center(), Modifiers::none());
+    draw(cx);
+}
+
+fn setup(cx: &mut TestAppContext) -> (Entity<AnnotationOverlay>, &mut VisualTestContext) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Editor test", "gpui://editor")
+        .unwrap();
+    cx.add_window_view(|window, cx| AnnotationOverlay::new(store, session, 0, window, cx))
+}
+
+fn outside(cx: &mut VisualTestContext) {
+    let point = cx.update(|window, _| {
+        let size = window.viewport_size();
+        point(size.width - px(4.), size.height - px(4.))
+    });
+    cx.simulate_click(point, Modifiers::none());
+    draw(cx);
+}
+
+fn saved(overlay: &Entity<AnnotationOverlay>, cx: &mut VisualTestContext) -> String {
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Original".into(),
+                        element_path: "counter".into(),
+                        element: "Counter".into(),
+                        bounding_box: crate::Rect {
+                            x: 40.,
+                            y: 100.,
+                            width: 180.,
+                            height: 40.,
+                        },
+                        x: 20.,
+                        y: 120.,
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: None,
+                    },
+                )
+                .unwrap();
+            this.edit(&note.id, window, cx);
+            note.id
+        })
+    })
+}
+
+#[gpui::test]
+fn existing_note_should_require_edit_then_autosave_on_outside_click(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    let id = saved(&overlay, cx);
+    draw(cx);
+    cx.update(|_, cx| assert!(!overlay.read(cx).draft.as_ref().unwrap().editing));
+    let edit = cx.debug_bounds("feedback-editor-primary").unwrap();
+    cx.simulate_click(edit.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|window, cx| {
+        assert!(overlay.read(cx).draft.as_ref().unwrap().editing);
+        assert!(overlay.read(cx).input.focus_handle(cx).is_focused(window));
+    });
+    cx.simulate_input(" updated");
+    draw(cx);
+    outside(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert_eq!(
+            this.store.annotation(&id).unwrap().feedback.comment,
+            "Original updated"
+        );
+        assert_eq!(
+            this.store
+                .app_annotations(&this.session.app_name)
+                .unwrap()
+                .len(),
+            1
+        );
+    });
+}
+
+#[gpui::test]
+fn new_note_should_hug_one_line_grow_when_wrapped_and_save_when_clicked_away(
+    cx: &mut TestAppContext,
+) {
+    let (overlay, cx) = setup(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.active = true;
+            this.select(
+                Target {
+                    id: "counter".into(),
+                    label: "Counter".into(),
+                    source: String::new(),
+                    bounds: crate::Rect {
+                        x: 40.,
+                        y: 100.,
+                        width: 180.,
+                        height: 40.,
+                    },
+                },
+                20.,
+                120.,
+                window,
+                cx,
+            );
+        })
+    });
+    draw(cx);
+    let short = cx
+        .debug_bounds("feedback-editor-panel")
+        .unwrap()
+        .size
+        .height;
+    assert!(short < px(140.), "empty editor should hug one line");
+    let text = "A comment that should wrap as the user writes more. ".repeat(8);
+    cx.simulate_input(&text);
+    draw(cx);
+    let tall = cx
+        .debug_bounds("feedback-editor-panel")
+        .unwrap()
+        .size
+        .height;
+    assert!(tall > short + px(40.), "wrapped lines grow the editor");
+    outside(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        let notes = this.store.app_annotations(&this.session.app_name).unwrap();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].feedback.comment, text.trim());
+        assert!(this.stroke.is_empty());
+    });
+}
+
+#[gpui::test]
+fn outside_click_should_discard_empty_new_note_and_retain_invalid_existing_edit(
+    cx: &mut TestAppContext,
+) {
+    let (overlay, cx) = setup(cx);
+    let id = saved(&overlay, cx);
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.start_editing(window, cx);
+            this.input.update(cx, |input, cx| input.set_text("", cx));
+        })
+    });
+    draw(cx);
+    outside(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_some());
+        assert!(!this.notice.is_empty());
+        assert_eq!(
+            this.store.annotation(&id).unwrap().feedback.comment,
+            "Original"
+        );
+    });
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.draft = None;
+            this.select(
+                Target {
+                    id: "new".into(),
+                    label: "New".into(),
+                    source: String::new(),
+                    bounds: crate::Rect::default(),
+                },
+                20.,
+                120.,
+                window,
+                cx,
+            );
+        })
+    });
+    draw(cx);
+    outside(cx);
+    cx.update(|_, cx| {
+        assert!(overlay.read(cx).draft.is_none());
+        assert_eq!(
+            overlay
+                .read(cx)
+                .store
+                .app_annotations("Editor test")
+                .unwrap()
+                .len(),
+            1
+        );
+    });
+}
+
+#[gpui::test]
+fn comments_and_settings_should_save_and_open_in_one_click_and_block_invalid_changes(
+    cx: &mut TestAppContext,
+) {
+    let (overlay, cx) = setup(cx);
+    let id = saved(&overlay, cx);
+    cx.update(|_, cx| crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true));
+    for (selector, settings) in [
+        ("banner-notes", false),
+        ("feedback-settings-trigger-target", true),
+    ] {
+        cx.update(|window, cx| {
+            overlay.update(cx, |this, cx| {
+                this.edit(&id, window, cx);
+                this.start_editing(window, cx);
+                this.input
+                    .update(cx, |input, cx| input.set_text(selector, cx));
+            })
+        });
+        draw(cx);
+        click_toolbar(&overlay, selector, cx);
+        draw(cx);
+        cx.update(|window, cx| {
+            overlay.update(cx, |this, cx| {
+                assert!(this.draft.is_none());
+                assert_eq!(this.settings_open, settings);
+                assert_eq!(this.review_open, !settings);
+                assert_eq!(
+                    this.store.annotation(&id).unwrap().feedback.comment,
+                    selector
+                );
+                this.dismiss_sheet(window, cx);
+                this.edit(&id, window, cx);
+                this.start_editing(window, cx);
+                this.input.update(cx, |input, cx| input.set_text("", cx));
+            })
+        });
+        draw(cx);
+        click_toolbar(&overlay, selector, cx);
+        draw(cx);
+        cx.update(|_, cx| {
+            let this = overlay.read(cx);
+            assert_eq!(
+                this.draft.as_ref().unwrap().id.as_deref(),
+                Some(id.as_str())
+            );
+            assert!(!this.settings_open && !this.review_open);
+            assert_eq!(
+                this.store.annotation(&id).unwrap().feedback.comment,
+                selector
+            );
+        });
+        cx.update(|_, cx| {
+            overlay.update(cx, |this, cx| {
+                this.input
+                    .update(cx, |input, cx| input.set_text(selector, cx));
+            })
+        });
+    }
+}
+
+#[gpui::test]
+fn another_canvas_pin_should_save_current_note_and_open_clicked_note_in_one_click(
+    cx: &mut TestAppContext,
+) {
+    let (overlay, cx) = setup(cx);
+    let ids = cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            let ids: Vec<_> = [(0.15, 0.2), (0.8, 0.7)]
+                .into_iter()
+                .map(|at| {
+                    this.store
+                        .add(
+                            &this.session.id,
+                            AnnotationInput {
+                                inspection: None,
+                                comment: "Original".into(),
+                                element_path: format!("pin:{at:?}"),
+                                element: "Pin".into(),
+                                bounding_box: crate::Rect::default(),
+                                x: at.0 * 100.,
+                                y: at.1,
+                                source_file: None,
+                                gpui_configuration: None,
+                                shape: Some(crate::AnnotationShape::Pin { at, color: 0 }),
+                            },
+                        )
+                        .unwrap()
+                        .id
+                })
+                .collect();
+            this.session = this.store.session(&this.session.id).unwrap();
+            this.edit(&ids[0], window, cx);
+            this.start_editing(window, cx);
+            this.input
+                .update(cx, |input, cx| input.set_text("Saved before switching", cx));
+            cx.notify();
+            ids
+        })
+    });
+    draw(cx);
+    let pin = cx.debug_bounds("feedback-marker-number-2").unwrap();
+    cx.simulate_click(pin.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            assert_eq!(
+                this.store.annotation(&ids[0]).unwrap().feedback.comment,
+                "Saved before switching"
+            );
+            assert_eq!(
+                this.draft.as_ref().unwrap().id.as_deref(),
+                Some(ids[1].as_str())
+            );
+            assert!(!this.draft.as_ref().unwrap().editing);
+            this.start_editing(window, cx);
+            this.input.update(cx, |input, cx| input.set_text("", cx));
+        })
+    });
+    draw(cx);
+    let pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.simulate_click(pin.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        assert_eq!(
+            overlay.read(cx).draft.as_ref().unwrap().id.as_deref(),
+            Some(ids[1].as_str())
+        );
+        assert_eq!(
+            overlay
+                .read(cx)
+                .store
+                .annotation(&ids[1])
+                .unwrap()
+                .feedback
+                .comment,
+            "Original"
+        );
+    });
+}
+
+#[gpui::test]
+fn floating_comments_should_save_and_open_in_one_click(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    let id = saved(&overlay, cx);
+    cx.update(|window, cx| {
+        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        overlay.update(cx, |this, cx| {
+            this.set_toolbar_banner(false, window, cx);
+            this.start_editing(window, cx);
+            this.input
+                .update(cx, |input, cx| input.set_text("Floating saved", cx));
+        });
+    });
+    draw(cx);
+    click_toolbar(&overlay, "feedback-floating-comments", cx);
+    draw(cx);
+    let mut comments = toolbar(&overlay, cx);
+    assert!(comments.debug_bounds("feedback-comments-list").is_some());
+    cx.update(|_, cx| {
+        assert!(overlay.read(cx).draft.is_none());
+        assert_eq!(
+            overlay
+                .read(cx)
+                .store
+                .annotation(&id)
+                .unwrap()
+                .feedback
+                .comment,
+            "Floating saved"
+        );
+    });
+}
+
+#[gpui::test]
+fn saved_multiline_note_should_render_without_mutating_or_dropping_line_breaks(
+    cx: &mut TestAppContext,
+) {
+    let (overlay, cx) = setup(cx);
+    let id = saved(&overlay, cx);
+    let text = "First line\n\nThird line\n";
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.store
+                .update(
+                    &id,
+                    AnnotationPatch {
+                        comment: Some(text.into()),
+                        status: None,
+                    },
+                )
+                .unwrap();
+            this.edit(&id, window, cx);
+        })
+    });
+    draw(cx);
+    cx.update(|_, cx| {
+        assert!(!overlay.read(cx).draft.as_ref().unwrap().editing);
+        assert_eq!(overlay.read(cx).input.read(cx).text(), text);
+    });
+    click_toolbar(&overlay, "banner-notes", cx);
+    draw(cx);
+    cx.update(|_, cx| {
+        assert!(overlay.read(cx).review_open);
+        assert_eq!(
+            overlay
+                .read(cx)
+                .store
+                .annotation(&id)
+                .unwrap()
+                .feedback
+                .comment,
+            text
+        );
+    });
+}
+
+#[gpui::test]
+fn explicit_save_should_keep_new_and_existing_notes_open_in_read_mode(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.active = true;
+            this.select(
+                Target {
+                    id: "counter".into(),
+                    label: "Counter".into(),
+                    source: String::new(),
+                    bounds: crate::Rect {
+                        x: 40.,
+                        y: 100.,
+                        width: 180.,
+                        height: 40.,
+                    },
+                },
+                20.,
+                120.,
+                window,
+                cx,
+            );
+        })
+    });
+    draw(cx);
+    cx.simulate_input("New note");
+    draw(cx);
+    let save = cx.debug_bounds("feedback-editor-primary").unwrap();
+    cx.simulate_click(save.center(), Modifiers::none());
+    draw(cx);
+    let id = cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        let draft = this.draft.as_ref().expect("Save keeps the panel open");
+        assert!(!draft.editing);
+        assert_eq!(draft.index, Some(1));
+        assert_eq!(draft.original_comment, "New note");
+        assert_eq!(this.store.app_annotations("Editor test").unwrap().len(), 1);
+        draft.id.clone().unwrap()
+    });
+    let edit = cx.debug_bounds("feedback-editor-primary").unwrap();
+    cx.simulate_click(edit.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| assert!(overlay.read(cx).draft.as_ref().unwrap().editing));
+    cx.simulate_input(" updated");
+    draw(cx);
+    let save = cx.debug_bounds("feedback-editor-primary").unwrap();
+    cx.simulate_click(save.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        let draft = this.draft.as_ref().unwrap();
+        assert!(!draft.editing);
+        assert_eq!(draft.id.as_deref(), Some(id.as_str()));
+        assert_eq!(
+            this.store.annotation(&id).unwrap().feedback.comment,
+            "New note updated"
+        );
+        assert_eq!(this.store.app_annotations("Editor test").unwrap().len(), 1);
+    });
+    outside(cx);
+    cx.update(|_, cx| assert!(overlay.read(cx).draft.is_none()));
+}
+
+#[cfg(unix)]
+#[test]
+fn store_identity_resolves_aliases_before_and_after_the_notes_file_exists() {
+    let dir = tempfile::tempdir().unwrap();
+    let original = dir.path().join("original");
+    let alias = dir.path().join("alias");
+    std::fs::create_dir(&original).unwrap();
+    std::os::unix::fs::symlink(&original, &alias).unwrap();
+    let path = original.join("new-directory/notes.json");
+    let aliased = alias.join("new-directory/notes.json");
+    assert_eq!(store_path(&path).unwrap(), store_path(&aliased).unwrap());
+    std::fs::create_dir(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, b"{}").unwrap();
+    assert_eq!(store_path(&path).unwrap(), store_path(&aliased).unwrap());
+    let file_alias = dir.path().join("notes.json");
+    std::os::unix::fs::symlink(&path, &file_alias).unwrap();
+    assert_eq!(store_path(&path).unwrap(), store_path(&file_alias).unwrap());
+}
+
+fn text_draft(overlay: &Entity<AnnotationOverlay>, cx: &mut VisualTestContext) {
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            if !this.active {
+                this.toggle(window, cx);
+            }
+            this.choose_tool(Some(Tool::Select), window, cx);
+            this.color = 2;
+            this.stroke = vec![(0.2, 0.4)];
+            this.finish_stroke(point(px(200.), px(240.)), window, cx);
+        })
+    });
+    draw(cx);
+}
+
+#[gpui::test]
+fn textbox_saves_inline_and_reopens_for_editing_without_a_comment(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    // A new textbox edits inline on the canvas, not in a floating comment editor.
+    assert!(cx.debug_bounds("feedback-editor-panel").is_none());
+    assert!(cx.debug_bounds("feedback-textbox").is_some());
+    cx.update(|window, cx| assert!(overlay.read(cx).input.focus_handle(cx).is_focused(window)));
+    cx.simulate_input("Plain textbox");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    let id = cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none(), "saving closes the inline editor");
+        let note = &this.session.annotations[0];
+        assert!(matches!(&note.feedback.shape, Some(AnnotationShape::Text { text, color: 2, .. }) if text == "Plain textbox"));
+        note.id.clone()
+    });
+    assert!(cx.debug_bounds("feedback-editor-panel").is_none());
+    let text = cx.debug_bounds("feedback-textbox").unwrap();
+    cx.simulate_click(text.center(), Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("feedback-textbox-selected").is_some());
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).selected_note.as_deref(), Some(id.as_str())));
+    cx.simulate_keystrokes("enter");
+    draw(cx);
+    cx.update(|window, cx| {
+        let this = overlay.read(cx);
+        assert_eq!(
+            this.draft.as_ref().unwrap().id.as_deref(),
+            Some(id.as_str())
+        );
+        assert!(this.draft.as_ref().unwrap().editing);
+        assert!(this.input.focus_handle(cx).is_focused(window));
+        assert_eq!(this.draft.as_ref().unwrap().color, 2);
+    });
+    cx.simulate_input(" edited");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    cx.update(|_, cx| {
+        let note = overlay.read(cx).store.annotation(&id).unwrap();
+        assert_eq!(note.feedback.comment, "Plain textbox edited");
+        assert!(matches!(note.feedback.shape, Some(AnnotationShape::Text { text, .. }) if text == "Plain textbox edited"));
+    });
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|_, cx| {
+        assert_eq!(
+            overlay
+                .read(cx)
+                .store
+                .annotation(&id)
+                .unwrap()
+                .feedback
+                .comment,
+            "Plain textbox"
+        )
+    });
+}
+
+#[gpui::test]
+fn deletion_undo_and_redo_keep_annotation_identity_and_number(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    cx.simulate_input("Keep identity");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    let note = cx.update(|_, cx| overlay.read(cx).session.annotations[0].clone());
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.selected_note = Some(note.id.clone());
+            window.focus(&this.focus, cx);
+        })
+    });
+    draw(cx);
+    cx.simulate_keystrokes("delete");
+    draw(cx);
+    cx.update(|_, cx| assert!(overlay.read(cx).store.annotation(&note.id).is_err()));
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).store.annotation(&note.id).unwrap(), note));
+    cx.simulate_keystrokes("ctrl-shift-z");
+    draw(cx);
+    cx.update(|_, cx| assert!(overlay.read(cx).store.annotation(&note.id).is_err()));
+}
+
+#[gpui::test]
+fn textbox_pin_selection_pointer_drag_and_context_actions_preserve_identity(
+    cx: &mut TestAppContext,
+) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    cx.simulate_input("Draggable textbox");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    let before = cx.update(|_, cx| overlay.read(cx).session.annotations[0].clone());
+    assert!(cx.debug_bounds("feedback-marker-number-1").is_some());
+    let body = cx.debug_bounds("feedback-textbox").unwrap();
+    cx.update(|_, cx| {
+        let measured = overlay.read(cx).textbox_bounds[&before.id];
+        assert!(measured.size.width > gpui::px(40.));
+        assert!(measured.size.height > gpui::px(20.));
+    });
+    cx.simulate_click(body.center(), Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("feedback-textbox-selected").is_some());
+    let start = cx.debug_bounds("feedback-textbox").unwrap().center();
+    cx.simulate_mouse_move(start, None, Modifiers::none());
+    cx.simulate_mouse_down(start, gpui::MouseButton::Left, Modifiers::none());
+    let end = start + gpui::point(px(92.), px(40.));
+    cx.simulate_mouse_move(end, Some(gpui::MouseButton::Left), Modifiers::none());
+    draw(cx);
+    cx.simulate_mouse_up(end, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let after = overlay.read(cx).store.annotation(&before.id).unwrap();
+        assert_eq!(after.index, before.index);
+        assert_eq!(after.feedback.comment, before.feedback.comment);
+        assert_ne!(after.feedback.shape, before.feedback.shape);
+    });
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            assert_eq!(this.store.annotation(&before.id).unwrap(), before);
+            this.note_action(&before.id, super::menu::NoteAction::Color(1), window, cx);
+            assert_eq!(this.store.annotation(&before.id).unwrap().color, Some(1));
+            this.undo(window, cx);
+            assert_eq!(this.store.annotation(&before.id).unwrap(), before);
+        })
+    });
+    draw(cx);
+    let at = cx.debug_bounds("feedback-textbox").unwrap().center();
+    cx.simulate_mouse_move(at, None, Modifiers::none());
+    cx.simulate_mouse_down(at, gpui::MouseButton::Right, Modifiers::none());
+    cx.simulate_mouse_up(at, gpui::MouseButton::Right, Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("menu-row-Color").is_some());
+    let delete = cx
+        .debug_bounds("menu-row-Delete")
+        .expect("annotation context menu");
+    cx.simulate_click(delete.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| assert!(overlay.read(cx).store.annotation(&before.id).is_err()));
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|_, cx| {
+        assert_eq!(
+            overlay.read(cx).store.annotation(&before.id).unwrap(),
+            before
+        )
+    });
+}
+
+#[gpui::test]
+fn textbox_tool_frames_a_box_by_dragging_and_grips_resize_it(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    cx.simulate_resize(size(px(1000.), px(800.)));
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            if !this.active {
+                this.toggle(window, cx);
+            }
+            this.choose_tool(Some(Tool::Select), window, cx);
+        })
+    });
+    draw(cx);
+    // Drag out a frame on the picker, as in Freeform: a dashed preview follows.
+    let (start, end) = (point(px(100.), px(100.)), point(px(400.), px(260.)));
+    cx.simulate_mouse_move(start, None, Modifiers::none());
+    cx.simulate_mouse_down(start, gpui::MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(end, Some(gpui::MouseButton::Left), Modifiers::none());
+    draw(cx);
+    let preview = cx
+        .debug_bounds("feedback-textbox-frame")
+        .expect("dashed frame while dragging");
+    assert_eq!(preview.origin, start);
+    assert_eq!(preview.size, size(px(300.), px(160.)));
+    cx.simulate_mouse_up(end, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("feedback-textbox-frame").is_none());
+    cx.update(|_, cx| {
+        let draft = overlay
+            .read(cx)
+            .draft
+            .as_ref()
+            .expect("inline textbox draft");
+        let Some(AnnotationShape::Text {
+            at, width, height, ..
+        }) = &draft.shape
+        else {
+            panic!("textbox draft");
+        };
+        assert!((at.0 - 0.1).abs() < 1e-5 && (at.1 - 0.125).abs() < 1e-5);
+        assert!((width.unwrap() - 0.3).abs() < 1e-5);
+        assert!((height.unwrap() - 0.2).abs() < 1e-5);
+    });
+    let body = cx.debug_bounds("feedback-textbox").unwrap();
+    assert_eq!(body.size.width, px(300.), "the frame fixes the wrap width");
+    assert!(
+        body.size.height >= px(160.),
+        "the frame sets the minimum height"
+    );
+    cx.simulate_input("Framed");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    let saved = cx.update(|_, cx| overlay.read(cx).session.annotations[0].clone());
+    // At rest no grips show; selecting the box reveals its bounding box and grips.
+    assert!(cx.debug_bounds("feedback-textbox-resize-left").is_none());
+    let body = cx.debug_bounds("feedback-textbox").unwrap();
+    cx.simulate_click(body.center(), Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("feedback-textbox-selected").is_some());
+    for grip in [
+        "feedback-textbox-resize-top-left",
+        "feedback-textbox-resize-top-right",
+        "feedback-textbox-resize-bottom-left",
+        "feedback-textbox-resize-bottom-right",
+        "feedback-textbox-resize-left",
+        "feedback-textbox-resize-right",
+    ] {
+        assert!(cx.debug_bounds(grip).is_some(), "{grip}");
+    }
+    let left = cx.debug_bounds("feedback-textbox-resize-left").unwrap();
+    assert_eq!(left.center().x, body.left());
+    // Pulling the left grip moves the origin and keeps the right edge in place.
+    let from = left.center();
+    let to = from - point(px(50.), px(0.));
+    cx.simulate_mouse_move(from, None, Modifiers::none());
+    cx.simulate_mouse_down(from, gpui::MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(to, Some(gpui::MouseButton::Left), Modifiers::none());
+    draw(cx);
+    cx.simulate_mouse_up(to, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let after = overlay.read(cx).store.annotation(&saved.id).unwrap();
+        let Some(AnnotationShape::Text {
+            at, width, height, ..
+        }) = &after.feedback.shape
+        else {
+            panic!("textbox");
+        };
+        assert!((at.0 - 0.05).abs() < 1e-4, "origin follows the left grip");
+        assert!(
+            (width.unwrap() - 0.35).abs() < 1e-4,
+            "width grows by the pull"
+        );
+        assert!(
+            (height.unwrap() - 0.2).abs() < 1e-5,
+            "a side grip leaves height"
+        );
+        assert_eq!(after.index, saved.index);
+    });
+    // A corner grip also sets the minimum height, and undo restores the frame.
+    let corner = cx
+        .debug_bounds("feedback-textbox-resize-bottom-right")
+        .unwrap();
+    let from = corner.center();
+    let to = from + point(px(0.), px(80.));
+    cx.simulate_mouse_move(from, None, Modifiers::none());
+    cx.simulate_mouse_down(from, gpui::MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(to, Some(gpui::MouseButton::Left), Modifiers::none());
+    draw(cx);
+    cx.simulate_mouse_up(to, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let after = overlay.read(cx).store.annotation(&saved.id).unwrap();
+        let Some(AnnotationShape::Text { height, .. }) = &after.feedback.shape else {
+            panic!("textbox");
+        };
+        assert!(
+            (height.unwrap() - 0.3).abs() < 1e-3,
+            "corner grip grows height"
+        );
+    });
+    cx.simulate_keystrokes("ctrl-z");
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|_, cx| {
+        assert_eq!(overlay.read(cx).store.annotation(&saved.id).unwrap(), saved);
+    });
+}
+
+#[gpui::test]
+fn textbox_draft_has_grips_and_clicking_away_saves_text_or_removes_an_empty_box(
+    cx: &mut TestAppContext,
+) {
+    let (overlay, cx) = setup(cx);
+    cx.simulate_resize(size(px(1000.), px(800.)));
+    draw(cx);
+    text_draft(&overlay, cx);
+    draw(cx);
+    // The unsaved draft already shows its bounding box grips, and the text
+    // starts at the box's own padding rather than after a pin gutter.
+    let body = cx.debug_bounds("feedback-textbox").unwrap();
+    let right = cx
+        .debug_bounds("feedback-textbox-resize-right")
+        .expect("draft grips");
+    assert_eq!(right.center().x, body.right());
+    let input = cx.debug_bounds("feedback-textbox-input").unwrap();
+    assert!(input.left() - body.left() < px(16.));
+    // Pulling the draft's right grip widens the draft frame and keeps editing.
+    let from = right.center();
+    let to = from + point(px(120.), px(0.));
+    cx.simulate_mouse_move(from, None, Modifiers::none());
+    cx.simulate_mouse_down(from, gpui::MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(to, Some(gpui::MouseButton::Left), Modifiers::none());
+    draw(cx);
+    cx.simulate_mouse_up(to, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    cx.update(|window, cx| {
+        let this = overlay.read(cx);
+        let draft = this.draft.as_ref().expect("still drafting");
+        assert!(draft.editing && draft.id.is_none());
+        let Some(AnnotationShape::Text { width, .. }) = &draft.shape else {
+            panic!("textbox");
+        };
+        let expected = (f32::from(body.size.width) + 120.) / 1000.;
+        assert!(
+            (width.unwrap() - expected).abs() < 1e-3,
+            "{width:?} vs {expected}"
+        );
+        assert!(this.input.focus_handle(cx).is_focused(window));
+    });
+    // Clicking away from an empty draft removes it without a note.
+    cx.simulate_click(point(px(900.), px(700.)), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert!(this.session.annotations.is_empty());
+        assert!(this.stroke.is_empty(), "the press did not start a new box");
+    });
+    // With text, clicking away saves the box instead.
+    text_draft(&overlay, cx);
+    cx.simulate_input("Kept");
+    cx.simulate_click(point(px(900.), px(700.)), Modifiers::none());
+    draw(cx);
+    let saved = cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert_eq!(this.session.annotations.len(), 1);
+        this.session.annotations[0].clone()
+    });
+    assert!(
+        matches!(&saved.feedback.shape, Some(AnnotationShape::Text { text, .. }) if text == "Kept")
+    );
+    // The pin tags the box from above its left edge.
+    let body = cx.debug_bounds("feedback-textbox").unwrap();
+    let pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert!(pin.bottom() <= body.top() + px(1.));
+    assert!(pin.left() >= body.left() - px(1.));
+    // Emptying a saved box and clicking away removes it; undo brings it back.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.edit(&saved.id, window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            this.input.update(cx, |input, cx| input.set_text("", cx))
+        })
+    });
+    cx.simulate_click(point(px(900.), px(700.)), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert!(this.store.annotation(&saved.id).is_err());
+    });
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).store.annotation(&saved.id).unwrap(), saved));
+}
+
+#[gpui::test]
+fn right_click_on_empty_canvas_opens_the_tools_menu_in_annotation_mode(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    // Off: an empty-canvas right click shows nothing.
+    let at = cx.update(|window, _| {
+        let size = window.viewport_size();
+        point(size.width / 2., size.height / 2.)
+    });
+    cx.simulate_mouse_move(at, None, Modifiers::none());
+    cx.simulate_mouse_down(at, gpui::MouseButton::Right, Modifiers::none());
+    cx.simulate_mouse_up(at, gpui::MouseButton::Right, Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("menu-row-Box").is_none());
+    // On: the same right click offers the tools under New.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.toggle(window, cx)));
+    draw(cx);
+    cx.simulate_mouse_move(at, None, Modifiers::none());
+    cx.simulate_mouse_down(at, gpui::MouseButton::Right, Modifiers::none());
+    cx.simulate_mouse_up(at, gpui::MouseButton::Right, Modifiers::none());
+    draw(cx);
+    let new = cx.debug_bounds("menu-row-New").expect("tools menu");
+    cx.simulate_click(new.center(), Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("menu-row-Box").is_some());
+    let arrow = cx.debug_bounds("menu-row-Arrow").expect("tools menu");
+    cx.simulate_click(arrow.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).tool, Some(Tool::Arrow)));
+}
+
+#[gpui::test]
+fn existing_annotation_context_menu_requires_annotation_mode(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Pinned".into(),
+                        element_path: "pin".into(),
+                        element: "Pin".into(),
+                        x: 20.,
+                        y: 120.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(crate::AnnotationShape::Pin {
+                            at: (0.2, 0.12),
+                            color: 0,
+                        }),
+                    },
+                )
+                .unwrap();
+            this.session = this.store.session(&this.session.id).unwrap();
+            window.activate_window();
+            cx.notify();
+        })
+    });
+    draw(cx);
+    let marker = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.simulate_mouse_down(marker.center(), gpui::MouseButton::Right, Modifiers::none());
+    cx.simulate_mouse_up(marker.center(), gpui::MouseButton::Right, Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("menu-row-Delete").is_none());
+
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.toggle(window, cx)));
+    draw(cx);
+    let marker = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.simulate_mouse_down(marker.center(), gpui::MouseButton::Right, Modifiers::none());
+    cx.simulate_mouse_up(marker.center(), gpui::MouseButton::Right, Modifiers::none());
+    draw(cx);
+    assert!(cx.debug_bounds("menu-row-Delete").is_some());
+}
+
+#[gpui::test]
+fn delete_shortcut_keeps_the_selected_note_after_editor_outside_click(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    cx.simulate_input("Delete from toolbar");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    let note = cx.update(|_, cx| overlay.read(cx).session.annotations[0].clone());
+    let text = cx.debug_bounds("feedback-textbox").unwrap();
+    cx.simulate_click(text.center(), Modifiers::none());
+    draw(cx);
+    cx.simulate_keystrokes("delete");
+    draw(cx);
+    cx.update(|_, cx| assert!(overlay.read(cx).store.annotation(&note.id).is_err()));
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).store.annotation(&note.id).unwrap(), note));
+}
+
+#[gpui::test]
+fn tool_shortcuts_are_scoped_to_annotation_mode_and_preserve_typing(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    cx.update(|window, cx| window.focus(&overlay.read(cx).focus.clone(), cx));
+    draw(cx);
+    cx.simulate_keystrokes("b");
+    cx.update(|_, cx| assert!(!overlay.read(cx).active));
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.toggle(window, cx)));
+    draw(cx);
+    for (key, tool) in [
+        ("b", Tool::Box),
+        ("a", Tool::Arrow),
+        ("p", Tool::Pen),
+        ("c", Tool::Pin),
+        ("t", Tool::Select),
+    ] {
+        cx.simulate_keystrokes(key);
+        draw(cx);
+        cx.update(|_, cx| assert_eq!(overlay.read(cx).tool, Some(tool)));
+    }
+    text_draft(&overlay, cx);
+    cx.simulate_keystrokes("b");
+    cx.update(|_, cx| {
+        assert_eq!(overlay.read(cx).tool, Some(Tool::Select));
+        assert_eq!(overlay.read(cx).input.read(cx).text(), "b");
+    });
+}
+
+#[gpui::test]
+fn pin_drag_moves_only_the_pin_and_can_be_undone(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    cx.simulate_input("Move pin");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            let mut before = this.session.annotations[0].clone();
+            before.feedback.shape = Some(AnnotationShape::Box {
+                from: (0.1, 0.2),
+                to: (0.4, 0.5),
+                color: 2,
+            });
+            let old = this.store.annotation(&before.id).unwrap();
+            this.store.replace_note(Some(&old), Some(&before)).unwrap();
+            this.session = this.store.session(&this.session.id).unwrap();
+            this.pin_drag = Some((before.clone(), (0., 0.)));
+            this.finish_stroke(point(px(300.), px(300.)), window, cx);
+            let after = this.store.annotation(&before.id).unwrap();
+            assert_eq!(after.feedback.shape, before.feedback.shape);
+            assert_ne!(after.feedback.x, before.feedback.x);
+            this.undo(window, cx);
+            assert_eq!(this.store.annotation(&before.id).unwrap(), before);
+        })
+    });
+}
+
+#[gpui::test]
+fn none_position_removes_the_toolbar_and_menu_commands_restore_it(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    cx.update(|window, _| window.activate_window());
+    cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            this.set_toolbar_position(ToolbarPosition::None, cx)
+        })
+    });
+    draw(cx);
+    assert!(cx.debug_bounds("banner-inspect").is_none());
+    assert!(cx.debug_bounds("feedback-floating-comments").is_none());
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.dispatch_command(
+                &commands::AnnotationCommand {
+                    name: "toolbar".into(),
+                },
+                window,
+                cx,
+            );
+        })
+    });
+    draw(cx);
+    cx.update(|_, cx| assert!(overlay.read(cx).companion_toolbar.is_some()));
+}
+
+gpui::actions!(release_test, [HostBox]);
+
+struct ShortcutHost {
+    overlay: Entity<AnnotationOverlay>,
+    focus: FocusHandle,
+    presses: usize,
+}
+impl Render for ShortcutHost {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .id("shortcut-host")
+            .track_focus(&self.focus)
+            .size_full()
+            .on_action(cx.listener(|this, _: &HostBox, _, cx| {
+                this.presses += 1;
+                cx.notify();
+            }))
+            .child(self.overlay.clone())
+    }
+}
+
+#[gpui::test]
+fn annotation_shortcut_overrides_the_host_binding_only_while_enabled(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        crate::ely::init_for_tests(cx);
+        cx.bind_keys([gpui::KeyBinding::new("b", HostBox, None)]);
+    });
+    let (host, cx) = cx.add_window_view(|window, cx| {
+        let store = Store::memory();
+        let session = store
+            .ensure_session("Shortcuts", "gpui://shortcuts")
+            .unwrap();
+        let focus = cx.focus_handle();
+        window.focus(&focus, cx);
+        ShortcutHost {
+            overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+            focus,
+            presses: 0,
+        }
+    });
+    draw(cx);
+    cx.simulate_keystrokes("b");
+    cx.update(|_, cx| assert_eq!(host.read(cx).presses, 1));
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.toggle(window, cx)));
+    draw(cx);
+    cx.update(|window, cx| assert!(overlay.read(cx).focus.is_focused(window)));
+    cx.simulate_keystrokes("b");
+    draw(cx);
+    cx.update(|_, cx| {
+        assert_eq!(host.read(cx).presses, 1);
+        assert_eq!(overlay.read(cx).tool, Some(Tool::Box));
+    });
+    cx.simulate_keystrokes("escape");
+    draw(cx);
+    cx.simulate_keystrokes("b");
+    cx.update(|_, cx| assert_eq!(host.read(cx).presses, 2));
+}
+
+#[test]
+fn queries_respect_caret_boundaries_and_numbered_references() {
+    let q = query("see @#12 next", 8).unwrap();
+    assert_eq!(q.search, "12");
+    assert!(q.dropdown);
+    assert_eq!(q.start, 4);
+    assert_eq!(query("note #2", 7).unwrap().search, "2");
+    assert!(query("mail@example", 12).is_none());
+    assert!(query("@#2 ", 4).is_none());
+    assert!(query("é @", 1).is_none());
+}
+
+#[gpui::test]
+fn mention_dropdown_previews_hovered_and_typed_notes_and_inserts_reference(
+    cx: &mut gpui::TestAppContext,
+) {
+    cx.update(|cx| {
+        crate::ely::init_for_tests(cx);
+        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+    });
+    let (overlay, cx) = cx.add_window_view(|window, cx| {
+        let store = Store::memory();
+        let session = store.ensure_session("Mentions", "gpui://mentions").unwrap();
+        for index in 1..=12 {
+            store
+                .add(
+                    &session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: format!("Existing note {index}, see 12"),
+                        element_path: format!("note-{index}"),
+                        element: "Pin".into(),
+                        x: 5.0 * index as f32,
+                        y: 100.0,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(crate::AnnotationShape::Pin {
+                            at: (0.05 * index as f32, 0.2),
+                            color: 0,
+                        }),
+                    },
+                )
+                .unwrap();
+        }
+        let session = store.session(&session.id).unwrap();
+        AnnotationOverlay::new(store, session, 0, window, cx)
+    });
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.choose_tool(Some(crate::ely::media::Tool::Pin), window, cx);
+            this.stroke = vec![(0.5, 0.4)];
+            this.finish_stroke(gpui::point(px(400.), px(250.)), window, cx);
+        })
+    });
+    draw(cx);
+    cx.simulate_input("@");
+    draw(cx);
+    assert!(cx.debug_bounds("annotation-mentions").is_some());
+    let row = cx.debug_bounds("mention-note-1").unwrap();
+    cx.simulate_mouse_move(row.center(), None, gpui::Modifiers::none());
+    draw(cx);
+    cx.update(|window, cx| {
+        let this = overlay.read(cx);
+        assert!(
+            this.input.focus_handle(cx).is_focused(window),
+            "hover keeps the input focused"
+        );
+        let id = &this.session.annotations[0].id;
+        assert_eq!(this.mentions.preview.as_deref(), Some(id.as_str()));
+        assert_eq!(this.pin_scale(id, window, cx), 1.35);
+    });
+    cx.simulate_keystrokes("escape");
+    draw(cx);
+    assert!(cx.debug_bounds("annotation-mentions").is_none());
+    cx.update(|_, cx| {
+        assert!(overlay.read(cx).draft.is_some());
+        assert!(overlay.read(cx).mentions.preview.is_none());
+    });
+    cx.simulate_keystrokes("backspace");
+    cx.simulate_input("@#2");
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert_eq!(
+            this.mentions.preview.as_deref(),
+            Some(this.session.annotations[1].id.as_str())
+        );
+    });
+    cx.simulate_keystrokes("enter");
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert_eq!(this.input.read(cx).text(), "@#2 ");
+        assert!(this.mentions.preview.is_none());
+    });
+    assert!(cx.debug_bounds("annotation-mentions").is_none());
+    cx.update(|_, cx| {
+        let input = overlay.read(cx).input.clone();
+        input.update(cx, |input, cx| input.set_text("@#1", cx));
+    });
+    draw(cx);
+    cx.simulate_keystrokes("down down");
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert_eq!(
+            this.mentions.preview.as_deref(),
+            Some(this.session.annotations[1].id.as_str())
+        );
+    });
+    cx.update(|_, cx| {
+        let input = overlay.read(cx).input.clone();
+        input.update(cx, |input, cx| input.set_text("@#12", cx));
+    });
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert_eq!(this.mention_candidates()[0].index, 12);
+        assert_eq!(
+            this.mentions.preview.as_deref(),
+            Some(this.session.annotations[11].id.as_str())
+        );
+    });
+    cx.simulate_keystrokes("enter");
+    draw(cx);
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).input.read(cx).text(), "@#12 "));
+}
+
+#[test]
+fn pin_motion_returns_to_normal_and_honors_reduced_motion() {
+    let up = Motion {
+        from: 1.0,
+        to: 1.35,
+        since: Instant::now() - Duration::from_secs(1),
+    };
+    assert_eq!(up.sample(Duration::from_millis(120)), (1.35, false));
+    let down = Motion {
+        from: 1.35,
+        to: 1.0,
+        since: Instant::now(),
+    };
+    assert_eq!(down.sample(Duration::ZERO), (1.0, false));
+}
+
+#[test]
+fn saved_style_is_restored_only_for_a_fresh_pick() {
+    use super::super::inspector::should_restore;
+    use crate::{GpuiConfiguration, GpuiStyleChange};
+
+    let config = |after: &str| GpuiConfiguration {
+        source: "src/view.rs:1:1".into(),
+        element_path: "root".into(),
+        changes: vec![GpuiStyleChange {
+            property: "width".into(),
+            before: "10px".into(),
+            after: after.into(),
+        }],
+        rust: format!(".w(px({after}))"),
+    };
+    let saved = config("20px");
+    let edited = config("30px");
+
+    // Fresh pick of an element whose live style differs from the saved one.
+    assert!(should_restore(false, false, &saved, None));
+    assert!(should_restore(false, false, &saved, Some(&edited)));
+    // Nothing to restore when the live style already matches.
+    assert!(!should_restore(false, false, &saved, Some(&saved)));
+    // A restore is already queued.
+    assert!(!should_restore(true, false, &saved, Some(&edited)));
+    // Same selection: a new edit or Reset must not be undone.
+    assert!(!should_restore(false, true, &saved, Some(&edited)));
+    assert!(!should_restore(false, true, &saved, None));
+}
+
+struct ScrollHost {
+    overlay: Entity<AnnotationOverlay>,
+    scroll: f32,
+}
+
+impl gpui::Render for ScrollHost {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::begin_frame(window, cx);
+        div()
+            .size_full()
+            .on_scroll_wheel(cx.listener(|this, event: &gpui::ScrollWheelEvent, _, cx| {
+                if let gpui::ScrollDelta::Pixels(delta) = event.delta {
+                    this.scroll += f32::from(delta.y);
+                    cx.notify();
+                }
+            }))
+            .child(
+                div()
+                    .absolute()
+                    .top(px(100. - self.scroll))
+                    .left(px(40.))
+                    .child(crate::target("card", "Card", div().w(px(200.)).h(px(80.)))),
+            )
+            .child(self.overlay.clone())
+    }
+}
+
+#[gpui::test]
+fn annotation_mode_only_freezes_consumer_scroll_after_drawing_starts(cx: &mut TestAppContext) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Scroll interaction", "gpui://scroll-interaction")
+        .unwrap();
+    store
+        .add(
+            &session.id,
+            AnnotationInput {
+                inspection: None,
+                comment: "Pinned".into(),
+                element_path: "card".into(),
+                element: "Card".into(),
+                x: 10.,
+                y: 140.,
+                bounding_box: crate::Rect::default(),
+                source_file: None,
+                gpui_configuration: None,
+                shape: None,
+            },
+        )
+        .unwrap();
+    let session = store.session(&session.id).unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| ScrollHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+        scroll: 0.,
+    });
+    cx.update(|window, cx| {
+        window.activate_window();
+        host.update(cx, |host, cx| {
+            host.overlay.update(cx, |overlay, cx| {
+                overlay.toggle(window, cx);
+                overlay.choose_tool(Some(Tool::Box), window, cx);
+            });
+        });
+    });
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.simulate_event(gpui::ScrollWheelEvent {
+        position: point(px(100.), px(100.)),
+        delta: gpui::ScrollDelta::Pixels(point(px(0.), px(30.))),
+        modifiers: Modifiers::none(),
+        touch_phase: gpui::TouchPhase::Moved,
+    });
+    draw(cx);
+    let after_scroll = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after_scroll.center().y, before.center().y - px(30.));
+
+    cx.simulate_mouse_move(point(px(100.), px(100.)), None, Modifiers::none());
+    cx.simulate_mouse_down(
+        point(px(100.), px(100.)),
+        gpui::MouseButton::Left,
+        Modifiers::none(),
+    );
+    cx.simulate_event(gpui::ScrollWheelEvent {
+        position: point(px(100.), px(100.)),
+        delta: gpui::ScrollDelta::Pixels(point(px(0.), px(30.))),
+        modifiers: Modifiers::none(),
+        touch_phase: gpui::TouchPhase::Moved,
+    });
+    draw(cx);
+    assert_eq!(
+        cx.update(|_, cx| host.read(cx).scroll),
+        30.,
+        "consumer scrolling freezes after the stroke begins"
+    );
+
+    cx.simulate_keystrokes("escape");
+    cx.simulate_event(gpui::ScrollWheelEvent {
+        position: point(px(100.), px(100.)),
+        delta: gpui::ScrollDelta::Pixels(point(px(0.), px(30.))),
+        modifiers: Modifiers::none(),
+        touch_phase: gpui::TouchPhase::Moved,
+    });
+    draw(cx);
+    assert_eq!(cx.update(|_, cx| host.read(cx).scroll), 60.);
+
+    cx.update(|window, cx| {
+        host.update(cx, |host, cx| {
+            host.overlay
+                .update(cx, |overlay, cx| overlay.choose_tool(None, window, cx));
+        });
+    });
+    draw(cx);
+    cx.simulate_click(point(px(100.), px(100.)), Modifiers::none());
+    draw(cx);
+    cx.simulate_event(gpui::ScrollWheelEvent {
+        position: point(px(100.), px(100.)),
+        delta: gpui::ScrollDelta::Pixels(point(px(0.), px(30.))),
+        modifiers: Modifiers::none(),
+        touch_phase: gpui::TouchPhase::Moved,
+    });
+    draw(cx);
+    assert_eq!(
+        cx.update(|_, cx| host.read(cx).scroll),
+        90.,
+        "inspector mode leaves consumer scrolling available"
+    );
+}
+
+#[gpui::test]
+fn pins_on_a_registered_target_scroll_with_it_while_annotating_is_off(cx: &mut TestAppContext) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Scroll test", "gpui://scroll")
+        .unwrap();
+    store
+        .add(
+            &session.id,
+            AnnotationInput {
+                inspection: None,
+                comment: "Pinned".into(),
+                element_path: "card".into(),
+                element: "Card".into(),
+                x: 10.,
+                y: 140.,
+                bounding_box: crate::Rect::default(),
+                source_file: None,
+                gpui_configuration: None,
+                shape: None,
+            },
+        )
+        .unwrap();
+    let session = store.session(&session.id).unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| ScrollHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+        scroll: 0.,
+    });
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.scroll = 30.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after.center().y, before.center().y - px(30.));
+    assert_eq!(after.center().x, before.center().x);
+}
+
+#[gpui::test]
+fn drawn_annotations_scroll_with_the_content_under_them_and_commit_before_editing(
+    cx: &mut TestAppContext,
+) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Drawn scroll", "gpui://drawn-scroll")
+        .unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| ScrollHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+        scroll: 0.,
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    // A Pin-tool comment over the card (40..240 by 100..180), at (140, 140).
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    let id = cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Drawn".into(),
+                        element_path: "drawing:pin".into(),
+                        element: "Pin".into(),
+                        x: 140. / 800. * 100.,
+                        y: 140.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(AnnotationShape::Pin {
+                            at: (140. / 800., 140. / 600.),
+                            color: 0,
+                        }),
+                    },
+                )
+                .unwrap();
+            this.session.annotations.push(note.clone());
+            cx.notify();
+            note.id
+        })
+    });
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.scroll = 30.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(
+        after.center().y,
+        before.center().y - px(30.),
+        "a pin drawn over scrolling content scrolls with it"
+    );
+    assert_eq!(after.center().x, before.center().x);
+    // Editing reads stored coordinates, so the scroll is folded into them first
+    // and the pin does not jump.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.edit(&id, window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        let Some(AnnotationShape::Pin { at, .. }) = stored.feedback.shape else {
+            panic!("pin shape")
+        };
+        assert!((at.1 - 110. / 600.).abs() < 1e-4, "stored y follows scroll");
+        assert!((stored.feedback.y - 110.).abs() < 1e-3);
+    });
+    let edited = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(edited.center().y, after.center().y, "no jump on edit");
+}
+
+fn scrolled_overlay(
+    cx: &mut TestAppContext,
+    shape: AnnotationShape,
+) -> (
+    Entity<ScrollHost>,
+    Entity<AnnotationOverlay>,
+    String,
+    &mut VisualTestContext,
+) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Scroll commit", "gpui://scroll-commit")
+        .unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| ScrollHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+        scroll: 0.,
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    let id = cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Drawn".into(),
+                        element_path: "drawing:scroll".into(),
+                        element: "Shape".into(),
+                        x: 20.,
+                        y: 140.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(shape),
+                    },
+                )
+                .unwrap();
+            this.record_change(None, Some(note.clone()));
+            this.session.annotations.push(note.clone());
+            cx.notify();
+            note.id
+        })
+    });
+    draw(cx);
+    (host, overlay, id, cx)
+}
+
+fn scroll_host(host: &Entity<ScrollHost>, to: f32, cx: &mut VisualTestContext) {
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.scroll = to;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+}
+
+#[gpui::test]
+fn committing_scroll_never_flattens_a_shape_partly_out_of_the_window(cx: &mut TestAppContext) {
+    // A box over the card (y 100..180) whose top edge scroll pushes above the window.
+    let original = AnnotationShape::Box {
+        from: (0.1, 40. / 600.),
+        to: (0.3, 240. / 600.),
+        color: 0,
+    };
+    let (host, overlay, id, cx) = scrolled_overlay(cx, original.clone());
+    scroll_host(&host, 60., cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.commit_scroll(window, cx)));
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        assert_eq!(
+            stored.feedback.shape,
+            Some(original.clone()),
+            "a shape that would leave the window is not rewritten"
+        );
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "no failed rewrite: {}", this.notice);
+    });
+    // Scrolling back shows the whole shape again.
+    scroll_host(&host, 0., cx);
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        assert_eq!(stored.feedback.shape, Some(original));
+        assert!(overlay.read(cx).notice.is_empty());
+    });
+}
+
+#[gpui::test]
+fn undo_still_works_after_a_scroll_was_committed(cx: &mut TestAppContext) {
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Pin {
+            at: (140. / 800., 140. / 600.),
+            color: 0,
+        },
+    );
+    scroll_host(&host, 30., cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.commit_scroll(window, cx)));
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        let Some(AnnotationShape::Pin { at, .. }) = stored.feedback.shape else {
+            panic!("pin shape")
+        };
+        assert!(
+            (at.1 - 110. / 600.).abs() < 1e-4,
+            "the scroll was committed"
+        );
+    });
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "undo failed: {}", this.notice);
+        assert!(this.session.annotations.is_empty(), "creation was undone");
+        assert!(this.store.annotation(&id).is_err());
+    });
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.redo(window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "redo failed: {}", this.notice);
+        assert_eq!(this.session.annotations.len(), 1);
+    });
+}
+
+fn set_note(
+    overlay: &Entity<AnnotationOverlay>,
+    id: &str,
+    edit: impl FnOnce(&mut crate::Annotation),
+    record: bool,
+    cx: &mut VisualTestContext,
+) {
+    cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let before = this.store.annotation(id).unwrap();
+            let mut after = before.clone();
+            edit(&mut after);
+            this.store
+                .replace_note(Some(&before), Some(&after))
+                .unwrap();
+            if record {
+                this.record_change(Some(before), Some(after.clone()));
+            }
+            this.session.annotations = this.store.session(&this.session.id).unwrap().annotations;
+            cx.notify();
+        })
+    });
+    draw(cx);
+}
+
+#[gpui::test]
+fn undoing_an_earlier_edit_keeps_the_note_in_the_scrolled_frame(cx: &mut TestAppContext) {
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Pin {
+            at: (140. / 800., 140. / 600.),
+            color: 0,
+        },
+    );
+    // A later edit of the same note: only its comment changes.
+    set_note(
+        &overlay,
+        &id,
+        |note| note.feedback.comment = "Edited".into(),
+        true,
+        cx,
+    );
+    scroll_host(&host, 30., cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.commit_scroll(window, cx)));
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    // Undo the comment edit: the pin must not jump back by the scroll distance.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "undo failed: {}", this.notice);
+        assert_eq!(this.session.annotations[0].feedback.comment, "Drawn");
+    });
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after.center(), before.center(), "no jump on undo");
+}
+
+#[gpui::test]
+fn undo_across_a_geometry_edit_keeps_pending_scroll_displacement(cx: &mut TestAppContext) {
+    // Top edge at y=40; resizing it down to y=100 is a recorded geometry edit.
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Box {
+            from: (0.1, 40. / 600.),
+            to: (0.3, 240. / 600.),
+            color: 0,
+        },
+    );
+    set_note(
+        &overlay,
+        &id,
+        |note| {
+            note.feedback.shape = Some(AnnotationShape::Box {
+                from: (0.1, 100. / 600.),
+                to: (0.3, 240. / 600.),
+                color: 0,
+            })
+        },
+        true,
+        cx,
+    );
+    // Scrolling up 60px: the current box still fits, the earlier one would not,
+    // so the scroll stays pending instead of being committed.
+    scroll_host(&host, 60., cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.commit_scroll(window, cx)));
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "undo failed: {}", this.notice);
+    });
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(
+        after.center(),
+        before.center(),
+        "the restored shape keeps the displacement scrolling gave it"
+    );
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.redo(window, cx)));
+    draw(cx);
+    draw(cx);
+    let redone = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(redone.center(), before.center(), "and so does redo");
+}
+
+#[gpui::test]
+fn undoing_a_move_between_targets_follows_the_target_it_returns_to(cx: &mut TestAppContext) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store.ensure_session("Retarget", "gpui://retarget").unwrap();
+    // Card "one" spans y 24..524 and card "two" y 544..1044 in the page.
+    let (host, cx) = cx.add_window_view(|window, cx| PageHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    let id = cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Move me".into(),
+                        element_path: "drawing:move".into(),
+                        element: "Pin".into(),
+                        x: 100. / 800. * 100.,
+                        y: 100.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(AnnotationShape::Pin {
+                            at: (100. / 800., 100. / 600.),
+                            color: 0,
+                        }),
+                    },
+                )
+                .unwrap();
+            this.record_change(None, Some(note.clone()));
+            this.session.annotations.push(note.clone());
+            cx.notify();
+            note.id
+        })
+    });
+    draw(cx);
+    let target =
+        |cx: &mut VisualTestContext| cx.update(|_, cx| overlay.read(cx).anchor_target(&id));
+    assert_eq!(target(cx).as_deref(), Some("one"));
+    // Drop it over the second card.
+    set_note(
+        &overlay,
+        &id,
+        |note| {
+            note.feedback.y = 570.;
+            note.feedback.shape = Some(AnnotationShape::Pin {
+                at: (100. / 800., 570. / 600.),
+                color: 0,
+            });
+        },
+        true,
+        cx,
+    );
+    draw(cx);
+    assert_eq!(target(cx).as_deref(), Some("two"));
+    // Undoing the move puts it back over the first card, and it follows that.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    draw(cx);
+    assert_eq!(target(cx).as_deref(), Some("one"));
+}
+
+#[gpui::test]
+fn undo_keeps_the_anchor_of_a_note_whose_target_is_out_of_view(cx: &mut TestAppContext) {
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Pin {
+            at: (140. / 800., 140. / 600.),
+            color: 0,
+        },
+    );
+    // A recorded geometry edit, then the card (y 100..180) scrolls out of view.
+    set_note(
+        &overlay,
+        &id,
+        |note| {
+            note.feedback.y = 150.;
+            note.feedback.shape = Some(AnnotationShape::Pin {
+                at: (140. / 800., 150. / 600.),
+                color: 0,
+            });
+        },
+        true,
+        cx,
+    );
+    scroll_host(&host, 200., cx);
+    let target =
+        |cx: &mut VisualTestContext| cx.update(|_, cx| overlay.read(cx).anchor_target(&id));
+    assert_eq!(target(cx).as_deref(), Some("card"));
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    draw(cx);
+    assert_eq!(
+        target(cx).as_deref(),
+        Some("card"),
+        "the anchor survives while its target is unavailable"
+    );
+    // Back in view, the note sits where the undone edit put it, on its card.
+    scroll_host(&host, 0., cx);
+    let marker = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(marker.center().y, px(140.));
+}
+
+#[gpui::test]
+fn a_displaced_textbox_cannot_be_moved_until_it_fits_the_window(cx: &mut TestAppContext) {
+    // The box (y 40..240) is pushed above the window by a 60px scroll.
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Text {
+            at: (0.05, 40. / 600.),
+            text: "Text".into(),
+            color: 0,
+            width: Some(0.25),
+            height: Some(200. / 600.),
+        },
+    );
+    scroll_host(&host, 60., cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.commit_scroll(window, cx);
+            this.begin_textbox_drag(&id, window, cx);
+        })
+    });
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.textbox_drag.is_none(), "no drag in a mixed frame");
+        assert!(!this.notice.is_empty());
+    });
+    // Back in view it is movable again.
+    scroll_host(&host, 0., cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.notice.clear();
+            this.begin_textbox_drag(&id, window, cx);
+        })
+    });
+    cx.update(|_, cx| assert!(overlay.read(cx).textbox_drag.is_some()));
+}
+
+#[gpui::test]
+fn a_moved_note_follows_the_content_at_its_new_position(cx: &mut TestAppContext) {
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Pin {
+            at: (140. / 800., 140. / 600.),
+            color: 0,
+        },
+    );
+    scroll_host(&host, 30., cx);
+    let shifted = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    // A completed move rewrites the stored geometry in the current frame.
+    set_note(
+        &overlay,
+        &id,
+        |note| {
+            note.feedback.y = 300.;
+            note.feedback.shape = Some(AnnotationShape::Pin {
+                at: (140. / 800., 300. / 600.),
+                color: 0,
+            });
+        },
+        true,
+        cx,
+    );
+    draw(cx);
+    let moved = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(
+        moved.center().y - shifted.center().y,
+        px(300. - 110.),
+        "shown where it was dropped, not displaced by the old anchor"
+    );
+    // Scrolling on moves it from there.
+    scroll_host(&host, 50., cx);
+    let later = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(later.center().y, moved.center().y - px(20.));
+}
+
+struct PageHost {
+    overlay: Entity<AnnotationOverlay>,
+}
+
+impl gpui::Render for PageHost {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::begin_frame(window, cx);
+        // Like the example app: cards registered inside a real scroll container,
+        // with padding and gaps where no target lies.
+        div()
+            .size_full()
+            .child(
+                div()
+                    .id("page-scroll")
+                    .size_full()
+                    .overflow_y_scroll()
+                    .child(
+                        div()
+                            .p_6()
+                            .flex()
+                            .flex_col()
+                            .gap_5()
+                            .child(crate::target("one", "One", div().w_full().h(px(500.))))
+                            .child(crate::target("two", "Two", div().w_full().h(px(500.)))),
+                    ),
+            )
+            .child(self.overlay.clone())
+    }
+}
+
+#[gpui::test]
+fn a_pin_between_cards_scrolls_with_a_real_scroll_container(cx: &mut TestAppContext) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Page scroll", "gpui://page-scroll")
+        .unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| PageHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    // The gap between the cards: no target contains this point.
+    cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Gap".into(),
+                        element_path: "drawing:gap".into(),
+                        element: "Pin".into(),
+                        x: 100. / 800. * 100.,
+                        y: 534.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(AnnotationShape::Pin {
+                            at: (100. / 800., 534. / 600.),
+                            color: 0,
+                        }),
+                    },
+                )
+                .unwrap();
+            this.session.annotations.push(note);
+            cx.notify();
+        })
+    });
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.simulate_event(gpui::ScrollWheelEvent {
+        position: point(px(100.), px(100.)),
+        delta: gpui::ScrollDelta::Pixels(point(px(0.), px(-30.))),
+        modifiers: Modifiers::none(),
+        touch_phase: gpui::TouchPhase::Moved,
+    });
+    draw(cx);
+    draw(cx);
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after.center().y, before.center().y - px(30.));
+}
+
+#[gpui::test]
+fn textbox_editing_keeps_pointer_selection_and_saves_multiline_text(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    cx.simulate_input("Select these words");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    let id = cx.update(|_, cx| overlay.read(cx).session.annotations[0].id.clone());
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.edit(&id, window, cx)));
+    draw(cx);
+    let input = cx.debug_bounds("feedback-textbox-input").unwrap();
+    let start = input.origin + point(px(2.), px(10.));
+    let end = start + point(px(55.), px(0.));
+    cx.simulate_mouse_down(start, gpui::MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(end, Some(gpui::MouseButton::Left), Modifiers::none());
+    cx.simulate_mouse_up(end, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    cx.update(|window, cx| {
+        let this = overlay.read(cx);
+        assert!(
+            this.draft.is_some(),
+            "pointer selection must not dismiss editing"
+        );
+        assert!(
+            this.textbox_drag.is_none(),
+            "selecting text must not move its box"
+        );
+        assert!(!this.input.read(cx).selection().is_empty());
+        assert!(this.input.focus_handle(cx).is_focused(window));
+    });
+    cx.simulate_keystrokes("cmd-a");
+    cx.simulate_input("First line\n\nThird line");
+    draw(cx);
+    let editing_height = cx.debug_bounds("feedback-textbox").unwrap().size.height;
+    let save = cx.debug_bounds("feedback-textbox-save").unwrap();
+    cx.simulate_click(save.center(), Modifiers::none());
+    draw(cx);
+    assert_eq!(
+        cx.debug_bounds("feedback-textbox").unwrap().size.height,
+        editing_height
+    );
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert_eq!(
+            this.store.annotation(&id).unwrap().feedback.comment,
+            "First line\n\nThird line"
+        );
+    });
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.edit(&id, window, cx)));
+    draw(cx);
+    cx.simulate_input(" discarded");
+    let cancel = cx.debug_bounds("feedback-textbox-cancel").unwrap();
+    cx.simulate_click(cancel.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert_eq!(
+            this.store.annotation(&id).unwrap().feedback.comment,
+            "First line\n\nThird line"
+        );
+    });
+}
+
+#[gpui::test]
+fn textbox_outside_click_saves_once_and_empty_drafts_are_discarded(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    cx.simulate_input("Click away to save");
+    outside(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert_eq!(this.session.annotations.len(), 1);
+    });
+    text_draft(&overlay, cx);
+    outside(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.draft.is_none());
+        assert_eq!(this.session.annotations.len(), 1);
+    });
+}
+
+#[gpui::test]
+fn textbox_resize_obeys_minimum_width_undo_and_escape(cx: &mut TestAppContext) {
+    let (overlay, cx) = setup(cx);
+    text_draft(&overlay, cx);
+    cx.simulate_input("Resize this text without losing its identity");
+    cx.simulate_keystrokes("ctrl-s");
+    draw(cx);
+    let before = cx.update(|_, cx| overlay.read(cx).session.annotations[0].clone());
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| this.select_textbox(&before.id, window, cx))
+    });
+    draw(cx);
+    let handle = cx
+        .debug_bounds("feedback-textbox-resize-right")
+        .unwrap()
+        .center();
+    cx.simulate_mouse_down(handle, gpui::MouseButton::Left, Modifiers::none());
+    let end = handle + point(px(120.), px(0.));
+    cx.simulate_mouse_move(end, Some(gpui::MouseButton::Left), Modifiers::none());
+    draw(cx);
+    cx.simulate_mouse_up(end, gpui::MouseButton::Left, Modifiers::none());
+    draw(cx);
+    cx.update(|_, cx| {
+        let after = overlay.read(cx).store.annotation(&before.id).unwrap();
+        assert_ne!(after.feedback.shape, before.feedback.shape);
+        assert_eq!(after.index, before.index);
+        assert_eq!(after.feedback.comment, before.feedback.comment);
+    });
+    cx.simulate_keystrokes("ctrl-z");
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            assert_eq!(this.store.annotation(&before.id).unwrap(), before);
+            this.begin_textbox_resize(
+                Some(&before.id),
+                super::super::textbox::Grip::Right,
+                window,
+                cx,
+            );
+            this.advance_drag(point(px(0.), px(0.)), window, cx);
+        })
+    });
+    draw(cx);
+    assert!(
+        cx.debug_bounds("feedback-textbox").unwrap().size.width
+            >= px(super::super::textbox::MIN_WIDTH)
+    );
+    cx.simulate_keystrokes("escape");
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.textbox_resize.is_none());
+        assert!(this.active);
+        assert_eq!(this.session.annotations[0], before);
+        assert_eq!(this.store.annotation(&before.id).unwrap(), before);
+    });
+}
+
+#[test]
+fn textbox_position_keeps_its_entire_frame_inside_the_window() {
+    use super::super::textbox::constrained_origin;
+    assert_eq!(
+        constrained_origin((1.2, 1.1), (280., 100.), (800., 500.)),
+        (0.65, 0.8)
+    );
+    assert_eq!(
+        constrained_origin((-0.2, -1.), (280., 100.), (800., 500.)),
+        (0., 0.)
+    );
+    assert_eq!(
+        constrained_origin((0.5, 0.5), (280., 100.), (100., 50.)),
+        (0., 0.)
+    );
+}

@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    Animation, AnimationExt, App, ElementId, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled, Window, div,
-    prelude::*, transparent_black,
+    Animation, AnimationExt, App, ElementId, Hsla, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, Pixels, RenderOnce, Role, SharedString, Size, StatefulInteractiveElement,
+    Styled, Window, div, prelude::*, px, transparent_black,
 };
 
 use super::options::OnFlag;
@@ -22,6 +22,9 @@ pub struct Switch {
     name: Option<SharedString>,
     disabled: bool,
     on_change: Option<OnFlag>,
+    geometry: Option<(Size<Pixels>, Size<Pixels>)>,
+    tint: Option<Hsla>,
+    thumb_color: Option<Hsla>,
 }
 
 impl Switch {
@@ -33,6 +36,9 @@ impl Switch {
             name: None,
             disabled: false,
             on_change: None,
+            geometry: None,
+            tint: None,
+            thumb_color: None,
         }
     }
 
@@ -49,6 +55,22 @@ impl Switch {
 
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// Overrides track and thumb dimensions without changing switch behavior.
+    pub fn geometry(mut self, track: Size<Pixels>, thumb: Size<Pixels>) -> Self {
+        self.geometry = Some((track, thumb));
+        self
+    }
+
+    pub fn tint(mut self, color: Hsla) -> Self {
+        self.tint = Some(color);
+        self
+    }
+
+    pub fn thumb_color(mut self, color: Hsla) -> Self {
+        self.thumb_color = Some(color);
         self
     }
 
@@ -70,10 +92,24 @@ impl RenderOnce for Switch {
         let focused = focus.is_focused(window);
         let theme = cx.theme();
         let colors = &theme.colors;
-        let track = theme.switch_track();
-        let travel = track.width - track.height;
-        let (off, on) = (colors.border_strong, colors.accent);
-        let (knob_off, knob_on) = (colors.fg_muted, colors.on_accent);
+        let track = self.geometry.map_or_else(
+            || {
+                theme
+                    .switch_track()
+                    .map(|value| value.to_pixels(window.rem_size()))
+            },
+            |(track, _)| track,
+        );
+        let travel = self
+            .geometry
+            .map_or(track.width - track.height, |(_, thumb)| {
+                (track.width - thumb.width - px(3.)).max(px(0.))
+            });
+        let (off, on) = (colors.border_strong, self.tint.unwrap_or(colors.accent));
+        let (knob_off, knob_on) = (
+            self.thumb_color.unwrap_or(colors.fg_muted),
+            self.thumb_color.unwrap_or(colors.on_accent),
+        );
         let (from, to, fill_from, fill_to, knob_from, knob_to) = if self.on {
             (0.0, 1.0, off, on, knob_off, knob_on)
         } else {
@@ -82,7 +118,11 @@ impl RenderOnce for Switch {
         let thumb = div()
             .h_full()
             .map(|mut thumb| {
-                thumb.style().aspect_ratio = Some(1.0);
+                if let Some((_, dimensions)) = self.geometry {
+                    thumb = thumb.w(dimensions.width).h(dimensions.height);
+                } else {
+                    thumb.style().aspect_ratio = Some(1.0);
+                }
                 thumb
             })
             .rounded_full()
@@ -95,6 +135,7 @@ impl RenderOnce for Switch {
             .w(track.width)
             .h(track.height)
             .p_0p5()
+            .when(self.geometry.is_some(), |rail| rail.p(px(0.5)))
             .rounded_full()
             .border_1()
             .border_color(if focused {

@@ -12,8 +12,8 @@ consumer's existing architecture; keep ordinary rendering code unchanged.
 
 Read the consumer's instructions, Cargo manifests, root window/render code,
 and navigation handling. Locate the selected Agentation checkout or Cargo Git
-dependency source. Its README, `docs/consumer-setup.md`, and complete
-`examples/consumer` package are the reference implementation. If this skill
+dependency source. Its README, `site/docs/consumer-setup.md`, and complete
+`example` package are the reference implementation. If this skill
 was copied alone, retrieve those files from the same authenticated repository
 and revision selected for the dependency:
 `https://github.com/emmanuel-defreitas/gpui-agentation`.
@@ -38,7 +38,7 @@ of a host Ely crate. Preserve the host’s existing theme and focus setup.
 
 ## Keep integration in one app-local module
 
-Adapt `examples/consumer/src/devtools.rs` when available. It is a consumer
+Adapt `example/src/devtools.rs` when available. It is a consumer
 adapter, not an exported `gpui_agentation::Devtools` type. Use the public
 `Agentation`, `Assets`, and `init` API through this adapter:
 
@@ -48,13 +48,17 @@ adapter, not an exported `gpui_agentation::Devtools` type. Use the public
 - `Devtools::init(cx)`: call `gpui_agentation::init(cx)` inside the launch
   callback before mounting. This owns fonts, theme, and key bindings; no direct
   Ely initialization is needed. Report initialization errors rather than
-  silently continuing with incomplete tooling.
+  silently continuing with incomplete tooling. Also add
+  `gpui_agentation::debug_menu()` to the host's `cx.set_menus(...)` list so the
+  controls appear in the native **Debug** menu. Keep the host's existing menus.
 - `Devtools::mount(window, cx)`: retain one `gpui_agentation::Agentation` on the window's
   root entity. Customize app name, initial route, ignored store path, and local
   port. Storage failure must leave the application usable; listener failure
   already permits local annotations.
 - `frame(id, label, content, window, cx)`: delegate to `Agentation::root`,
-  which owns frame registration, toolbar layout, and root focus handling.
+  which owns frame registration and root focus handling. The toolbar is a
+  separate companion window docked to the host's right edge, so the frame
+  reserves no layout space.
   Mark the helper `#[track_caller]` so registration records the host call site.
   Preserve `flex_1`, `min_h_0`, and content sizing. Do not manually add Ely's
   `FocusScope` or duplicate `begin_frame` around this root.
@@ -70,8 +74,8 @@ app content, and the route hook is a no-op. Do not add
 release stubs to the annotation crate or enable debug assertions in release.
 Compile the consumer's real release binary, not a debug-only example stub.
 
-Place the frame below the native/custom titlebar, outside content padding and
-scrolling. Put padding inside the application's scroll region. Preserve the
+Wrap the screen content, outside its padding and scrolling. Put padding inside
+the application's scroll region. Preserve the
 host's own control focus and keyboard bindings. `Agentation::root` supplies the
 tooling's outer focus boundary; do not nest another Ely root around it. Existing
 lower-level `AnnotationOverlay` integrations may retain their own Ely root and
@@ -81,22 +85,24 @@ example is for one window.
 
 ## Register meaningful views, not every element
 
-Start with one target per screen through the adapter. This gives screen-level
-inspection and source context; drawing tools remain available across the
-viewport. Explicitly report that child controls are not automatically targets.
+Start with one frame per screen through the adapter. **Inspect** uses GPUI's
+native picker, so ordinary elements can be selected without wrappers. The
+registered frame supplies the route, screen-level source context, and the
+target for the drawing tools, which work across the viewport.
 
-If finer selection is requested, register the roots of selected shared views
-or component constructors, once at their implementation boundary. Keep any
+If host-defined feedback regions are requested, register the roots of selected
+shared views or component constructors with `target(id, label, child)`, once at
+their implementation boundary. Keep any
 additional debug gates in the adapter or a shared helper. Do not instrument
 every `.child`, button, label, or layout div. Do not promise an attribute macro,
 automatic traversal, or source rewriting MCP tool: none exists in this API.
-The native GPUI inspector has different picking behavior and is not a drop-in
-replacement for Agentation registration.
+Registered targets and native inspection are separate: registration does not
+change what the native picker can select.
 
 Use IDs unique within a window and stable across rebuilds. Repeated views
 need record keys rather than indices or source line numbers. Source locations
-describe the registered view's call site, not arbitrary descendants. The
-smallest visible registered target under the pointer is picked.
+describe the registered view's call site. Inspect annotations carry their own
+source location from the picked element.
 
 Navigation changes cancel unfinished editors; saved notes stay on their route.
 Do not silently change this lifecycle policy while wiring the host's router.

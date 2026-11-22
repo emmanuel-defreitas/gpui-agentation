@@ -8,14 +8,14 @@ use crate::ely::{
 use gpui::{AnyElement, Bounds, KeystrokeEvent, MouseButton, Pixels, Point, anchored, px};
 
 #[derive(Clone, Debug, PartialEq)]
-struct Query {
-    start: usize,
+pub(super) struct Query {
+    pub(super) start: usize,
     end: usize,
-    search: String,
-    dropdown: bool,
+    pub(super) search: String,
+    pub(super) dropdown: bool,
 }
 
-fn query(text: &str, caret: usize) -> Option<Query> {
+pub(super) fn query(text: &str, caret: usize) -> Option<Query> {
     let before = text.get(..caret)?;
     let start = before
         .char_indices()
@@ -39,13 +39,13 @@ fn query(text: &str, caret: usize) -> Option<Query> {
     })
 }
 
-struct Motion {
-    from: f32,
-    to: f32,
-    since: Instant,
+pub(super) struct Motion {
+    pub(super) from: f32,
+    pub(super) to: f32,
+    pub(super) since: Instant,
 }
 impl Motion {
-    fn sample(&self, duration: Duration) -> (f32, bool) {
+    pub(super) fn sample(&self, duration: Duration) -> (f32, bool) {
         let t = if duration.is_zero() {
             1.0
         } else {
@@ -65,13 +65,13 @@ pub(super) struct Mentions {
     hovered: Option<String>,
     dismissed: Option<usize>,
     escape_consumed: bool,
-    preview: Option<String>,
+    pub(super) preview: Option<String>,
     motions: std::collections::HashMap<String, Motion>,
     pub bounds: Option<Bounds<Pixels>>,
 }
 
 impl AnnotationOverlay {
-    fn mention_candidates(&self) -> Vec<crate::Annotation> {
+    pub(super) fn mention_candidates(&self) -> Vec<crate::Annotation> {
         let Some(query) = &self.mentions.query else {
             return vec![];
         };
@@ -349,7 +349,3 @@ impl AnnotationOverlay {
         )
     }
 }
-
-#[cfg(test)]
-#[path = "mentions.test.rs"]
-mod tests;
