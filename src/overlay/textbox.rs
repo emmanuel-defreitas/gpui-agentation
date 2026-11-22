@@ -153,6 +153,11 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
+        if self.displaced(id, window, cx) {
+            self.notice = "Scroll the annotation fully into view to move or resize it.".into();
+            cx.notify();
+            return;
+        }
         if let Ok(note) = self.store.annotation(id) {
             if let Some(AnnotationShape::Text { at, .. }) = note.feedback.shape.as_ref() {
                 let mouse = self
@@ -218,6 +223,11 @@ impl AnnotationOverlay {
             .as_ref()
             .is_some_and(|draft| draft.id.as_deref() == Some(id));
         if !editing_this && !self.dismiss_note(window, cx) {
+            return;
+        }
+        if self.displaced(id, window, cx) {
+            self.notice = "Scroll the annotation fully into view to move or resize it.".into();
+            cx.notify();
             return;
         }
         if let Ok(note) = self.store.annotation(id) {

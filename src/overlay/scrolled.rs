@@ -15,6 +15,26 @@ pub(super) struct Anchor {
     /// `None` when nothing registered lay under the note: it stays put.
     target: Option<String>,
     base: (f32, f32),
+    /// Geometry of the note when anchored. Any other stored geometry (a move,
+    /// a resize, an undo) is in a different frame, so the note anchors again.
+    geometry: [f32; 6],
+}
+
+/// A note's stored extent and position, ignoring its text and color.
+fn geometry(note: &Annotation) -> [f32; 6] {
+    let bounds = note
+        .feedback
+        .shape
+        .as_ref()
+        .map_or_else(crate::Rect::default, |shape| shape.bounds(1.0, 1.0));
+    [
+        bounds.x,
+        bounds.y,
+        bounds.width,
+        bounds.height,
+        note.feedback.x,
+        note.feedback.y,
+    ]
 }
 
 fn drawn(note: &Annotation) -> bool {
@@ -30,8 +50,11 @@ impl AnnotationOverlay {
     /// first render.
     pub(super) fn sync_anchors(&mut self, window: &Window, cx: &App) {
         let notes = &self.session.annotations;
-        self.anchors
-            .retain(|id, _| notes.iter().any(|note| &note.id == id && drawn(note)));
+        self.anchors.retain(|id, anchor| {
+            notes
+                .iter()
+                .any(|note| &note.id == id && drawn(note) && geometry(note) == anchor.geometry)
+        });
         let (w, h) = viewport(window, cx);
         for note in notes.iter().filter(|note| drawn(note)) {
             if self.anchors.contains_key(&note.id) {
@@ -51,11 +74,13 @@ impl AnnotationOverlay {
                 target::origin(window, cx, &found.id).map(|base| Anchor {
                     target: Some(found.id),
                     base,
+                    geometry: geometry(note),
                 })
             })
             .unwrap_or(Anchor {
                 target: None,
                 base: (0.0, 0.0),
+                geometry: geometry(note),
             });
             self.anchors.insert(note.id.clone(), anchor);
         }
@@ -73,6 +98,7 @@ impl AnnotationOverlay {
             Some(Anchor {
                 target: Some(target),
                 base,
+                ..
             }) => {
                 let at = target::origin(window, cx, target)?;
                 Some((at.0 - base.0, at.1 - base.1))
@@ -96,6 +122,17 @@ impl AnnotationOverlay {
         })
     }
 
+    /// Whether the note is drawn away from its stored position, which happens
+    /// while scrolling holds it partly outside the window. Moving or resizing
+    /// it then would mix two coordinate frames, so those wait until it fits.
+    pub(super) fn displaced(&self, id: &str, window: &Window, cx: &App) -> bool {
+        self.session
+            .annotations
+            .iter()
+            .find(|note| note.id == id && drawn(note))
+            .is_some_and(|note| self.scroll_shift(note, window, cx) != Some((0.0, 0.0)))
+    }
+
     /// Bake the displacement of every scrolled note into its stored position.
     pub(super) fn commit_scroll(&mut self, window: &Window, cx: &App) {
         let editing = self.draft.as_ref().and_then(|draft| draft.id.clone());
@@ -112,33 +149,42 @@ impl AnnotationOverlay {
         let size = viewport(window, cx);
         for (before, shift) in pending {
             let after = moved(&before, shift, size);
+            // Earlier versions of this note, kept for undo and redo, live in
+            // the old frame: move them too so every version agrees.
+            let snapshots: Vec<_> = self
+                .history
+                .iter()
+                .chain(self.future.iter())
+                .flat_map(|(from, to)| [from, to])
+                .flatten()
+                .filter(|snapshot| snapshot.id == before.id)
+                .map(|snapshot| moved(snapshot, shift, size))
+                .collect();
             // A shape pushed partly out of the window cannot be stored without
             // clamping, which would flatten it for good. Leave such a note
             // anchored and displaced: scrolling back restores it exactly.
-            if !after
-                .feedback
-                .shape
-                .as_ref()
-                .is_some_and(|shape| shape.valid())
-            {
+            if !std::iter::once(&after).chain(snapshots.iter()).all(|note| {
+                note.feedback
+                    .shape
+                    .as_ref()
+                    .is_some_and(|shape| shape.valid())
+            }) {
                 continue;
             }
             match self.store.replace_note(Some(&before), Some(&after)) {
                 Ok(()) => {
-                    // Undo and redo replace notes only when they equal the
-                    // stored one, so every snapshot of the old note becomes the
-                    // rebased note, keeping the history chain consistent.
                     for snapshot in self
                         .history
                         .iter_mut()
                         .chain(self.future.iter_mut())
                         .flat_map(|(from, to)| [from, to])
+                        .flatten()
+                        .filter(|snapshot| snapshot.id == before.id)
                     {
-                        if snapshot.as_ref() == Some(&before) {
-                            *snapshot = Some(after.clone());
-                        }
+                        *snapshot = moved(snapshot, shift, size);
                     }
                     if let Some(anchor) = self.anchors.get_mut(&before.id) {
+                        anchor.geometry = geometry(&after);
                         if let Some(target) = &anchor.target {
                             if let Some(at) = target::origin(window, cx, target) {
                                 anchor.base = at;

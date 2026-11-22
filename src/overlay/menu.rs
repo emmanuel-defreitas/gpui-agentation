@@ -386,6 +386,9 @@ impl AnnotationOverlay {
                 Ok(text) => cx.write_to_clipboard(gpui::ClipboardItem::new_string(text)),
                 Err(error) => self.notice = error.to_string(),
             },
+            NoteAction::Duplicate if self.displaced(id, window, cx) => {
+                self.notice = "Scroll the annotation fully into view to move or resize it.".into();
+            }
             NoteAction::Duplicate => self.duplicate(id),
             NoteAction::Color(color) if color < 4 => self.recolor(id, color),
             NoteAction::Color(_) => {}

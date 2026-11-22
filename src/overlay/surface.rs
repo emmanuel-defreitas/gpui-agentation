@@ -1299,6 +1299,12 @@ impl AnnotationOverlay {
                     if !this.dismiss_note(window, cx) {
                         return;
                     }
+                    if this.displaced(&drag_id, window, cx) {
+                        this.notice =
+                            "Scroll the annotation fully into view to move or resize it.".into();
+                        cx.notify();
+                        return;
+                    }
                     if let Ok(note) = this.store.annotation(&drag_id) {
                         if note.feedback.inspection.is_some() {
                             return;

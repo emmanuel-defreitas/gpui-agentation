@@ -1707,6 +1707,139 @@ fn undo_still_works_after_a_scroll_was_committed(cx: &mut TestAppContext) {
     });
 }
 
+fn set_note(
+    overlay: &Entity<AnnotationOverlay>,
+    id: &str,
+    edit: impl FnOnce(&mut crate::Annotation),
+    record: bool,
+    cx: &mut VisualTestContext,
+) {
+    cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let before = this.store.annotation(id).unwrap();
+            let mut after = before.clone();
+            edit(&mut after);
+            this.store
+                .replace_note(Some(&before), Some(&after))
+                .unwrap();
+            if record {
+                this.record_change(Some(before), Some(after.clone()));
+            }
+            this.session.annotations = this.store.session(&this.session.id).unwrap().annotations;
+            cx.notify();
+        })
+    });
+    draw(cx);
+}
+
+#[gpui::test]
+fn undoing_an_earlier_edit_keeps_the_note_in_the_scrolled_frame(cx: &mut TestAppContext) {
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Pin {
+            at: (140. / 800., 140. / 600.),
+            color: 0,
+        },
+    );
+    // A later edit of the same note: only its comment changes.
+    set_note(
+        &overlay,
+        &id,
+        |note| note.feedback.comment = "Edited".into(),
+        true,
+        cx,
+    );
+    scroll_host(&host, 30., cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.commit_scroll(window, cx)));
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    // Undo the comment edit: the pin must not jump back by the scroll distance.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "undo failed: {}", this.notice);
+        assert_eq!(this.session.annotations[0].feedback.comment, "Drawn");
+    });
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after.center(), before.center(), "no jump on undo");
+}
+
+#[gpui::test]
+fn a_displaced_textbox_cannot_be_moved_until_it_fits_the_window(cx: &mut TestAppContext) {
+    // The box (y 40..240) is pushed above the window by a 60px scroll.
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Text {
+            at: (0.05, 40. / 600.),
+            text: "Text".into(),
+            color: 0,
+            width: Some(0.25),
+            height: Some(200. / 600.),
+        },
+    );
+    scroll_host(&host, 60., cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.commit_scroll(window, cx);
+            this.begin_textbox_drag(&id, window, cx);
+        })
+    });
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.textbox_drag.is_none(), "no drag in a mixed frame");
+        assert!(!this.notice.is_empty());
+    });
+    // Back in view it is movable again.
+    scroll_host(&host, 0., cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.notice.clear();
+            this.begin_textbox_drag(&id, window, cx);
+        })
+    });
+    cx.update(|_, cx| assert!(overlay.read(cx).textbox_drag.is_some()));
+}
+
+#[gpui::test]
+fn a_moved_note_follows_the_content_at_its_new_position(cx: &mut TestAppContext) {
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Pin {
+            at: (140. / 800., 140. / 600.),
+            color: 0,
+        },
+    );
+    scroll_host(&host, 30., cx);
+    let shifted = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    // A completed move rewrites the stored geometry in the current frame.
+    set_note(
+        &overlay,
+        &id,
+        |note| {
+            note.feedback.y = 300.;
+            note.feedback.shape = Some(AnnotationShape::Pin {
+                at: (140. / 800., 300. / 600.),
+                color: 0,
+            });
+        },
+        true,
+        cx,
+    );
+    draw(cx);
+    let moved = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(
+        moved.center().y - shifted.center().y,
+        px(300. - 110.),
+        "shown where it was dropped, not displaced by the old anchor"
+    );
+    // Scrolling on moves it from there.
+    scroll_host(&host, 50., cx);
+    let later = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(later.center().y, moved.center().y - px(20.));
+}
+
 struct PageHost {
     overlay: Entity<AnnotationOverlay>,
 }
