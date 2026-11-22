@@ -15,7 +15,7 @@ Maintainers review these results; GitHub does not run the test suite.
 | Successful push-triggered `Promotion Preview` | `next-to-main-release-pr.yml` | Open the `next → main` release PR |
 | `next → main` merged | `release-tag.yml` | Validate metadata, tag the reviewed merge, create a GitHub Release |
 | Published release | `production-deploy.yml` | Run the configured production deployment |
-| Explicit dispatch from `main` | `publish-bridge.yml` | Check package identity/size and perform trusted publication when requested |
+| Explicit dispatch from `main` | `publish-bridge.yml` | Check package identity/size, publish to crates.io, then publish and verify the matching MCP Registry listing |
 
 All retained jobs use standard Linux runners. No hosted Rust compilation,
 Rust tests, website tests, cross-platform matrices, or AI/issue automation runs.
