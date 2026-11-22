@@ -130,18 +130,13 @@ impl AnnotationShape {
         }
     }
 
-    /// A copy moved by a normalized delta. Display copies stay unclamped so
-    /// content scrolled partly out of view keeps its shape; stored copies
-    /// clamp so they remain valid.
-    pub(crate) fn translated(&self, dx: f32, dy: f32, clamp: bool) -> Self {
+    /// A copy moved by a normalized delta, unclamped: it may lie partly
+    /// outside the window, and is only storable while [`Self::valid`].
+    pub(crate) fn translated(&self, dx: f32, dy: f32) -> Self {
         let mut moved = self.clone();
         let shift = |p: &mut (f32, f32)| {
             p.0 += dx;
             p.1 += dy;
-            if clamp {
-                p.0 = p.0.clamp(0.0, 1.0);
-                p.1 = p.1.clamp(0.0, 1.0);
-            }
         };
         match &mut moved {
             Self::Box { from, to, .. } | Self::Arrow { from, to, .. } => {

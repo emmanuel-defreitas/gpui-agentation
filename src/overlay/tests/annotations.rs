@@ -1576,6 +1576,137 @@ fn drawn_annotations_scroll_with_the_content_under_them_and_commit_before_editin
     assert_eq!(edited.center().y, after.center().y, "no jump on edit");
 }
 
+fn scrolled_overlay(
+    cx: &mut TestAppContext,
+    shape: AnnotationShape,
+) -> (
+    Entity<ScrollHost>,
+    Entity<AnnotationOverlay>,
+    String,
+    &mut VisualTestContext,
+) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Scroll commit", "gpui://scroll-commit")
+        .unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| ScrollHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+        scroll: 0.,
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    let id = cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Drawn".into(),
+                        element_path: "drawing:scroll".into(),
+                        element: "Shape".into(),
+                        x: 20.,
+                        y: 140.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(shape),
+                    },
+                )
+                .unwrap();
+            this.record_change(None, Some(note.clone()));
+            this.session.annotations.push(note.clone());
+            cx.notify();
+            note.id
+        })
+    });
+    draw(cx);
+    (host, overlay, id, cx)
+}
+
+fn scroll_host(host: &Entity<ScrollHost>, to: f32, cx: &mut VisualTestContext) {
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.scroll = to;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+}
+
+#[gpui::test]
+fn committing_scroll_never_flattens_a_shape_partly_out_of_the_window(cx: &mut TestAppContext) {
+    // A box over the card (y 100..180) whose top edge scroll pushes above the window.
+    let original = AnnotationShape::Box {
+        from: (0.1, 40. / 600.),
+        to: (0.3, 240. / 600.),
+        color: 0,
+    };
+    let (host, overlay, id, cx) = scrolled_overlay(cx, original.clone());
+    scroll_host(&host, 60., cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.commit_scroll(window, cx)));
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        assert_eq!(
+            stored.feedback.shape,
+            Some(original.clone()),
+            "a shape that would leave the window is not rewritten"
+        );
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "no failed rewrite: {}", this.notice);
+    });
+    // Scrolling back shows the whole shape again.
+    scroll_host(&host, 0., cx);
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        assert_eq!(stored.feedback.shape, Some(original));
+        assert!(overlay.read(cx).notice.is_empty());
+    });
+}
+
+#[gpui::test]
+fn undo_still_works_after_a_scroll_was_committed(cx: &mut TestAppContext) {
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Pin {
+            at: (140. / 800., 140. / 600.),
+            color: 0,
+        },
+    );
+    scroll_host(&host, 30., cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.commit_scroll(window, cx)));
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        let Some(AnnotationShape::Pin { at, .. }) = stored.feedback.shape else {
+            panic!("pin shape")
+        };
+        assert!(
+            (at.1 - 110. / 600.).abs() < 1e-4,
+            "the scroll was committed"
+        );
+    });
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "undo failed: {}", this.notice);
+        assert!(this.session.annotations.is_empty(), "creation was undone");
+        assert!(this.store.annotation(&id).is_err());
+    });
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.redo(window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "redo failed: {}", this.notice);
+        assert_eq!(this.session.annotations.len(), 1);
+    });
+}
+
 struct PageHost {
     overlay: Entity<AnnotationOverlay>,
 }

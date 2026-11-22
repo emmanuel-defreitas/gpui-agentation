@@ -92,7 +92,7 @@ impl AnnotationOverlay {
         Some(if shift == (0.0, 0.0) {
             note.clone()
         } else {
-            moved(note, shift, viewport(window, cx), false)
+            moved(note, shift, viewport(window, cx))
         })
     }
 
@@ -111,9 +111,33 @@ impl AnnotationOverlay {
             .collect();
         let size = viewport(window, cx);
         for (before, shift) in pending {
-            let after = moved(&before, shift, size, true);
+            let after = moved(&before, shift, size);
+            // A shape pushed partly out of the window cannot be stored without
+            // clamping, which would flatten it for good. Leave such a note
+            // anchored and displaced: scrolling back restores it exactly.
+            if !after
+                .feedback
+                .shape
+                .as_ref()
+                .is_some_and(|shape| shape.valid())
+            {
+                continue;
+            }
             match self.store.replace_note(Some(&before), Some(&after)) {
                 Ok(()) => {
+                    // Undo and redo replace notes only when they equal the
+                    // stored one, so every snapshot of the old note becomes the
+                    // rebased note, keeping the history chain consistent.
+                    for snapshot in self
+                        .history
+                        .iter_mut()
+                        .chain(self.future.iter_mut())
+                        .flat_map(|(from, to)| [from, to])
+                    {
+                        if snapshot.as_ref() == Some(&before) {
+                            *snapshot = Some(after.clone());
+                        }
+                    }
                     if let Some(anchor) = self.anchors.get_mut(&before.id) {
                         if let Some(target) = &anchor.target {
                             if let Some(at) = target::origin(window, cx, target) {
@@ -137,11 +161,11 @@ impl AnnotationOverlay {
 }
 
 /// `note` translated by `shift` window pixels.
-fn moved(note: &Annotation, shift: (f32, f32), size: (f32, f32), clamp: bool) -> Annotation {
+fn moved(note: &Annotation, shift: (f32, f32), size: (f32, f32)) -> Annotation {
     let (w, h) = (size.0.max(1.0), size.1.max(1.0));
     let mut moved = note.clone();
     if let Some(shape) = &note.feedback.shape {
-        moved.feedback.shape = Some(shape.translated(shift.0 / w, shift.1 / h, clamp));
+        moved.feedback.shape = Some(shape.translated(shift.0 / w, shift.1 / h));
     }
     moved.feedback.x += shift.0 / w * 100.0;
     moved.feedback.y += shift.1;
