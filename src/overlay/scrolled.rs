@@ -124,7 +124,8 @@ impl AnnotationOverlay {
     }
 
     /// Anchors an undo or redo must carry across its change: those of notes
-    /// whose scroll displacement is still pending.
+    /// whose scroll displacement is still pending, including notes whose
+    /// target is currently out of view.
     ///
     /// Restoring an earlier version puts stored geometry back in the frame its
     /// anchor already describes, pending displacement included, so such an
@@ -146,8 +147,11 @@ impl AnnotationOverlay {
                     .annotations
                     .iter()
                     .find(|note| note.id == **id && drawn(note))?;
-                let shift = self.scroll_shift(note, window, cx)?;
-                (shift != (0.0, 0.0)).then_some(())?;
+                // A target scrolled out of view has no shift to read, but its
+                // displacement is as pending as a nonzero one (see `displaced`).
+                if self.scroll_shift(note, window, cx) == Some((0.0, 0.0)) {
+                    return None;
+                }
                 Some((id.to_string(), self.anchors.get(*id)?.clone()))
             })
             .collect()

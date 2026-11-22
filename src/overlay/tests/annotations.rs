@@ -1886,6 +1886,47 @@ fn undoing_a_move_between_targets_follows_the_target_it_returns_to(cx: &mut Test
 }
 
 #[gpui::test]
+fn undo_keeps_the_anchor_of_a_note_whose_target_is_out_of_view(cx: &mut TestAppContext) {
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Pin {
+            at: (140. / 800., 140. / 600.),
+            color: 0,
+        },
+    );
+    // A recorded geometry edit, then the card (y 100..180) scrolls out of view.
+    set_note(
+        &overlay,
+        &id,
+        |note| {
+            note.feedback.y = 150.;
+            note.feedback.shape = Some(AnnotationShape::Pin {
+                at: (140. / 800., 150. / 600.),
+                color: 0,
+            });
+        },
+        true,
+        cx,
+    );
+    scroll_host(&host, 200., cx);
+    let target =
+        |cx: &mut VisualTestContext| cx.update(|_, cx| overlay.read(cx).anchor_target(&id));
+    assert_eq!(target(cx).as_deref(), Some("card"));
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    draw(cx);
+    assert_eq!(
+        target(cx).as_deref(),
+        Some("card"),
+        "the anchor survives while its target is unavailable"
+    );
+    // Back in view, the note sits where the undone edit put it, on its card.
+    scroll_host(&host, 0., cx);
+    let marker = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(marker.center().y, px(140.));
+}
+
+#[gpui::test]
 fn a_displaced_textbox_cannot_be_moved_until_it_fits_the_window(cx: &mut TestAppContext) {
     // The box (y 40..240) is pushed above the window by a 60px scroll.
     let (host, overlay, id, cx) = scrolled_overlay(
