@@ -123,15 +123,44 @@ impl AnnotationOverlay {
         })
     }
 
-    /// Anchors of the notes an undo or redo is about to change. Restoring an
-    /// earlier version puts stored geometry back in the frame its anchor
-    /// already describes, pending scroll displacement included, so the anchor
-    /// outlives the change instead of being rebuilt in viewport coordinates.
-    pub(super) fn anchors_of(&self, ids: &[Option<&str>]) -> Vec<(String, Anchor)> {
+    /// Anchors an undo or redo must carry across its change: those of notes
+    /// whose scroll displacement is still pending, including notes whose
+    /// target is currently out of view.
+    ///
+    /// Restoring an earlier version puts stored geometry back in the frame its
+    /// anchor already describes, pending displacement included, so such an
+    /// anchor outlives the change. Without pending displacement the stored
+    /// geometry is in the current frame and the anchor is rebuilt, so a note
+    /// restored over a different target follows that target, not the one it
+    /// was moved to.
+    pub(super) fn anchors_of(
+        &self,
+        ids: &[Option<&str>],
+        window: &Window,
+        cx: &App,
+    ) -> Vec<(String, Anchor)> {
         ids.iter()
             .flatten()
-            .filter_map(|id| Some((id.to_string(), self.anchors.get(*id)?.clone())))
+            .filter_map(|id| {
+                let note = self
+                    .session
+                    .annotations
+                    .iter()
+                    .find(|note| note.id == **id && drawn(note))?;
+                // A target scrolled out of view has no shift to read, but its
+                // displacement is as pending as a nonzero one (see `displaced`).
+                if self.scroll_shift(note, window, cx) == Some((0.0, 0.0)) {
+                    return None;
+                }
+                Some((id.to_string(), self.anchors.get(*id)?.clone()))
+            })
             .collect()
+    }
+
+    /// The registered target a note follows, for tests.
+    #[cfg(test)]
+    pub(super) fn anchor_target(&self, id: &str) -> Option<String> {
+        self.anchors.get(id)?.target.clone()
     }
 
     /// Put anchors saved by [`Self::anchors_of`] back for notes that still
