@@ -482,6 +482,7 @@ impl Render for ToolbarWindow {
             .w_full()
             .child(
                 div()
+                    .w_full()
                     .flex()
                     .flex_col()
                     .items_center()
@@ -489,7 +490,7 @@ impl Render for ToolbarWindow {
                     .child(
                         div()
                             .debug_selector(|| "feedback-annotation-toggle".into())
-                            .pb_1()
+                            .mb_2()
                             .child(
                                 Switch::new("feedback-mode-switch", self.state.active)
                                     .name("Annotation mode")
@@ -531,7 +532,7 @@ impl Render for ToolbarWindow {
                                 div()
                                     .w_full()
                                     .px_1()
-                                    .py_1()
+                                    .py_2()
                                     .debug_selector(|| "feedback-tool-divider".into())
                                     .child(Divider::horizontal())
                             });

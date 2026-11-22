@@ -1498,6 +1498,435 @@ fn pins_on_a_registered_target_scroll_with_it_while_annotating_is_off(cx: &mut T
 }
 
 #[gpui::test]
+fn drawn_annotations_scroll_with_the_content_under_them_and_commit_before_editing(
+    cx: &mut TestAppContext,
+) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Drawn scroll", "gpui://drawn-scroll")
+        .unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| ScrollHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+        scroll: 0.,
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    // A Pin-tool comment over the card (40..240 by 100..180), at (140, 140).
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    let id = cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Drawn".into(),
+                        element_path: "drawing:pin".into(),
+                        element: "Pin".into(),
+                        x: 140. / 800. * 100.,
+                        y: 140.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(AnnotationShape::Pin {
+                            at: (140. / 800., 140. / 600.),
+                            color: 0,
+                        }),
+                    },
+                )
+                .unwrap();
+            this.session.annotations.push(note.clone());
+            cx.notify();
+            note.id
+        })
+    });
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.scroll = 30.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(
+        after.center().y,
+        before.center().y - px(30.),
+        "a pin drawn over scrolling content scrolls with it"
+    );
+    assert_eq!(after.center().x, before.center().x);
+    // Editing reads stored coordinates, so the scroll is folded into them first
+    // and the pin does not jump.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.edit(&id, window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        let Some(AnnotationShape::Pin { at, .. }) = stored.feedback.shape else {
+            panic!("pin shape")
+        };
+        assert!((at.1 - 110. / 600.).abs() < 1e-4, "stored y follows scroll");
+        assert!((stored.feedback.y - 110.).abs() < 1e-3);
+    });
+    let edited = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(edited.center().y, after.center().y, "no jump on edit");
+}
+
+fn scrolled_overlay(
+    cx: &mut TestAppContext,
+    shape: AnnotationShape,
+) -> (
+    Entity<ScrollHost>,
+    Entity<AnnotationOverlay>,
+    String,
+    &mut VisualTestContext,
+) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Scroll commit", "gpui://scroll-commit")
+        .unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| ScrollHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+        scroll: 0.,
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    let id = cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Drawn".into(),
+                        element_path: "drawing:scroll".into(),
+                        element: "Shape".into(),
+                        x: 20.,
+                        y: 140.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(shape),
+                    },
+                )
+                .unwrap();
+            this.record_change(None, Some(note.clone()));
+            this.session.annotations.push(note.clone());
+            cx.notify();
+            note.id
+        })
+    });
+    draw(cx);
+    (host, overlay, id, cx)
+}
+
+fn scroll_host(host: &Entity<ScrollHost>, to: f32, cx: &mut VisualTestContext) {
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.scroll = to;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+}
+
+#[gpui::test]
+fn committing_scroll_never_flattens_a_shape_partly_out_of_the_window(cx: &mut TestAppContext) {
+    // A box over the card (y 100..180) whose top edge scroll pushes above the window.
+    let original = AnnotationShape::Box {
+        from: (0.1, 40. / 600.),
+        to: (0.3, 240. / 600.),
+        color: 0,
+    };
+    let (host, overlay, id, cx) = scrolled_overlay(cx, original.clone());
+    scroll_host(&host, 60., cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.commit_scroll(window, cx)));
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        assert_eq!(
+            stored.feedback.shape,
+            Some(original.clone()),
+            "a shape that would leave the window is not rewritten"
+        );
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "no failed rewrite: {}", this.notice);
+    });
+    // Scrolling back shows the whole shape again.
+    scroll_host(&host, 0., cx);
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        assert_eq!(stored.feedback.shape, Some(original));
+        assert!(overlay.read(cx).notice.is_empty());
+    });
+}
+
+#[gpui::test]
+fn undo_still_works_after_a_scroll_was_committed(cx: &mut TestAppContext) {
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Pin {
+            at: (140. / 800., 140. / 600.),
+            color: 0,
+        },
+    );
+    scroll_host(&host, 30., cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.commit_scroll(window, cx)));
+    cx.update(|_, cx| {
+        let stored = overlay.read(cx).store.annotation(&id).unwrap();
+        let Some(AnnotationShape::Pin { at, .. }) = stored.feedback.shape else {
+            panic!("pin shape")
+        };
+        assert!(
+            (at.1 - 110. / 600.).abs() < 1e-4,
+            "the scroll was committed"
+        );
+    });
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "undo failed: {}", this.notice);
+        assert!(this.session.annotations.is_empty(), "creation was undone");
+        assert!(this.store.annotation(&id).is_err());
+    });
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.redo(window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "redo failed: {}", this.notice);
+        assert_eq!(this.session.annotations.len(), 1);
+    });
+}
+
+fn set_note(
+    overlay: &Entity<AnnotationOverlay>,
+    id: &str,
+    edit: impl FnOnce(&mut crate::Annotation),
+    record: bool,
+    cx: &mut VisualTestContext,
+) {
+    cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let before = this.store.annotation(id).unwrap();
+            let mut after = before.clone();
+            edit(&mut after);
+            this.store
+                .replace_note(Some(&before), Some(&after))
+                .unwrap();
+            if record {
+                this.record_change(Some(before), Some(after.clone()));
+            }
+            this.session.annotations = this.store.session(&this.session.id).unwrap().annotations;
+            cx.notify();
+        })
+    });
+    draw(cx);
+}
+
+#[gpui::test]
+fn undoing_an_earlier_edit_keeps_the_note_in_the_scrolled_frame(cx: &mut TestAppContext) {
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Pin {
+            at: (140. / 800., 140. / 600.),
+            color: 0,
+        },
+    );
+    // A later edit of the same note: only its comment changes.
+    set_note(
+        &overlay,
+        &id,
+        |note| note.feedback.comment = "Edited".into(),
+        true,
+        cx,
+    );
+    scroll_host(&host, 30., cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.commit_scroll(window, cx)));
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    // Undo the comment edit: the pin must not jump back by the scroll distance.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "undo failed: {}", this.notice);
+        assert_eq!(this.session.annotations[0].feedback.comment, "Drawn");
+    });
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after.center(), before.center(), "no jump on undo");
+}
+
+#[gpui::test]
+fn a_displaced_textbox_cannot_be_moved_until_it_fits_the_window(cx: &mut TestAppContext) {
+    // The box (y 40..240) is pushed above the window by a 60px scroll.
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Text {
+            at: (0.05, 40. / 600.),
+            text: "Text".into(),
+            color: 0,
+            width: Some(0.25),
+            height: Some(200. / 600.),
+        },
+    );
+    scroll_host(&host, 60., cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.commit_scroll(window, cx);
+            this.begin_textbox_drag(&id, window, cx);
+        })
+    });
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.textbox_drag.is_none(), "no drag in a mixed frame");
+        assert!(!this.notice.is_empty());
+    });
+    // Back in view it is movable again.
+    scroll_host(&host, 0., cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.notice.clear();
+            this.begin_textbox_drag(&id, window, cx);
+        })
+    });
+    cx.update(|_, cx| assert!(overlay.read(cx).textbox_drag.is_some()));
+}
+
+#[gpui::test]
+fn a_moved_note_follows_the_content_at_its_new_position(cx: &mut TestAppContext) {
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Pin {
+            at: (140. / 800., 140. / 600.),
+            color: 0,
+        },
+    );
+    scroll_host(&host, 30., cx);
+    let shifted = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    // A completed move rewrites the stored geometry in the current frame.
+    set_note(
+        &overlay,
+        &id,
+        |note| {
+            note.feedback.y = 300.;
+            note.feedback.shape = Some(AnnotationShape::Pin {
+                at: (140. / 800., 300. / 600.),
+                color: 0,
+            });
+        },
+        true,
+        cx,
+    );
+    draw(cx);
+    let moved = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(
+        moved.center().y - shifted.center().y,
+        px(300. - 110.),
+        "shown where it was dropped, not displaced by the old anchor"
+    );
+    // Scrolling on moves it from there.
+    scroll_host(&host, 50., cx);
+    let later = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(later.center().y, moved.center().y - px(20.));
+}
+
+struct PageHost {
+    overlay: Entity<AnnotationOverlay>,
+}
+
+impl gpui::Render for PageHost {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::begin_frame(window, cx);
+        // Like the example app: cards registered inside a real scroll container,
+        // with padding and gaps where no target lies.
+        div()
+            .size_full()
+            .child(
+                div()
+                    .id("page-scroll")
+                    .size_full()
+                    .overflow_y_scroll()
+                    .child(
+                        div()
+                            .p_6()
+                            .flex()
+                            .flex_col()
+                            .gap_5()
+                            .child(crate::target("one", "One", div().w_full().h(px(500.))))
+                            .child(crate::target("two", "Two", div().w_full().h(px(500.)))),
+                    ),
+            )
+            .child(self.overlay.clone())
+    }
+}
+
+#[gpui::test]
+fn a_pin_between_cards_scrolls_with_a_real_scroll_container(cx: &mut TestAppContext) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Page scroll", "gpui://page-scroll")
+        .unwrap();
+    let (host, cx) = cx.add_window_view(|window, cx| PageHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    // The gap between the cards: no target contains this point.
+    cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Gap".into(),
+                        element_path: "drawing:gap".into(),
+                        element: "Pin".into(),
+                        x: 100. / 800. * 100.,
+                        y: 534.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(AnnotationShape::Pin {
+                            at: (100. / 800., 534. / 600.),
+                            color: 0,
+                        }),
+                    },
+                )
+                .unwrap();
+            this.session.annotations.push(note);
+            cx.notify();
+        })
+    });
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.simulate_event(gpui::ScrollWheelEvent {
+        position: point(px(100.), px(100.)),
+        delta: gpui::ScrollDelta::Pixels(point(px(0.), px(-30.))),
+        modifiers: Modifiers::none(),
+        touch_phase: gpui::TouchPhase::Moved,
+    });
+    draw(cx);
+    draw(cx);
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after.center().y, before.center().y - px(30.));
+}
+
+#[gpui::test]
 fn textbox_editing_keeps_pointer_selection_and_saves_multiline_text(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
     text_draft(&overlay, cx);

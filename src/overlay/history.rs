@@ -38,6 +38,7 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
+        self.commit_scroll(window, cx);
         let Some((before, after)) = self.history.last().cloned() else {
             return;
         };
@@ -56,6 +57,7 @@ impl AnnotationOverlay {
         if !self.dismiss_note(window, cx) {
             return;
         }
+        self.commit_scroll(window, cx);
         let Some((before, after)) = self.future.last().cloned() else {
             return;
         };

@@ -130,6 +130,25 @@ impl AnnotationShape {
         }
     }
 
+    /// A copy moved by a normalized delta, unclamped: it may lie partly
+    /// outside the window, and is only storable while [`Self::valid`].
+    pub(crate) fn translated(&self, dx: f32, dy: f32) -> Self {
+        let mut moved = self.clone();
+        let shift = |p: &mut (f32, f32)| {
+            p.0 += dx;
+            p.1 += dy;
+        };
+        match &mut moved {
+            Self::Box { from, to, .. } | Self::Arrow { from, to, .. } => {
+                shift(from);
+                shift(to);
+            }
+            Self::Pen { points, .. } => points.iter_mut().for_each(shift),
+            Self::Pin { at, .. } | Self::Text { at, .. } => shift(at),
+        }
+        moved
+    }
+
     fn points(&self) -> Vec<(f32, f32)> {
         match self {
             Self::Box { from, to, .. } | Self::Arrow { from, to, .. } => vec![*from, *to],

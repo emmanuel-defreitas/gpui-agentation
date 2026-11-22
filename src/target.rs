@@ -70,6 +70,27 @@ pub(crate) fn pick(window: &Window, cx: &App, x: f32, y: f32) -> Option<Target> 
         })
 }
 
+/// The registered target nearest to a point: the one under it when several
+/// overlap the smallest, otherwise the closest by edge distance. Content in one
+/// scroll container moves together, so a gap between cards is anchored to a
+/// neighbouring card.
+pub(crate) fn nearest(window: &Window, cx: &App, x: f32, y: f32) -> Option<Target> {
+    let distance = |t: &Target| {
+        let dx = (t.bounds.x - x)
+            .max(x - (t.bounds.x + t.bounds.width))
+            .max(0.0);
+        let dy = (t.bounds.y - y)
+            .max(y - (t.bounds.y + t.bounds.height))
+            .max(0.0);
+        dx.hypot(dy)
+    };
+    targets(window, cx).into_iter().min_by(|a, b| {
+        distance(a).total_cmp(&distance(b)).then_with(|| {
+            (a.bounds.width * a.bounds.height).total_cmp(&(b.bounds.width * b.bounds.height))
+        })
+    })
+}
+
 /// Current unclipped origin of a live, visible target.
 pub(crate) fn origin(window: &Window, cx: &App, id: &str) -> Option<(f32, f32)> {
     let window_id = window.window_handle().window_id();
