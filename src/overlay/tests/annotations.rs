@@ -1817,6 +1817,75 @@ fn undo_across_a_geometry_edit_keeps_pending_scroll_displacement(cx: &mut TestAp
 }
 
 #[gpui::test]
+fn undoing_a_move_between_targets_follows_the_target_it_returns_to(cx: &mut TestAppContext) {
+    cx.update(crate::ely::init_for_tests);
+    let store = Store::memory();
+    let session = store.ensure_session("Retarget", "gpui://retarget").unwrap();
+    // Card "one" spans y 24..524 and card "two" y 544..1044 in the page.
+    let (host, cx) = cx.add_window_view(|window, cx| PageHost {
+        overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    let overlay = cx.update(|_, cx| host.read(cx).overlay.clone());
+    let id = cx.update(|_, cx| {
+        overlay.update(cx, |this, cx| {
+            let note = this
+                .store
+                .add(
+                    &this.session.id,
+                    AnnotationInput {
+                        inspection: None,
+                        comment: "Move me".into(),
+                        element_path: "drawing:move".into(),
+                        element: "Pin".into(),
+                        x: 100. / 800. * 100.,
+                        y: 100.,
+                        bounding_box: crate::Rect::default(),
+                        source_file: None,
+                        gpui_configuration: None,
+                        shape: Some(AnnotationShape::Pin {
+                            at: (100. / 800., 100. / 600.),
+                            color: 0,
+                        }),
+                    },
+                )
+                .unwrap();
+            this.record_change(None, Some(note.clone()));
+            this.session.annotations.push(note.clone());
+            cx.notify();
+            note.id
+        })
+    });
+    draw(cx);
+    let target =
+        |cx: &mut VisualTestContext| cx.update(|_, cx| overlay.read(cx).anchor_target(&id));
+    assert_eq!(target(cx).as_deref(), Some("one"));
+    // Drop it over the second card.
+    set_note(
+        &overlay,
+        &id,
+        |note| {
+            note.feedback.y = 570.;
+            note.feedback.shape = Some(AnnotationShape::Pin {
+                at: (100. / 800., 570. / 600.),
+                color: 0,
+            });
+        },
+        true,
+        cx,
+    );
+    draw(cx);
+    assert_eq!(target(cx).as_deref(), Some("two"));
+    // Undoing the move puts it back over the first card, and it follows that.
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    draw(cx);
+    assert_eq!(target(cx).as_deref(), Some("one"));
+}
+
+#[gpui::test]
 fn a_displaced_textbox_cannot_be_moved_until_it_fits_the_window(cx: &mut TestAppContext) {
     // The box (y 40..240) is pushed above the window by a 60px scroll.
     let (host, overlay, id, cx) = scrolled_overlay(
