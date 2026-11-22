@@ -42,11 +42,16 @@ impl AnnotationOverlay {
         let Some((before, after)) = self.history.last().cloned() else {
             return;
         };
+        let kept = self.anchors_of(&[
+            before.as_ref().map(|note| note.id.as_str()),
+            after.as_ref().map(|note| note.id.as_str()),
+        ]);
         match self.store.replace_note(after.as_ref(), before.as_ref()) {
             Ok(()) => {
                 self.history.pop();
                 self.future.push((before, after));
                 self.refresh_notes();
+                self.restore_anchors(kept);
             }
             Err(error) => self.notice = error.to_string(),
         }
@@ -61,11 +66,16 @@ impl AnnotationOverlay {
         let Some((before, after)) = self.future.last().cloned() else {
             return;
         };
+        let kept = self.anchors_of(&[
+            before.as_ref().map(|note| note.id.as_str()),
+            after.as_ref().map(|note| note.id.as_str()),
+        ]);
         match self.store.replace_note(before.as_ref(), after.as_ref()) {
             Ok(()) => {
                 self.future.pop();
                 self.history.push((before, after));
                 self.refresh_notes();
+                self.restore_anchors(kept);
             }
             Err(error) => self.notice = error.to_string(),
         }

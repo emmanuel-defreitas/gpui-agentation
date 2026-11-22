@@ -11,6 +11,7 @@ use super::{surface::viewport, *};
 use crate::Annotation;
 
 /// The registered element a drawn note follows and where it sat when anchored.
+#[derive(Clone)]
 pub(super) struct Anchor {
     /// `None` when nothing registered lay under the note: it stays put.
     target: Option<String>,
@@ -120,6 +121,33 @@ impl AnnotationOverlay {
         } else {
             moved(note, shift, viewport(window, cx))
         })
+    }
+
+    /// Anchors of the notes an undo or redo is about to change. Restoring an
+    /// earlier version puts stored geometry back in the frame its anchor
+    /// already describes, pending scroll displacement included, so the anchor
+    /// outlives the change instead of being rebuilt in viewport coordinates.
+    pub(super) fn anchors_of(&self, ids: &[Option<&str>]) -> Vec<(String, Anchor)> {
+        ids.iter()
+            .flatten()
+            .filter_map(|id| Some((id.to_string(), self.anchors.get(*id)?.clone())))
+            .collect()
+    }
+
+    /// Put anchors saved by [`Self::anchors_of`] back for notes that still
+    /// exist, matching the geometry they now have.
+    pub(super) fn restore_anchors(&mut self, kept: Vec<(String, Anchor)>) {
+        for (id, mut anchor) in kept {
+            if let Some(note) = self
+                .session
+                .annotations
+                .iter()
+                .find(|note| note.id == id && drawn(note))
+            {
+                anchor.geometry = geometry(note);
+                self.anchors.insert(id, anchor);
+            }
+        }
     }
 
     /// Whether the note is drawn away from its stored position, which happens

@@ -1767,6 +1767,56 @@ fn undoing_an_earlier_edit_keeps_the_note_in_the_scrolled_frame(cx: &mut TestApp
 }
 
 #[gpui::test]
+fn undo_across_a_geometry_edit_keeps_pending_scroll_displacement(cx: &mut TestAppContext) {
+    // Top edge at y=40; resizing it down to y=100 is a recorded geometry edit.
+    let (host, overlay, id, cx) = scrolled_overlay(
+        cx,
+        AnnotationShape::Box {
+            from: (0.1, 40. / 600.),
+            to: (0.3, 240. / 600.),
+            color: 0,
+        },
+    );
+    set_note(
+        &overlay,
+        &id,
+        |note| {
+            note.feedback.shape = Some(AnnotationShape::Box {
+                from: (0.1, 100. / 600.),
+                to: (0.3, 240. / 600.),
+                color: 0,
+            })
+        },
+        true,
+        cx,
+    );
+    // Scrolling up 60px: the current box still fits, the earlier one would not,
+    // so the scroll stays pending instead of being committed.
+    scroll_host(&host, 60., cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.commit_scroll(window, cx)));
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.undo(window, cx)));
+    draw(cx);
+    draw(cx);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(this.notice.is_empty(), "undo failed: {}", this.notice);
+    });
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(
+        after.center(),
+        before.center(),
+        "the restored shape keeps the displacement scrolling gave it"
+    );
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.redo(window, cx)));
+    draw(cx);
+    draw(cx);
+    let redone = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(redone.center(), before.center(), "and so does redo");
+}
+
+#[gpui::test]
 fn a_displaced_textbox_cannot_be_moved_until_it_fits_the_window(cx: &mut TestAppContext) {
     // The box (y 40..240) is pushed above the window by a 60px scroll.
     let (host, overlay, id, cx) = scrolled_overlay(
