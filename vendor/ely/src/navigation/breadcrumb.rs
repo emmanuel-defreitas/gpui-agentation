@@ -60,6 +60,7 @@ pub struct Breadcrumb {
     id: ElementId,
     crumbs: Vec<Crumb>,
     on_select: Option<OnLevel>,
+    current_only: bool,
 }
 
 impl Breadcrumb {
@@ -68,6 +69,7 @@ impl Breadcrumb {
             id: id.into(),
             crumbs: crumbs.into_iter().collect(),
             on_select: None,
+            current_only: false,
         }
     }
 
@@ -77,6 +79,19 @@ impl Breadcrumb {
         handler: impl Fn(usize, &SharedString, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_select = Some(Rc::new(handler));
+        self.current_only = false;
+        self
+    }
+
+    /// Makes the current (last) segment actionable while ancestors remain context.
+    pub fn on_current(
+        mut self,
+        handler: impl Fn(&SharedString, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_select = Some(Rc::new(move |_, value, window, cx| {
+            handler(value, window, cx)
+        }));
+        self.current_only = true;
         self
     }
 }
@@ -92,8 +107,12 @@ impl RenderOnce for Breadcrumb {
         let mut levels: Vec<AnyElement> = Vec::new();
         for (level, crumb) in self.crumbs.into_iter().enumerate() {
             let here: ElementId = (self.id.clone(), format!("crumb-{level}")).into();
-            let listed = !crumb.siblings.is_empty();
-            let active = listed || level < last;
+            let listed = !self.current_only && !crumb.siblings.is_empty();
+            let active = if self.current_only {
+                level == last
+            } else {
+                listed || level < last
+            };
             let focus = tab_stop((here.clone(), "focus").into(), active, window, cx);
             let focused = focus.is_focused(window);
             let theme = cx.theme();
@@ -105,6 +124,12 @@ impl RenderOnce for Breadcrumb {
             };
             let trigger = div()
                 .id(here.clone())
+                .when(self.current_only && level == last, |trigger| {
+                    trigger
+                        .role(gpui::Role::Button)
+                        .aria_label(crumb.label.clone())
+                        .debug_selector(|| "inspector-source-open".into())
+                })
                 .track_focus(&focus)
                 .relative()
                 .flex()

@@ -77,7 +77,7 @@ class ReleaseVersionTests(unittest.TestCase):
         self.assertEqual(registry["packages"][0]["version"], version)
         for name in release.FILES:
             self.assertNotEqual(before[name], after[name], name)
-        self.assertIn("Version 0.3.0 bundles", after["docs/package-layout.md"].decode())
+        self.assertIn("Version 0.3.0 bundles", after["site/docs/package-layout.md"].decode())
         self.assertEqual(before["src/overlay/settings.rs"], after["src/overlay/settings.rs"])
         release.prepare(self.root, version)
         self.assertEqual(after, self.snapshot(), "Repeated preparation must be idempotent")

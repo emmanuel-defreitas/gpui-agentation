@@ -223,3 +223,32 @@ fn framing_rejects_oversize_input_and_recovers_after_parse_errors() {
             .is_err()
     );
 }
+
+#[cfg(all(debug_assertions, feature = "native"))]
+#[test]
+fn bridge_discovers_and_reads_the_native_server() {
+    use gpui_agentation::{Server, Store};
+
+    let store = Store::memory();
+    let session = store
+        .ensure_session("Bridge smoke test", "gpui://bridge-test")
+        .unwrap();
+    let server = Server::start(store, 0).unwrap();
+    let mut bridge = bridge(&format!("http://{}/mcp", server.address()));
+    let frames = exchange(
+        &mut bridge,
+        &[
+            initialize(),
+            json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+            json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
+            json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"annotation_sessions"}}),
+        ],
+    );
+    assert_eq!(frames.len(), 3);
+    assert_eq!(frames[1]["id"], 2);
+    assert_eq!(frames[1]["result"]["tools"].as_array().unwrap().len(), 6);
+    assert_eq!(frames[2]["id"], 3);
+    let sessions: Value =
+        serde_json::from_str(frames[2]["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(sessions[0]["id"], session.id);
+}

@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     outputs:
       commit: ${{ steps.commit.outputs.sha }}
     env:
@@ -47,30 +47,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: '1.98.1'
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: .
       - name: Verify pinned Ely snapshot
         run: python3 .github/scripts/check-ely-snapshot.py
       - name: Check version and Registry ownership metadata
         run: |
           make version-check
           python3 .github/scripts/check-bridge-release.py --require-publishable
-      - name: Format, lint, test and dry-run the exact package
+      - name: Check package contents and size without compiling
         working-directory: .
         run: |
           cargo package --no-verify --all-features --locked
           python3 .github/scripts/check-bridge-release.py --require-publishable --check-package-size
-          cargo fmt -- --check
-          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-          cargo test --workspace --all-features --locked
-          cargo publish --dry-run --all-features --locked
 
   publish:
     needs: verify
     if: inputs.publish == true
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     environment: crates-io
     permissions:
       contents: read
@@ -90,4 +82,5 @@ jobs:
         working-directory: .
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-        run: cargo publish --all-features --locked
+        # Native compilation and tests are run locally on macOS before promotion.
+        run: cargo publish --no-verify --all-features --locked

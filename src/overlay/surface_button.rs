@@ -101,13 +101,13 @@ impl RenderOnce for SurfaceButton {
             .flex_none()
             .h(theme.control_height(self.size))
             .px_2()
-            .when(self.icon_only || self.shortcut.is_some(), |root| {
+            .text_size(theme.text_size(TextSize::Sm))
+            .when(self.icon_only, |root| {
                 root.w(theme.control_height(self.size)).px_0()
             })
             .border_1()
             .border_color(gpui::transparent_black())
             .rounded(theme.radius(Radius::Md))
-            .text_size(theme.text_size(TextSize::Sm))
             .font_weight(gpui::FontWeight::MEDIUM)
             .bg(background)
             .text_color(foreground)

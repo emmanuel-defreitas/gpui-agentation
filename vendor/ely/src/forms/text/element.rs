@@ -15,11 +15,20 @@ use crate::{
 
 pub(crate) struct TextElement {
     input: Entity<TextInput>,
+    caret_color: Option<gpui::Hsla>,
 }
 
 impl TextElement {
     pub fn new(input: Entity<TextInput>) -> Self {
-        Self { input }
+        Self {
+            input,
+            caret_color: None,
+        }
+    }
+
+    pub fn caret_color(mut self, color: Option<gpui::Hsla>) -> Self {
+        self.caret_color = color;
+        self
     }
 }
 
@@ -216,7 +225,10 @@ impl Element for TextElement {
         cx: &mut App,
     ) -> Prepaint {
         let theme = cx.theme();
-        let (selection_color, caret_color) = (theme.colors.selection, theme.colors.focus);
+        let (selection_color, caret_color) = (
+            theme.colors.selection,
+            self.caret_color.unwrap_or(theme.colors.focus),
+        );
         let caret_width = caret_width(
             theme.caret_width().to_pixels(window.rem_size()),
             window.scale_factor(),

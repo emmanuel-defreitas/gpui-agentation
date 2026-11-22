@@ -20,6 +20,11 @@ pub(crate) struct Target {
     pub bounds: Rect,
 }
 
+/// Unclipped top-left per target, so pins can follow content as it scrolls.
+#[derive(Default)]
+struct Origins(HashMap<(WindowId, String), (f32, f32)>);
+impl Global for Origins {}
+
 #[derive(Default)]
 struct Registry(HashMap<WindowId, Vec<Weak<RefCell<Target>>>>);
 impl Global for Registry {}
@@ -63,6 +68,37 @@ pub(crate) fn pick(window: &Window, cx: &App, x: f32, y: f32) -> Option<Target> 
         .min_by(|a, b| {
             (a.bounds.width * a.bounds.height).total_cmp(&(b.bounds.width * b.bounds.height))
         })
+}
+
+/// The registered target nearest to a point: the one under it when several
+/// overlap the smallest, otherwise the closest by edge distance. Content in one
+/// scroll container moves together, so a gap between cards is anchored to a
+/// neighbouring card.
+pub(crate) fn nearest(window: &Window, cx: &App, x: f32, y: f32) -> Option<Target> {
+    let distance = |t: &Target| {
+        let dx = (t.bounds.x - x)
+            .max(x - (t.bounds.x + t.bounds.width))
+            .max(0.0);
+        let dy = (t.bounds.y - y)
+            .max(y - (t.bounds.y + t.bounds.height))
+            .max(0.0);
+        dx.hypot(dy)
+    };
+    targets(window, cx).into_iter().min_by(|a, b| {
+        distance(a).total_cmp(&distance(b)).then_with(|| {
+            (a.bounds.width * a.bounds.height).total_cmp(&(b.bounds.width * b.bounds.height))
+        })
+    })
+}
+
+/// Current unclipped origin of a live, visible target.
+pub(crate) fn origin(window: &Window, cx: &App, id: &str) -> Option<(f32, f32)> {
+    let window_id = window.window_handle().window_id();
+    targets(window, cx).iter().find(|t| t.id == id)?;
+    cx.try_global::<Origins>()?
+        .0
+        .get(&(window_id, id.to_owned()))
+        .copied()
 }
 
 pub(crate) fn targets(window: &Window, cx: &App) -> Vec<Target> {
@@ -129,6 +165,13 @@ impl Element for Registered {
             width: (right - x).max(0.0),
             height: (bottom - y).max(0.0),
         };
+        if !cx.has_global::<Origins>() {
+            cx.set_global(Origins::default());
+        }
+        cx.global_mut::<Origins>().0.insert(
+            (window.window_handle().window_id(), self.target.id.clone()),
+            (f32::from(bounds.origin.x), f32::from(bounds.origin.y)),
+        );
         if let Some(global_id) = global_id {
             if !cx.has_global::<Registry>() {
                 cx.set_global(Registry::default());
@@ -170,5 +213,5 @@ impl Element for Registered {
 }
 
 #[cfg(all(test, feature = "test-support"))]
-#[path = "target.test.rs"]
+#[path = "tests/target.rs"]
 mod tests;

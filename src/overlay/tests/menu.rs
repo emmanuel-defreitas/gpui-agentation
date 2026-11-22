@@ -1,0 +1,152 @@
+use super::*;
+use crate::{AnnotationCommand, overlay::tests::draw};
+use gpui::TestAppContext;
+
+fn menu<'a>(root: &'a Menu, name: &str) -> &'a Menu {
+    root.items
+        .iter()
+        .find_map(|item| match item {
+            MenuItem::Submenu(menu) if menu.name.as_ref() == name => Some(menu),
+            _ => None,
+        })
+        .unwrap()
+}
+
+#[test]
+fn native_menu_groups_use_real_disabled_states_and_checkmarks() {
+    let off = build_menu(MenuState::default());
+    assert!(off.items[0].is_disabled());
+    assert!(off.items[1].is_disabled());
+    assert!(matches!(
+        &off.items[2],
+        MenuItem::Action { name, action, .. }
+            if name.as_ref() == "Inspect element"
+                && action
+                    .as_any()
+                    .downcast_ref::<AnnotationCommand>()
+                    .is_some_and(|command| command.name == "devtools")
+    ));
+    assert!(menu(&off, "New").disabled);
+    assert!(menu(&off, "Color").disabled);
+    let on = build_menu(MenuState {
+        active: true,
+        undo: true,
+        hidden: true,
+        ..Default::default()
+    });
+    assert!(!on.items[0].is_disabled());
+    assert!(on.items[1].is_disabled());
+    assert!(!menu(&on, "New").disabled);
+    assert!(
+        matches!(&off.items[0], MenuItem::Action { action, .. } if action.as_any().is::<UnavailableCommand>())
+    );
+    assert!(
+        matches!(&on.items[0], MenuItem::Action { action, .. } if action.as_any().is::<AnnotationCommand>())
+    );
+}
+
+#[gpui::test]
+fn menu_tracks_window_state_and_preserves_host_menus(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        crate::ely::init_for_tests(cx);
+        cx.set_menus([
+            Menu::new("Host").items([MenuItem::action("Host Action", gpui::NoAction)]),
+            debug_menu(),
+        ]);
+    });
+    let (overlay, cx) = cx.add_window_view(|window, cx| {
+        let store = Store::memory();
+        let session = store.ensure_session("Menu", "gpui://menu").unwrap();
+        AnnotationOverlay::new(store, session, 0, window, cx)
+    });
+    draw(cx);
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.toggle(window, cx);
+            this.sync_debug_menu(window.window_handle().window_id(), cx);
+        });
+    });
+    draw(cx);
+    cx.update(|_, cx| {
+        let menus = cx.get_menus().unwrap();
+        assert_eq!(menus[0].name.as_ref(), "Host");
+        assert_eq!(menus[0].items.len(), 1);
+        let debug = restore_menu(menus[1].clone());
+        assert!(!menu(&debug, "New").disabled);
+        assert!(menu(&debug, "Settings").items[2].is_checked());
+    });
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.set_toolbar_position(ToolbarPosition::Floating, cx);
+            this.dispatch_command(
+                &AnnotationCommand {
+                    name: "toolbar".into(),
+                },
+                window,
+                cx,
+            );
+            assert!(this.toolbar_hidden);
+            this.dispatch_command(
+                &AnnotationCommand {
+                    name: "banner".into(),
+                },
+                window,
+                cx,
+            );
+            assert!(
+                !this.toolbar_hidden,
+                "position commands remain available when hidden"
+            );
+            assert!(this.banner);
+            this.dispatch_command(
+                &AnnotationCommand {
+                    name: "close-toolbar".into(),
+                },
+                window,
+                cx,
+            );
+            assert!(this.toolbar_hidden);
+            this.dispatch_command(
+                &AnnotationCommand {
+                    name: "toolbar".into(),
+                },
+                window,
+                cx,
+            );
+            assert!(!this.toolbar_hidden);
+            assert!(this.banner, "show restores the last position");
+        });
+    });
+    let other = cx.update(|_, cx| {
+        cx.open_window(gpui::WindowOptions::default(), |window, cx| {
+            let store = Store::memory();
+            let session = store.ensure_session("Other", "gpui://other").unwrap();
+            cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx))
+        })
+        .unwrap()
+    });
+    cx.update(|_, cx| {
+        other
+            .update(cx, |_, window, _| window.activate_window())
+            .unwrap()
+    });
+    draw(cx);
+    cx.update(|_, cx| {
+        let menus = cx.get_menus().unwrap();
+        assert!(
+            menu(&restore_menu(menus[1].clone()), "New").disabled,
+            "the second window has annotation mode off"
+        );
+    });
+    cx.update(|window, _| window.activate_window());
+    draw(cx);
+    cx.update(|_, cx| {
+        let menus = cx.get_menus().unwrap();
+        assert!(
+            !menu(&restore_menu(menus[1].clone()), "New").disabled,
+            "reactivating the first window restores its menu state"
+        );
+    });
+}

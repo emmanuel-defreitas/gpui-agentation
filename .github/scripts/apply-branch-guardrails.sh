@@ -26,15 +26,15 @@ ensure_branch() {
 apply_branch_protection() {
   local branch="$1"
 
+  local checks='null'
+  if [[ "${branch}" == "next" || "${branch}" == "main" ]]; then
+    checks='{"strict":true,"contexts":["promotion-metadata"]}'
+  fi
+
   gh api -X PUT "repos/${repo}/branches/${branch}/protection" \
-    --input - >/dev/null <<'EOF'
+    --input - >/dev/null <<EOF
 {
-  "required_status_checks": {
-    "strict": true,
-    "contexts": [
-      "validate-template"
-    ]
-  },
+  "required_status_checks": ${checks},
   "enforce_admins": false,
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": true,

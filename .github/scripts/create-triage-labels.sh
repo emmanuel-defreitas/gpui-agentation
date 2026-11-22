@@ -2,8 +2,7 @@
 # create-triage-labels.sh
 #
 # Creates the labels used by the lifecycle workflows:
-#   - issue-start-branch.yml (fires when status:in-progress is added; removes status:todo)
-#   - issue-status-sync.yml  (ensures status:in-progress on draft PR open)
+# Labels are managed manually; issue and draft-PR automation is retired.
 #
 # Idempotent: `--force` creates the label or updates it if it already exists, so this is safe to
 # re-run and will also correct drifted colors/descriptions. Run from the repo root:
@@ -34,7 +33,7 @@ mklabel "status:in-progress" "1d76db" "Work has started; feature branch created"
 # ── Duplicate (flagged by triage, confirmed/closed by a human) ───────────
 mklabel "duplicate"         "cccccc" "Likely duplicate of another issue"
 
-# ── Policy / release-doc flags (pr-base-policy, pr-branch-enforcement) ────
+# ── Manual policy / release-doc flags ────
 mklabel "needs-base-fix"    "b60205" "PR targets the wrong base branch (policy reassigns/closes)"
 mklabel "wiki-update"       "0075ca" "Release docs pending/created for a next → main PR"
 

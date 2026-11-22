@@ -1,14 +1,18 @@
 # Bundled pinned Ely source
 
-This directory preserves **Ely GPUI Components** runtime source, assets and
-license notices byte-for-byte from upstream Ely 0.1.1 at commit
+This directory bundles **Ely GPUI Components** runtime source, assets and
+license notices, based on upstream Ely 0.1.1 at commit
 `da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721`:
 https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components
 
 Copyright (c) 2026 Ely GPUI Component contributors. The original MIT license
 is in LICENSE; font and icon licenses remain in assets. Cargo.upstream.toml
 preserves the upstream manifest. UPSTREAM.json records the revision and SHA-256
-hashes for every runtime file and the original manifest.
+hashes for every original runtime file and the original manifest. That upstream
+inventory remains unchanged. LOCAL_PATCHES.json separately records the exact
+hashes of Agentation's reviewed source additions and modifications for inspector
+routing, property snapshots, and component styling. All other files, including
+assets and license notices, must still match the upstream hashes byte-for-byte.
 
 There is no Cargo package in this directory and no dependency on the separately
 published gpui-agentation-ely crate. gpui-agentation includes these files in its
@@ -18,7 +22,7 @@ by the native feature, with GPUI and platform pinned to =0.3.8.
 ## Build adaptation
 
 For native builds, build/ely.rs copies Rust files into OUT_DIR and makes four
-limited adaptations without editing this snapshot:
+limited adaptations without further editing the bundled source:
 
 - Internal crate:: paths become crate::ely:: paths, including paths in macros.
 - cfg(test) predicates become false, keeping upstream unit tests disabled as

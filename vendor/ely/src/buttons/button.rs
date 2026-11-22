@@ -140,6 +140,7 @@ pub struct Button {
     disabled: bool,
     loading: bool,
     full_width: bool,
+    hover_color: Option<Hsla>,
     focus: Option<FocusHandle>,
     pub(crate) slot: Option<Slot>,
     on_click: Option<ClickHandler>,
@@ -158,6 +159,7 @@ impl Button {
             disabled: false,
             loading: false,
             full_width: false,
+            hover_color: None,
             focus: None,
             slot: None,
             on_click: None,
@@ -217,6 +219,12 @@ impl Button {
         self
     }
 
+    /// Overrides the hover background while keeping the selected variant's other states.
+    pub fn hover_color(mut self, color: Hsla) -> Self {
+        self.hover_color = Some(color);
+        self
+    }
+
     pub fn on_click(
         mut self,
         handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -229,7 +237,10 @@ impl Button {
 impl RenderOnce for Button {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = cx.theme();
-        let tone = tone(self.variant, &theme.colors);
+        let mut tone = tone(self.variant, &theme.colors);
+        if let Some(color) = self.hover_color {
+            tone.hover = color;
+        }
         let (text, icon_size) = label_size(self.size);
         let link = self.variant == ButtonVariant::Link;
         let icon = |name| Icon::new(name).size(icon_size).color(tone.fg);
