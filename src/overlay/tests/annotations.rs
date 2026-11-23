@@ -1,7 +1,7 @@
 //! Annotation editing, pins, drawing tools, shortcuts and @-mentions.
 use super::super::mentions::{Motion, query};
 use super::*;
-use crate::{AnnotationShape, ToolbarPosition, ely::media::Tool};
+use crate::{AnnotationShape, ToolbarPosition, drawing::AnnotationTool};
 use gpui::{Modifiers, TestAppContext, VisualTestContext, point, px, size};
 
 fn click_toolbar(
@@ -527,7 +527,7 @@ fn text_draft(overlay: &Entity<AnnotationOverlay>, cx: &mut VisualTestContext) {
             if !this.active {
                 this.toggle(window, cx);
             }
-            this.choose_tool(Some(Tool::Select), window, cx);
+            this.choose_tool(Some(AnnotationTool::Text), window, cx);
             this.color = 2;
             this.stroke = vec![(0.2, 0.4)];
             this.finish_stroke(point(px(200.), px(240.)), window, cx);
@@ -700,7 +700,7 @@ fn textbox_tool_frames_a_box_by_dragging_and_grips_resize_it(cx: &mut TestAppCon
             if !this.active {
                 this.toggle(window, cx);
             }
-            this.choose_tool(Some(Tool::Select), window, cx);
+            this.choose_tool(Some(AnnotationTool::Text), window, cx);
         })
     });
     draw(cx);
@@ -936,7 +936,7 @@ fn right_click_on_empty_canvas_opens_the_tools_menu_in_annotation_mode(cx: &mut 
     let arrow = cx.debug_bounds("menu-row-Arrow").expect("tools menu");
     cx.simulate_click(arrow.center(), Modifiers::none());
     draw(cx);
-    cx.update(|_, cx| assert_eq!(overlay.read(cx).tool, Some(Tool::Arrow)));
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).tool, Some(AnnotationTool::Arrow)));
 }
 
 #[gpui::test]
@@ -1014,11 +1014,11 @@ fn tool_shortcuts_are_scoped_to_annotation_mode_and_preserve_typing(cx: &mut Tes
     cx.update(|window, cx| overlay.update(cx, |this, cx| this.toggle(window, cx)));
     draw(cx);
     for (key, tool) in [
-        ("b", Tool::Box),
-        ("a", Tool::Arrow),
-        ("p", Tool::Pen),
-        ("c", Tool::Pin),
-        ("t", Tool::Select),
+        ("b", AnnotationTool::Box),
+        ("a", AnnotationTool::Arrow),
+        ("p", AnnotationTool::Pen),
+        ("c", AnnotationTool::Pin),
+        ("t", AnnotationTool::Text),
     ] {
         cx.simulate_keystrokes(key);
         draw(cx);
@@ -1027,7 +1027,7 @@ fn tool_shortcuts_are_scoped_to_annotation_mode_and_preserve_typing(cx: &mut Tes
     text_draft(&overlay, cx);
     cx.simulate_keystrokes("b");
     cx.update(|_, cx| {
-        assert_eq!(overlay.read(cx).tool, Some(Tool::Select));
+        assert_eq!(overlay.read(cx).tool, Some(AnnotationTool::Text));
         assert_eq!(overlay.read(cx).input.read(cx).text(), "b");
     });
 }
@@ -1139,7 +1139,7 @@ fn annotation_shortcut_overrides_the_host_binding_only_while_enabled(cx: &mut Te
     draw(cx);
     cx.update(|_, cx| {
         assert_eq!(host.read(cx).presses, 1);
-        assert_eq!(overlay.read(cx).tool, Some(Tool::Box));
+        assert_eq!(overlay.read(cx).tool, Some(AnnotationTool::Box));
     });
     cx.simulate_keystrokes("escape");
     draw(cx);
@@ -1198,7 +1198,7 @@ fn mention_dropdown_previews_hovered_and_typed_notes_and_inserts_reference(
     draw(cx);
     cx.update(|window, cx| {
         overlay.update(cx, |this, cx| {
-            this.choose_tool(Some(crate::ely::media::Tool::Pin), window, cx);
+            this.choose_tool(Some(crate::drawing::AnnotationTool::Pin), window, cx);
             this.stroke = vec![(0.5, 0.4)];
             this.finish_stroke(gpui::point(px(400.), px(250.)), window, cx);
         })
@@ -1384,7 +1384,7 @@ fn annotation_mode_only_freezes_consumer_scroll_after_drawing_starts(cx: &mut Te
         host.update(cx, |host, cx| {
             host.overlay.update(cx, |overlay, cx| {
                 overlay.toggle(window, cx);
-                overlay.choose_tool(Some(Tool::Box), window, cx);
+                overlay.choose_tool(Some(AnnotationTool::Box), window, cx);
             });
         });
     });

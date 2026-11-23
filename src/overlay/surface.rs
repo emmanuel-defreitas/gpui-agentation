@@ -1,8 +1,8 @@
 use super::*;
+use crate::drawing::AnnotationTool;
 use crate::ely::{
     buttons::{Button, IconButton},
     lists::{ListItem, SelectableList},
-    media::Tool,
     primitives::{FocusRing, FocusScope, Icon, IconName, Measure, raise},
     theme::{ActiveTheme, ControlSize, Elevation, Radius, TextSize},
 };
@@ -20,18 +20,18 @@ pub(super) struct FeedbackDrag {
     pub owner: EntityId,
 }
 
-pub(super) fn tool_shortcut(tool: Option<Tool>) -> &'static str {
+pub(super) fn tool_shortcut(tool: Option<AnnotationTool>) -> &'static str {
     match tool {
         None => "I",
-        Some(Tool::Box) => "B",
-        Some(Tool::Arrow) => "A",
-        Some(Tool::Pen) => "P",
-        Some(Tool::Pin) => "C",
-        Some(Tool::Select) => "T",
+        Some(AnnotationTool::Box) => "B",
+        Some(AnnotationTool::Arrow) => "A",
+        Some(AnnotationTool::Pen) => "P",
+        Some(AnnotationTool::Pin) => "C",
+        Some(AnnotationTool::Text) => "T",
     }
 }
 
-pub(super) fn tool_cursor(tool: Option<Tool>) -> CursorStyle {
+pub(super) fn tool_cursor(tool: Option<AnnotationTool>) -> CursorStyle {
     match tool {
         None => CursorStyle::Arrow,
         Some(_) => CursorStyle::Crosshair,
@@ -528,7 +528,7 @@ impl AnnotationOverlay {
         let Some(tool) = self.tool else {
             return;
         };
-        let shape = if tool == Tool::Select && !points.is_empty() {
+        let shape = if tool == AnnotationTool::Text && !points.is_empty() {
             // A drag frames the box; a click places one sized to its text.
             Some(crate::drawing::text_box(
                 points[0],
@@ -758,7 +758,8 @@ impl AnnotationOverlay {
                 .w(px(width))
                 .max_h(px((h - 16.0).max(1.0)))
                 .p_3()
-                .bg(theme.colors.chart[self.draft.as_ref().map_or(self.color, |d| d.color)])
+                .bg(annotation_style::palette(cx)
+                    [self.draft.as_ref().map_or(self.color, |d| d.color)])
                 .text_color(theme.colors.bg)
                 .border_1()
                 .border_color(theme.colors.bg.opacity(0.25))
@@ -793,7 +794,7 @@ impl AnnotationOverlay {
         if bounds.width <= 0.0 || bounds.height <= 0.0 {
             return None;
         }
-        let color = cx.theme().colors.chart[draft.color];
+        let color = annotation_style::palette(cx)[draft.color];
         Some(
             div()
                 .debug_selector(|| "feedback-selection-outline".into())
@@ -950,7 +951,7 @@ impl AnnotationOverlay {
                             .absolute()
                             .left(px((at.0 + 14.0).min(w - 24.0)))
                             .top(px((at.1 + 14.0).min(h - 24.0)))
-                            .text_color(cx.theme().colors.chart[self.color])
+                            .text_color(annotation_style::palette(cx)[self.color])
                             .child(Icon::new(*icon)),
                     );
                 }
@@ -989,7 +990,7 @@ impl AnnotationOverlay {
             }
         }
         // The Textbox tool frames its box while dragging, as Freeform does.
-        if self.tool == Some(Tool::Select) && self.draft.is_none() {
+        if self.tool == Some(AnnotationTool::Text) && self.draft.is_none() {
             if let (Some(start), Some(end)) = (self.stroke.first(), self.stroke.last()) {
                 let frame = crate::drawing::text_box(*start, *end, (w, h), self.color);
                 if let AnnotationShape::Text {
@@ -1009,16 +1010,14 @@ impl AnnotationOverlay {
                             .h(px(height * h))
                             .border_1()
                             .border_dashed()
-                            .border_color(cx.theme().colors.chart[self.color])
+                            .border_color(annotation_style::palette(cx)[self.color])
                             .rounded(cx.theme().radius(Radius::Sm)),
                     );
                 }
             }
         }
-        let colors = cx.theme().colors.chart;
-        let media = cx.theme().media();
-        let stroke = f32::from(media.mark_stroke.to_pixels(window.rem_size()));
-        let head = f32::from(media.arrow_head.to_pixels(window.rem_size()));
+        let colors = annotation_style::palette(cx);
+        let (stroke, head) = annotation_style::stroke_metrics(window, cx);
         layer = layer.child(
             canvas(
                 |_, _, _| {},
@@ -1275,8 +1274,8 @@ impl AnnotationOverlay {
             .annotations
             .iter()
             .find(|n| n.id == id)
-            .map_or(cx.theme().colors.chart[self.color], |note| {
-                cx.theme().colors.chart[note.annotation_color()]
+            .map_or(annotation_style::palette(cx)[self.color], |note| {
+                annotation_style::palette(cx)[note.annotation_color()]
             });
         let drag_id = id.clone();
         let menu_id = id.clone();

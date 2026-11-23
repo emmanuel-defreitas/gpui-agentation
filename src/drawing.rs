@@ -1,9 +1,18 @@
 use crate::Rect;
-use crate::ely::media::{Mark, Tool};
 use gpui::{PathBuilder, Window, point, px};
 use serde::{Deserialize, Serialize};
 
-/// A serializable live-surface mark in Ely ImageAnnotator's normalized coordinate model.
+/// A drawing tool owned by Agentation. Inspect mode is represented by `None`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AnnotationTool {
+    Box,
+    Arrow,
+    Pen,
+    Pin,
+    Text,
+}
+
+/// A serializable live-surface mark in normalized coordinates.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
 pub enum AnnotationShape {
@@ -13,7 +22,7 @@ pub enum AnnotationShape {
         from: (f32, f32),
         /// Opposite normalized corner.
         to: (f32, f32),
-        /// Ely chart color, zero through three.
+        /// Stable annotation palette index, zero through three.
         color: usize,
     },
     /// Directed arrow.
@@ -22,14 +31,14 @@ pub enum AnnotationShape {
         from: (f32, f32),
         /// Normalized tip.
         to: (f32, f32),
-        /// Ely chart color, zero through three.
+        /// Stable annotation palette index, zero through three.
         color: usize,
     },
     /// Freehand polyline.
     Pen {
         /// Normalized points, at most 4,096.
         points: Vec<(f32, f32)>,
-        /// Ely chart color, zero through three.
+        /// Stable annotation palette index, zero through three.
         color: usize,
     },
     /// Plain text at a normalized position, rendered at one fixed size.
@@ -38,7 +47,7 @@ pub enum AnnotationShape {
         at: (f32, f32),
         /// Plain text, at most 8,000 characters.
         text: String,
-        /// Ely chart color, zero through three.
+        /// Stable annotation palette index, zero through three.
         color: usize,
         /// Normalized wrap width. `None` sizes the box to its content.
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -51,55 +60,36 @@ pub enum AnnotationShape {
     Pin {
         /// Normalized position.
         at: (f32, f32),
-        /// Ely chart color, zero through three.
+        /// Stable annotation palette index, zero through three.
         color: usize,
     },
 }
 
 impl AnnotationShape {
-    pub(crate) fn from_stroke(tool: Tool, points: &[(f32, f32)], color: usize) -> Option<Self> {
+    pub(crate) fn from_stroke(
+        tool: AnnotationTool,
+        points: &[(f32, f32)],
+        color: usize,
+    ) -> Option<Self> {
         let (&first, &last) = (points.first()?, points.last()?);
         match tool {
-            Tool::Select => None,
-            Tool::Pin => Some(Self::Pin { at: last, color }),
-            Tool::Box if first != last => Some(Self::Box {
+            AnnotationTool::Text => None,
+            AnnotationTool::Pin => Some(Self::Pin { at: last, color }),
+            AnnotationTool::Box if first != last => Some(Self::Box {
                 from: first,
                 to: last,
                 color,
             }),
-            Tool::Arrow if first != last => Some(Self::Arrow {
+            AnnotationTool::Arrow if first != last => Some(Self::Arrow {
                 from: first,
                 to: last,
                 color,
             }),
-            Tool::Pen if points.iter().any(|p| *p != first) => Some(Self::Pen {
+            AnnotationTool::Pen if points.iter().any(|p| *p != first) => Some(Self::Pen {
                 points: points.to_vec(),
                 color,
             }),
             _ => None,
-        }
-    }
-
-    pub(crate) fn mark(&self) -> Mark {
-        match self {
-            Self::Box { from, to, color } => Mark::Box {
-                from: *from,
-                to: *to,
-                color: *color,
-            },
-            Self::Arrow { from, to, color } => Mark::Arrow {
-                from: *from,
-                to: *to,
-                color: *color,
-            },
-            Self::Pen { points, color } => Mark::Pen {
-                points: points.clone(),
-                color: *color,
-            },
-            Self::Text { at, color, .. } | Self::Pin { at, color } => Mark::Pin {
-                at: *at,
-                color: *color,
-            },
         }
     }
 
@@ -248,15 +238,15 @@ impl AnnotationShape {
     ) {
         let place = |p: (f32, f32)| point(px(p.0 * viewport.0), px(p.1 * viewport.1));
         let mut path = PathBuilder::stroke(px(stroke));
-        match self.mark() {
-            Mark::Box { from, to, .. } => {
-                path.move_to(place(from));
-                for p in [(to.0, from.1), to, (from.0, to.1), from] {
+        match self {
+            Self::Box { from, to, .. } => {
+                path.move_to(place(*from));
+                for p in [(to.0, from.1), *to, (from.0, to.1), *from] {
                     path.line_to(place(p));
                 }
             }
-            Mark::Arrow { from, to, .. } => {
-                let (tail, tip) = (place(from), place(to));
+            Self::Arrow { from, to, .. } => {
+                let (tail, tip) = (place(*from), place(*to));
                 path.move_to(tail);
                 path.line_to(tip);
                 let angle = f32::from(tip.y - tail.y).atan2(f32::from(tip.x - tail.x));
@@ -268,7 +258,7 @@ impl AnnotationShape {
                     path.line_to(tip);
                 }
             }
-            Mark::Pen { points, .. } => {
+            Self::Pen { points, .. } => {
                 if let Some(first) = points.first() {
                     path.move_to(place(*first));
                 }
@@ -276,7 +266,7 @@ impl AnnotationShape {
                     path.line_to(place(*p));
                 }
             }
-            Mark::Pin { .. } => return,
+            Self::Pin { .. } | Self::Text { .. } => return,
         }
         if let Ok(path) = path.build() {
             window.paint_path(path, color);
@@ -333,7 +323,7 @@ pub(crate) fn centered_panel(
 }
 
 pub(crate) fn finish_shape(
-    tool: Tool,
+    tool: AnnotationTool,
     mut points: Vec<(f32, f32)>,
     end: (f32, f32),
     color: usize,

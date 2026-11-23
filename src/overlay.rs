@@ -70,7 +70,7 @@ pub struct AnnotationOverlay {
     previous_focus: Option<FocusHandle>,
     notice: String,
     revision: u64,
-    tool: Option<crate::ely::media::Tool>,
+    tool: Option<crate::drawing::AnnotationTool>,
     color: usize,
     stroke: Vec<(f32, f32)>,
     toolbar_at: Option<(f32, f32)>,
@@ -314,7 +314,7 @@ impl AnnotationOverlay {
             previous_focus: None,
             notice,
             revision: 0,
-            tool: Some(crate::ely::media::Tool::Box),
+            tool: Some(crate::drawing::AnnotationTool::Box),
             color: 0,
             stroke: vec![],
             toolbar_at: preference.at,
@@ -426,7 +426,7 @@ impl AnnotationOverlay {
 
     fn choose_tool(
         &mut self,
-        tool: Option<crate::ely::media::Tool>,
+        tool: Option<crate::drawing::AnnotationTool>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -737,7 +737,7 @@ impl AnnotationOverlay {
             .unwrap_or_else(|| self.store.next_index(&self.session.id).unwrap_or(1));
         let editing = draft.editing;
         let textbox = matches!(draft.shape, Some(crate::AnnotationShape::Text { .. }));
-        let background = cx.theme().colors.chart[draft.color];
+        let background = annotation_style::palette(cx)[draft.color];
         let confirm = surface_button::SurfaceButton::new(
             "feedback-save",
             if editing { "Save" } else { "Edit" },
@@ -855,6 +855,7 @@ impl AnnotationOverlay {
 #[cfg(test)]
 use crate::AnnotationPatch;
 
+mod annotation_style;
 mod banner;
 pub mod commands;
 mod followed;

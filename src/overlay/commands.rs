@@ -1,6 +1,6 @@
 use super::*;
 use crate::ToolbarPosition;
-use crate::ely::media::Tool;
+use crate::drawing::AnnotationTool;
 
 /// A Debug menu command dispatched to the active window's annotation entity.
 #[derive(Clone, PartialEq, gpui::Action, serde::Deserialize)]
@@ -164,13 +164,11 @@ impl AnnotationOverlay {
             },
             "resume-inspection" => inspector::resume_picking(window, cx),
             "inspect" => self.choose_tool(None, window, cx),
-            "box" => self.choose_tool(Some(Tool::Box), window, cx),
-            "arrow" => self.choose_tool(Some(Tool::Arrow), window, cx),
-            "pen" => self.choose_tool(Some(Tool::Pen), window, cx),
-            "comment" => self.choose_tool(Some(Tool::Pin), window, cx),
-            // Ely's Select tool is unused by the drawing layer. It denotes our
-            // plain textbox tool without modifying the pinned vendor snapshot.
-            "text" => self.choose_tool(Some(Tool::Select), window, cx),
+            "box" => self.choose_tool(Some(AnnotationTool::Box), window, cx),
+            "arrow" => self.choose_tool(Some(AnnotationTool::Arrow), window, cx),
+            "pen" => self.choose_tool(Some(AnnotationTool::Pen), window, cx),
+            "comment" => self.choose_tool(Some(AnnotationTool::Pin), window, cx),
+            "text" => self.choose_tool(Some(AnnotationTool::Text), window, cx),
             "save" => {
                 self.save(window, cx);
             }

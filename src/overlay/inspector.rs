@@ -76,7 +76,7 @@ pub(crate) fn install(cx: &mut App) {
                 owner
                     .update(cx, |this, cx| {
                         this.sync_inspector_selection(inspector, window, cx);
-                        cx.theme().colors.chart[this.color]
+                        annotation_style::palette(cx)[this.color]
                     })
                     .ok()
             });

@@ -422,7 +422,10 @@ fn inspection_annotation_comments_use_companion_and_drawing_switch_is_independen
     draw(&mut palette);
     cx.update(|_, cx| {
         assert!(!overlay.read(cx).active);
-        assert_eq!(overlay.read(cx).tool, Some(crate::ely::media::Tool::Box));
+        assert_eq!(
+            overlay.read(cx).tool,
+            Some(crate::drawing::AnnotationTool::Box)
+        );
     });
     let mode = palette.debug_bounds("feedback-annotation-toggle").unwrap();
     palette.simulate_click(mode.center(), Modifiers::none());

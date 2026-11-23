@@ -1,8 +1,8 @@
 //! One vertical companion window per consumer, outside its annotation/picker tree.
 use super::*;
+use crate::drawing::AnnotationTool;
 use crate::ely::{
     forms::{ColorSwatch, Switch},
-    media::Tool,
     primitives::{Divider, FocusScope, IconName},
     theme::Elevation,
 };
@@ -102,24 +102,34 @@ pub(super) fn fills_display(window: &Window) -> bool {
 }
 
 const GAP: f32 = 14.0;
-pub(super) const TOOLS: [(Option<Tool>, IconName, &str, &str); 6] = [
+pub(super) const TOOLS: [(Option<AnnotationTool>, IconName, &str, &str); 6] = [
     (None, IconName::Crosshair, "Inspect", "inspect"),
-    (Some(Tool::Box), IconName::Square, "Box", "box"),
-    (Some(Tool::Arrow), IconName::ArrowUpRight, "Arrow", "arrow"),
-    (Some(Tool::Pen), IconName::PenLine, "Pen", "pen"),
+    (Some(AnnotationTool::Box), IconName::Square, "Box", "box"),
     (
-        Some(Tool::Pin),
+        Some(AnnotationTool::Arrow),
+        IconName::ArrowUpRight,
+        "Arrow",
+        "arrow",
+    ),
+    (Some(AnnotationTool::Pen), IconName::PenLine, "Pen", "pen"),
+    (
+        Some(AnnotationTool::Pin),
         IconName::MessageSquare,
         "Comment",
         "comment",
     ),
-    (Some(Tool::Select), IconName::Type, "Textbox", "text"),
+    (
+        Some(AnnotationTool::Text),
+        IconName::Type,
+        "Textbox",
+        "text",
+    ),
 ];
 
 #[derive(Clone, PartialEq)]
 struct ToolbarState {
     active: bool,
-    tool: Option<Tool>,
+    tool: Option<AnnotationTool>,
     color: usize,
     count: usize,
     mcp: bool,
@@ -555,7 +565,7 @@ impl Render for ToolbarWindow {
                             .child(
                                 ColorSwatch::new(
                                     ("feedback-color", color),
-                                    cx.theme().colors.chart[color],
+                                    annotation_style::palette(cx)[color],
                                 )
                                 .selected(color == self.state.color)
                                 .when(

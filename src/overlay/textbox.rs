@@ -402,7 +402,7 @@ impl AnnotationOverlay {
         if draft.id.is_some() {
             return None; // Saved textboxes render through `textbox` instead.
         }
-        let color = cx.theme().colors.chart[draft.color];
+        let color = annotation_style::palette(cx)[draft.color];
         let frame = self.textbox_frame(at, *width, *height, color, true, None, window, cx);
         let mut grips = Vec::new();
         if let Some(bounds) = self.draft_textbox_bounds {
@@ -441,7 +441,7 @@ impl AnnotationOverlay {
             .as_ref()
             .is_some_and(|d| d.editing && d.id.as_deref() == Some(note.id.as_str()));
         let selected = editing || self.selected_note.as_deref() == Some(note.id.as_str());
-        let color = cx.theme().colors.chart[note.annotation_color()];
+        let color = annotation_style::palette(cx)[note.annotation_color()];
         let (w, h) = viewport(window, cx);
         let side = cx
             .theme()

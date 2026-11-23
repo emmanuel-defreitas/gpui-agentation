@@ -4,7 +4,7 @@ use super::super::{
     toolbar_window::dock_bounds,
 };
 use super::*;
-use crate::ely::media::Tool;
+use crate::drawing::AnnotationTool;
 use gpui::{
     Bounds, Context, FocusHandle, Modifiers, Render, TestAppContext, VisualTestContext,
     WindowVisibility, div, point, px, size,
@@ -148,7 +148,7 @@ fn escape_keeps_inspection_mode_active(cx: &mut TestAppContext) {
     cx.simulate_keystrokes("b");
     draw(cx);
     cx.update(|window, cx| {
-        assert_eq!(overlay.read(cx).tool, Some(Tool::Box));
+        assert_eq!(overlay.read(cx).tool, Some(AnnotationTool::Box));
         assert!(inspector::is_open(window, cx));
         assert!(window.is_inspector_picking(cx));
     });
@@ -444,7 +444,7 @@ fn trailing_actions_should_keep_mouse_and_keyboard_activation_out_of_the_row(
 fn inspect_should_use_normal_cursor_and_arrow_drawing_should_use_crosshair() {
     assert_eq!(tool_cursor(None), gpui::CursorStyle::Arrow);
     assert_eq!(
-        tool_cursor(Some(crate::ely::media::Tool::Arrow)),
+        tool_cursor(Some(crate::drawing::AnnotationTool::Arrow)),
         gpui::CursorStyle::Crosshair
     );
 }
@@ -487,7 +487,7 @@ fn host_elements_with_matching_toolbar_ids_should_remain_inspectable(cx: &mut Te
         let overlay = host.read(cx).overlay.clone();
         overlay.update(cx, |this, cx| {
             this.set_toolbar_position(crate::ToolbarPosition::Floating, cx);
-            this.tool = Some(Tool::Pen);
+            this.tool = Some(AnnotationTool::Pen);
             this.choose_tool(None, window, cx);
         });
         overlay
@@ -503,7 +503,7 @@ fn host_elements_with_matching_toolbar_ids_should_remain_inspectable(cx: &mut Te
         let this = overlay.read(cx);
         assert_eq!(
             this.tool,
-            Some(Tool::Pen),
+            Some(AnnotationTool::Pen),
             "a host element with a toolbar-like id must not change the tool"
         );
         assert!(this.inspected_id.is_some());
