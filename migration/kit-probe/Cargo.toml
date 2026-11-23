@@ -14,4 +14,3 @@ gpui = { package = "gpui-kit", version = "=0.11.0", default-features = false, fe
 
 [dev-dependencies]
 gpui = { package = "gpui-kit", version = "=0.11.0", default-features = false, features = ["component", "assets", "inspector", "test-support"] }
-
