@@ -1,8 +1,13 @@
 use agentation_kit_probe::{HostMode, prepare};
+use gpui::component::input::{Input, InputState};
 use gpui::component::{button::Button, *};
 use gpui::*;
 
-struct Probe;
+mod acceptance;
+
+struct Probe {
+    input: Entity<InputState>,
+}
 
 impl Render for Probe {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
@@ -12,6 +17,7 @@ impl Render for Probe {
             .p_4()
             .gap_3()
             .child("Agentation — Kit compatibility probe")
+            .child(Input::new(&self.input))
             .child(Button::new("probe-button").label("Kit button"))
     }
 }
@@ -19,6 +25,7 @@ impl Render for Probe {
 fn main() {
     let host_initialized = std::env::args().any(|arg| arg == "--host-initialized");
     let smoke = std::env::args().any(|arg| arg == "--smoke");
+    let acceptance = std::env::args().any(|arg| arg == "--acceptance");
     gpui::application()
         .with_assets(gpui::assets::Assets)
         .run(move |cx| {
@@ -31,11 +38,12 @@ fn main() {
             };
             prepare(mode, cx);
             prepare(mode, cx);
+            let mut windows = Vec::new();
             for title in [
                 "Agentation Kit host probe",
                 "Agentation Kit companion probe",
             ] {
-                let (window, _) = gpui::open_window(
+                let (window, view) = gpui::open_window(
                     WindowOptions {
                         titlebar: Some(TitlebarOptions {
                             title: Some(title.into()),
@@ -44,7 +52,11 @@ fn main() {
                         ..Default::default()
                     },
                     cx,
-                    |_, cx| cx.new(|_| Probe),
+                    |window, cx| {
+                        let input =
+                            cx.new(|cx| InputState::new(window, cx).placeholder("Host text input"));
+                        cx.new(|_| Probe { input })
+                    },
                 )
                 .expect("open Kit probe");
                 window
@@ -55,9 +67,12 @@ fn main() {
                         }
                     })
                     .expect("validate native root");
+                windows.push((window, view));
             }
             cx.activate(true);
-            if smoke {
+            if acceptance {
+                acceptance::run(windows, cx);
+            } else if smoke {
                 cx.spawn(async |cx| {
                     cx.background_executor()
                         .timer(std::time::Duration::from_secs(2))

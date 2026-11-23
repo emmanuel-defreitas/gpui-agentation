@@ -1,7 +1,7 @@
 # Kit compatibility contract — #113
 
-Status: compatibility implementation and initial native evidence ready for review;
-the complete native acceptance matrix remains open. This is
+Status: baseline and compatibility acceptance evidence ready for review.
+OS-level appearance switching was skipped at the user's request. This is
 the foundation for [#112](https://github.com/emmanuel-defreitas/gpui-agentation/issues/112),
 not a migrated Agentation release. The probe deliberately does **not** link
 `gpui-agentation`, Ely, or the production workspace.
@@ -36,10 +36,10 @@ of both Kit and Ely. Do not add a production Kit dependency in #113.
 | Concern | Required behavior at cutover | Probe / remaining evidence |
 | --- | --- | --- |
 | Initialization | Agentation initialization is idempotent. A host that fully initialized Kit explicitly retains ownership; Agentation skips Kit init. Standalone hosts initialize Kit exactly once. A Theme global alone is not proof of complete initialization. | `prepare` exercises explicit ownership modes; production API design must expose/document that ownership. |
-| Theme | Retain host colors, appearance mode and registry. Follow system appearance only when Agentation owns initialization. | Dark-mode preservation regression tests; system appearance/native transitions remain acceptance work. |
+| Theme | Retain host colors, appearance mode and registry. Follow system appearance only when Agentation owns initialization. | Dark-mode preservation tests and native app-owned Dark → Light transitions pass. OS-level switching excluded by request. |
 | Assets | Keep Agentation assets under `agentation/`. Preserve host assets and unknown-path fallback; choose and document collision precedence. | Probe chooses host-first precedence and filters Kit's inventory before loading, because Kit returns an error for an unknown path. Port Agentation's own namespace in #116. |
 | Root | A Kit host keeps its actual Base Root; annotation content mounts inside it. Agentation-owned companion windows get their own Base Root. Do not nest Roots or replace host roots. | Root identity regression test and two-window native probe. Root plugins must register before windows are constructed. |
-| Focus and keyboard | Preserve host focus on mount and after close; keep shortcuts scoped so normal typing remains usable. | Focus identity test; input/IME, dialogs, menus and multi-window keyboard acceptance remain required. |
+| Focus and keyboard | Preserve host focus on mount and after close; keep shortcuts scoped so normal typing remains usable. | Focus identity and native composition-handler/lifecycle checks pass. Actual OS IME and final integrated keyboard behavior remain cutover gates. |
 | Inspector | Preserve the host's renderer by default. External-inspector replacement requires explicit ownership/opt-in; do not silently overwrite a host renderer. | Sentinel renderer test. GPUI exposes a setter but no getter/restore/composition API. #115/#119 must settle external-window rendering and fallback explicitly. |
 
 Kit's full `init` is not idempotent: it resets theme state and installs an
@@ -113,9 +113,23 @@ headless test results:
 - [Kit host-owned dark appearance](evidence/kit-host-initialized.png): actual
   Kit companion window after host initialization; no Agentation/Ely linked.
 
-These establish initial baseline references, not exhaustive native QA. Small
-windows, native dark/light transitions, IME, keyboard-only navigation, drawing
-tool variants, scroll/undo, and multi-window close/reopen remain in the matrix.
+These establish the baseline references, not exhaustive cutover QA. The
+[small-window capture](evidence/ely-small-window.png) records the existing host
+at 640×512. Existing automated fixtures cover tool variants, shortcut typing
+isolation, scroll/undo, textbox resize, and companion geometry/lifecycle.
+Those fixtures are distinct from manual native interaction evidence.
+
+Both Kit ownership modes also pass `--acceptance` on native windows: 420×300
+resize, text preedit commit/cancellation through `EntityInputHandler`, app-owned
+Dark → Light transitions, companion removal/recreation with a new Root, and
+original host Root/text preservation with explicit host refocus. Focus is
+rechecked after the next native event-loop turn. This does not verify automatic
+focus return, real keyboard dispatch, or a macOS IME candidate panel.
+
+OS-level appearance switching was explicitly skipped by the user after macOS
+denied System Events automation. Real OS IME, integrated keyboard-only flows,
+and the complete native drawing/scroll matrix remain acceptance gates for the
+actual Kit UI cutover (#121), whose widgets do not exist in this probe.
 Native screenshots contain only the dedicated example/probe windows. Local
 feedback stores and build artifacts are excluded from this change.
 
@@ -131,14 +145,14 @@ original checkout remains untouched.
 
 | Consumer / behavior | Automated baseline | Native visual / interaction gate |
 | --- | --- | --- |
-| Current Ely example: drawing, text editing, mentions, scroll/undo, inspector/source/reset, settings and companion geometry | Existing workspace tests pass on repaired baseline; fixtures remain in `src/overlay/tests`, `src/tests`, `example` | Initial native captures above pass; complete dark/light, small-window and interaction matrix remains pending |
-| Standalone Kit host | Probe initializes once and creates Kit controls under Base Root | Native two-window smoke passes; this does not exercise Agentation annotations |
-| Already initialized Kit host | Probe preserves dark theme, root, focus and sentinel inspector renderer | Native two-window smoke and dark screenshot pass; full focus/input and close/reopen interaction matrix remains pending |
+| Current Ely example: drawing, text editing, mentions, scroll/undo, inspector/source/reset, settings and companion geometry | Existing workspace tests pass on repaired baseline; fixtures remain in `src/overlay/tests`, `src/tests`, `example` | Captured drawing, text, mentions, inspector, settings and small-window baseline; remaining exhaustive native interactions must be repeated at cutover |
+| Standalone Kit host | Probe initializes once and creates Kit controls under Base Root | Native smoke and acceptance modes pass; no Agentation annotations linked |
+| Already initialized Kit host | Probe preserves dark theme, root, focus and sentinel inspector renderer | Native smoke, dark screenshot and acceptance mode pass; OS IME and automatic focus return are not established |
 | Production MCP-only client | Existing bridge tests/install pass; no production Cargo changes in #113 | No native UI dependency allowed |
 | Production release consumer | Existing release check passes with annotation API excluded | Recheck after cutover, including actual example release build |
 
-Do not close #113 or unblock #114/#115 solely because the small probe compiles.
-Attach the native evidence and review the contract first. Full annotation
+The contract and evidence require review before #113 closes. #114 may proceed
+as a draft preparation change at the user's request while review is pending. Full annotation
 behavior in a Kit host cannot be demonstrated until the later UI ports; record
 that as a cutover gate rather than claim the probe is a migrated library.
 
@@ -149,7 +163,9 @@ that as a cutover gate rather than claim the probe is a migrated library.
 make kit-probe-check
 cargo run --manifest-path migration/kit-probe/Cargo.toml --locked -- --smoke
 cargo run --manifest-path migration/kit-probe/Cargo.toml --locked -- --host-initialized --smoke
-# Omit --smoke to leave both native windows open for inspection.
+cargo run --manifest-path migration/kit-probe/Cargo.toml --locked -- --acceptance
+cargo run --manifest-path migration/kit-probe/Cargo.toml --locked -- --host-initialized --acceptance
+# Omit the mode flag to leave both native windows open for inspection.
 ```
 
 The smoke mode creates two native Root windows, checks their type and host
