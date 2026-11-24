@@ -3,7 +3,7 @@ use crate::overlay::tests::draw;
 use gpui::{Modifiers, TestAppContext, VisualTestContext};
 
 fn host(cx: &mut TestAppContext, name: &str) -> (Entity<AnnotationOverlay>, VisualTestContext) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let (owner, visual) = cx.add_window_view(|window, cx| {
         let store = Store::memory();
         let session = store.ensure_session(name, "gpui://settings").unwrap();
@@ -67,7 +67,10 @@ fn rich_popup_has_own_input_copies_collapsed_config_and_preserves_consumer(
 ) {
     let (owner, mut host) = host(cx, "First consumer");
     host.update(|_, cx| {
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
     });
     host.update(|window, cx| owner.update(cx, |this, cx| this.choose_tool(None, window, cx)));
     draw(&mut host);
@@ -108,7 +111,15 @@ fn rich_popup_has_own_input_copies_collapsed_config_and_preserves_consumer(
         assert!(!owner.read(cx).settings_open);
     });
     popup.update(|window, cx| {
-        let view = window.root::<SettingsPopup>().unwrap().unwrap();
+        let view = window
+            .root::<gpui::base::Root>()
+            .unwrap()
+            .unwrap()
+            .read(cx)
+            .view()
+            .clone()
+            .downcast::<SettingsPopup>()
+            .unwrap();
         assert_ne!(
             view.read(cx).config.entity_id(),
             owner.read(cx).mcp_config_input.entity_id()
@@ -122,7 +133,7 @@ fn rich_popup_has_own_input_copies_collapsed_config_and_preserves_consumer(
     assert!(popup.debug_bounds("feedback-mcp-config-code").is_none());
     popup.update(|_, cx| {
         let text = cx.read_from_clipboard().unwrap().text().unwrap();
-        assert_eq!(text, owner.read(cx).mcp_config_input.read(cx).text());
+        assert_eq!(text, owner.read(cx).mcp_config_input.read(cx).value());
         cx.write_to_clipboard(gpui::ClipboardItem::new_string("before shortcut".into()));
     });
     popup.simulate_keystrokes("ctrl-cmd-c");
@@ -130,7 +141,7 @@ fn rich_popup_has_own_input_copies_collapsed_config_and_preserves_consumer(
     popup.update(|_, cx| {
         assert_eq!(
             cx.read_from_clipboard().unwrap().text().unwrap(),
-            owner.read(cx).mcp_config_input.read(cx).text(),
+            owner.read(cx).mcp_config_input.read(cx).value(),
         );
     });
     let disclosure = popup.debug_bounds("feedback-mcp-config-toggle").unwrap();

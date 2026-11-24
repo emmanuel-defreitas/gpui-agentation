@@ -1,5 +1,5 @@
 //! Agentation-owned source navigation, independent of UI component libraries.
-//! Extracted from the locally patched Ely inspector; provenance is in ORIGIN.md.
+//! Extracted from the locally patched previous presentation inspector; provenance is in ORIGIN.md.
 use gpui::{App, ClipboardItem, Entity};
 use std::{
     ffi::OsString,
@@ -49,18 +49,6 @@ fn relative_path(path: &Path, cwd: &Path) -> PathBuf {
 impl SourceLocation {
     pub fn new(file: &str, line: u32, column: u32, cwd: &Path) -> Self {
         let mut path = PathBuf::from(file);
-        let mut mapped = false;
-        if let Some(output) = option_env!("OUT_DIR") {
-            if let Ok(suffix) = path.strip_prefix(Path::new(output).join("ely")) {
-                let editable = Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("vendor/ely/src")
-                    .join(suffix);
-                if editable.is_file() {
-                    path = editable;
-                    mapped = true;
-                }
-            }
-        }
         if path.is_relative() {
             // Rust's own relative spans belong to the compilation package, not
             // whichever directory the executable was launched from. Fall back
@@ -78,7 +66,7 @@ impl SourceLocation {
             path,
             relative,
             line: line.max(1),
-            column: if mapped { 1 } else { column.max(1) },
+            column: column.max(1),
         }
     }
 

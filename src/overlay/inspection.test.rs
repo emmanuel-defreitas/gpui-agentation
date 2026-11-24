@@ -60,9 +60,12 @@ fn setup(
     Entity<AnnotationOverlay>,
     &mut VisualTestContext,
 ) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     cx.update(|cx| {
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
         cx.set_global(toolbar_window::SimulateHiddenMargin);
     });
     let (host, cx) = cx.add_window_view(|window, cx| {
@@ -121,9 +124,7 @@ fn inspection_annotation_autosaves_properties_reopens_and_accepts_optional_comme
     let mut palette = tools(&overlay, cx);
     assert!(palette.debug_bounds("inspector-header").is_some());
     assert!(palette.debug_bounds("feedback-toolbar-close").is_none());
-    let track = palette
-        .debug_bounds("inspector-slider-ely-inspector-opacity")
-        .unwrap();
+    let track = palette.debug_bounds("inspector-slider-Opacity").unwrap();
     palette.simulate_click(
         point(track.left() + track.size.width * 0.5, track.center().y),
         Modifiers::none(),
@@ -238,9 +239,7 @@ fn fresh_inspection_pick_preserves_saved_overrides(cx: &mut TestAppContext) {
     let (_, overlay, cx) = setup(cx);
     let original = cx.update(|_, cx| overlay.read(cx).session.annotations[0].clone());
     let mut palette = tools(&overlay, cx);
-    let track = palette
-        .debug_bounds("inspector-slider-ely-inspector-opacity")
-        .unwrap();
+    let track = palette.debug_bounds("inspector-slider-Opacity").unwrap();
     palette.simulate_click(
         point(track.left() + track.size.width * 0.5, track.center().y),
         Modifiers::none(),
@@ -442,5 +441,87 @@ fn inspection_annotation_comments_use_companion_and_drawing_switch_is_independen
             assert!(!this.inspecting);
             assert!(!window.is_inspector_picking(cx));
         })
+    });
+}
+
+#[gpui::test]
+fn unregister_closes_a_picked_inspector_while_host_remains_open(cx: &mut TestAppContext) {
+    let (_, overlay, cx) = setup(cx);
+    let (host_id, selected) = cx.update(|window, cx| {
+        assert!(!window.is_inspector_picking(cx));
+        (
+            window.window_handle().window_id(),
+            crate::inspection::inspector_selection(window, cx)
+                .unwrap()
+                .id,
+        )
+    });
+    cx.update(|_, cx| inspector::unregister(host_id, overlay.entity_id(), cx));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        assert!(
+            window
+                .with_inspector_state::<gpui::DivInspectorState, _>(Some(&selected), cx, |_, _| ())
+                .is_none(),
+            "picked inspector closes after unregister"
+        );
+    });
+}
+
+#[gpui::test]
+fn an_existing_host_inspector_is_adopted_and_can_reopen_after_host_close(cx: &mut TestAppContext) {
+    let (_, overlay, cx) = setup(cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.stop_inspection(window, cx)));
+    draw(cx);
+    cx.update(|window, cx| window.toggle_inspector(cx));
+    draw(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| this.choose_tool(None, window, cx));
+        assert!(
+            inspector::is_external(window, cx),
+            "adopt existing inspection into companion"
+        );
+        assert!(inspector::sidebar_open(window, cx));
+        // The host may close the native inspector independently of Agentation.
+        window.toggle_inspector(cx);
+        inspector::start(window, true, cx);
+        assert!(
+            window.is_inspector_picking(cx),
+            "reopen despite retained inspector entity"
+        );
+        assert!(inspector::is_external(window, cx));
+    });
+}
+
+#[gpui::test]
+fn fullscreen_and_hidden_toolbar_keep_the_selected_inspector_visible(cx: &mut TestAppContext) {
+    let (_, overlay, cx) = setup(cx);
+    let selected = cx.update(|window, cx| {
+        crate::inspection::inspector_selection(window, cx)
+            .unwrap()
+            .id
+    });
+    cx.update(|window, cx| {
+        window.toggle_fullscreen();
+        overlay.update(cx, |this, cx| this.sync_toolbar_window(window, cx));
+        assert!(!inspector::is_external(window, cx));
+        assert!(
+            window
+                .with_inspector_state::<gpui::DivInspectorState, _>(Some(&selected), cx, |_, _| ())
+                .is_some()
+        );
+        window.toggle_fullscreen();
+        overlay.update(cx, |this, cx| this.sync_toolbar_window(window, cx));
+        assert!(inspector::is_external(window, cx));
+        overlay.update(cx, |this, cx| {
+            this.toolbar_hidden = true;
+            this.sync_toolbar_window(window, cx);
+        });
+        assert!(!inspector::is_external(window, cx));
+        assert!(
+            window
+                .with_inspector_state::<gpui::DivInspectorState, _>(Some(&selected), cx, |_, _| ())
+                .is_some()
+        );
     });
 }

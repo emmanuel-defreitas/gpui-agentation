@@ -271,6 +271,33 @@ impl AnnotationOverlay {
             cx.stop_propagation();
             return;
         }
+        if event.keystroke.key == "escape" {
+            if self.settings_open || self.review_open {
+                self.dismiss_sheet(window, cx);
+                cx.stop_propagation();
+                return;
+            }
+            if self.active || self.draft.is_some() {
+                self.stroke.clear();
+                let dragging = self.pin_drag.take().is_some()
+                    | self.textbox_drag.take().is_some()
+                    | self.textbox_resize.take().is_some();
+                if dragging {
+                    if let Ok(session) = self.store.session(&self.session.id) {
+                        self.session = session;
+                    }
+                    window.focus(&self.focus, cx);
+                    cx.notify();
+                } else if self.draft.take().is_some() {
+                    self.return_focus(window, cx);
+                    cx.notify();
+                } else {
+                    self.close(window, cx);
+                }
+                cx.stop_propagation();
+                return;
+            }
+        }
         if !self.active || self.settings_open || self.review_open {
             return;
         }

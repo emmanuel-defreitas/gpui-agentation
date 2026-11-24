@@ -82,7 +82,17 @@ fn kit_slider_and_reset_update_live_host_configuration(cx: &mut TestAppContext) 
     visual.run_until_parked();
     visual.update(|window, cx| {
         assert!(service::active_inspector_configuration(window, cx).is_none());
-        assert!(companion::is_open(window, cx));
+        assert!(
+            window
+                .with_inspector_state::<DivInspectorState, _>(
+                    service::inspector_selection(window, cx)
+                        .map(|s| s.id)
+                        .as_ref(),
+                    cx,
+                    |_, _| ()
+                )
+                .is_some()
+        );
         assert_eq!(
             service::inspector_selection(window, cx).unwrap().properties["Width"],
             "160 px"
@@ -185,9 +195,29 @@ fn visible_toast_and_underlying_host_remain_pickable(cx: &mut TestAppContext) {
                 "picked {:?}",
                 picked.id
             );
-            assert!(companion::is_open(window, cx));
+            assert!(
+                window
+                    .with_inspector_state::<DivInspectorState, _>(
+                        service::inspector_selection(window, cx)
+                            .map(|s| s.id)
+                            .as_ref(),
+                        cx,
+                        |_, _| ()
+                    )
+                    .is_some()
+            );
             window.toggle_inspector(cx);
-            assert!(!companion::is_open(window, cx));
+            assert!(
+                !window
+                    .with_inspector_state::<DivInspectorState, _>(
+                        service::inspector_selection(window, cx)
+                            .map(|s| s.id)
+                            .as_ref(),
+                        cx,
+                        |_, _| ()
+                    )
+                    .is_some()
+            );
             window.toggle_inspector(cx);
         });
         visual.run_until_parked();

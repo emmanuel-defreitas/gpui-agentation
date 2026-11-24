@@ -1,4 +1,4 @@
-//! Inspector editing and snapshots, extracted from the patched Ely inspector.
+//! Inspector editing and snapshots, extracted from the patched previous presentation inspector.
 //! MIT provenance: ORIGIN.md. No UI component types cross this boundary.
 use super::{InspectorStyleChange, InspectorStyleConfiguration, State, inspector_target};
 use gpui::{

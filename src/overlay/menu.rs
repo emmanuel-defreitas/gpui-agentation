@@ -1,10 +1,9 @@
 //! Right-click context menus. One model (`Row`) drives both the native macOS
-//! `NSMenu` popup and the in-app Ely fallback used off macOS and in tests, so
+//! `NSMenu` popup and the in-app Kit fallback used off macOS and in tests, so
 //! every menu — pin, shape, element, and tools — looks like a macOS menu.
 use super::commands::AnnotationCommand;
 use super::surface::viewport;
 use super::*;
-use crate::ely::menus::{ContextMenu, Menu, MenuItem};
 use gpui::{AnyElement, Pixels, Point, SharedString};
 
 /// A per-note menu command. Pins offer edit/copy; shapes offer color/duplicate.
@@ -475,66 +474,115 @@ impl AnnotationOverlay {
     }
 
     /// The right-click menu rendered in-app off macOS and in tests.
-    pub(super) fn context_layer(&self, cx: &mut Context<Self>) -> AnyElement {
-        let Some(kind) = self.context.clone() else {
+    pub(super) fn context_layer(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let (Some(kind), Some((generation, at))) = (self.context.clone(), self.context_request)
+        else {
+            self.context_menu = None;
+            self._context_dismiss = None;
             return div().into_any_element();
         };
-        let rows = self.rows_for(&kind, cx);
-        let owner = cx.entity().downgrade();
-        let make = move |tag: i64| {
-            let kind = kind.clone();
-            let owner = owner.clone();
-            move |window: &mut Window, cx: &mut App| {
-                let _ = owner.update(cx, |this, cx| this.apply_context(&kind, tag, window, cx));
-            }
-        };
-        ContextMenu::new("context-menu", ely_menu(&rows, make))
-            .manual(self.context_request)
-            .into_any_element()
+        if self
+            .context_menu
+            .as_ref()
+            .is_none_or(|(id, _)| *id != generation)
+        {
+            let rows = self.rows_for(&kind, cx);
+            let owner = cx.entity().downgrade();
+            let menu = gpui::component::menu::PopupMenu::build(window, cx, |menu, window, cx| {
+                kit_menu(menu, &rows, owner, kind, window, cx)
+            });
+            self._context_dismiss = Some(cx.subscribe_in(
+                &menu,
+                window,
+                |this, _, _: &gpui::DismissEvent, window, cx| {
+                    this.context = None;
+                    this.context_request = None;
+                    window.focus(&this.focus, cx);
+                    cx.notify();
+                },
+            ));
+            window.focus(&menu.focus_handle(cx), cx);
+            self.context_menu = Some((generation, menu));
+        }
+        gpui::deferred(
+            gpui::anchored()
+                .position(at)
+                .child(self.context_menu.as_ref().unwrap().1.clone()),
+        )
+        .into_any_element()
     }
 }
 
-fn ely_menu<H>(rows: &[Row], make: impl Fn(i64) -> H) -> Menu
-where
-    H: Fn(&mut Window, &mut App) + 'static,
-{
-    let mut menu = Menu::new();
+fn kit_menu(
+    mut menu: gpui::component::menu::PopupMenu,
+    rows: &[Row],
+    owner: gpui::WeakEntity<AnnotationOverlay>,
+    kind: ContextKind,
+    window: &mut Window,
+    cx: &mut Context<gpui::component::menu::PopupMenu>,
+) -> gpui::component::menu::PopupMenu {
+    use gpui::component::menu::{PopupMenu, PopupMenuItem};
     for row in rows {
-        menu = match row {
-            Row::Separator => menu.separator(),
+        match row {
+            Row::Separator => menu = menu.separator(),
             Row::Item {
                 label,
                 tag,
-                keys,
                 checked,
                 enabled,
+                keys,
             } => {
-                let row = if *checked {
-                    MenuItem::check(label.clone(), true)
-                } else {
-                    MenuItem::new(label.clone())
-                };
-                let row = if let Some(keys) = keys {
-                    row.keys(keys.clone())
-                } else {
-                    row
-                };
-                menu.item(row.disabled(!*enabled).on_click(make(*tag)))
+                let owner = owner.clone();
+                let kind = kind.clone();
+                let tag = *tag;
+                menu = menu.item(
+                    PopupMenuItem::new(label.clone())
+                        .when_some(
+                            keys.as_ref().and_then(|keys| {
+                                [
+                                    "devtools", "inspect", "undo", "redo", "delete", "box",
+                                    "arrow", "pen", "comment", "text",
+                                ]
+                                .into_iter()
+                                .find(|command| {
+                                    super::commands::shortcut(command) == Some(keys.as_ref())
+                                })
+                            }),
+                            |item, command| {
+                                item.action(Box::new(AnnotationCommand {
+                                    name: command.into(),
+                                }))
+                            },
+                        )
+                        .checked(*checked)
+                        .disabled(!enabled)
+                        .on_click(move |_, window, cx| {
+                            let _ = owner
+                                .update(cx, |this, cx| this.apply_context(&kind, tag, window, cx));
+                        }),
+                );
             }
             Row::Submenu { label, items } => {
-                let mut submenu = Menu::new();
-                for sub in items {
-                    let row = MenuItem::radio(sub.label.clone(), sub.checked);
-                    let row = if let Some(keys) = &sub.keys {
-                        row.keys(keys.clone())
-                    } else {
-                        row
-                    };
-                    submenu = submenu.item(row.disabled(!sub.enabled).on_click(make(sub.tag)));
-                }
-                menu.item(MenuItem::submenu(label.clone(), submenu))
+                let children = items
+                    .iter()
+                    .map(|item| Row::Item {
+                        label: item.label.clone(),
+                        tag: item.tag,
+                        keys: item.keys.clone(),
+                        checked: item.checked,
+                        enabled: item.enabled,
+                    })
+                    .collect::<Vec<_>>();
+                let submenu = PopupMenu::build(window, cx, |menu, window, cx| {
+                    kit_menu(menu, &children, owner.clone(), kind.clone(), window, cx)
+                });
+                menu = menu.item(PopupMenuItem::submenu(label.clone(), submenu));
             }
-        };
+        }
     }
     menu
 }
@@ -604,7 +652,7 @@ mod row_tests {
 
     #[gpui::test]
     fn context_menu_rows_follow_the_debug_menu_by_target(cx: &mut TestAppContext) {
-        cx.update(crate::ely::init_for_tests);
+        cx.update(crate::integration::init_for_tests);
         let (overlay, cx) = cx.add_window_view(|window, cx| {
             let store = Store::memory();
             let session = store.ensure_session("Rows", "gpui://rows").unwrap();

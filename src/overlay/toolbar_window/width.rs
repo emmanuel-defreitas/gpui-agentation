@@ -1,6 +1,5 @@
 //! Interruptible native-window width transitions for the companion's panels.
 use super::*;
-use crate::ely::motion;
 
 pub(in crate::overlay) struct WidthAnimation {
     pub current: Pixels,
@@ -49,8 +48,10 @@ impl ToolbarWindow {
         if let Some(panel) = &self.state.panel {
             self.width.panel = Some(panel.clone());
         }
-        let animate =
-            visible && self.width.visible && !cx.theme().reduced_motion && !cx.reduce_motion();
+        let animate = visible
+            && self.width.visible
+            && !cx.reduce_motion()
+            && !cx.theme().motion.duration_normal.is_zero();
         self.width.visible = visible;
         if !animate {
             self.width.task = None;
@@ -86,7 +87,7 @@ impl ToolbarWindow {
             let _ = hidden_frame.send(());
         });
         let host = self.host;
-        let child = window.window_handle().downcast::<ToolbarWindow>().unwrap();
+        let child = ToolWindow::<ToolbarWindow>::from_window(window);
         self.width.task = Some(cx.spawn(async move |_, cx| {
             if hidden_ready.await.is_err() {
                 return;
@@ -101,12 +102,13 @@ impl ToolbarWindow {
                     .update(cx, |_, host, cx| {
                         child
                             .update(cx, |this, window, cx| {
-                                let (width, running) =
-                                    if cx.theme().reduced_motion || cx.reduce_motion() {
-                                        (target, false)
-                                    } else {
-                                        sample(from, target, elapsed)
-                                    };
+                                let (width, running) = if cx.reduce_motion()
+                                    || cx.theme().motion.duration_normal.is_zero()
+                                {
+                                    (target, false)
+                                } else {
+                                    sample(from, target, elapsed)
+                                };
                                 this.width.current = width;
                                 if !running {
                                     this.width.panel = this.state.panel.clone();
@@ -177,7 +179,9 @@ impl ToolbarWindow {
                                 if this.width.generation != generation {
                                     return false;
                                 }
-                                let t = if cx.theme().reduced_motion || cx.reduce_motion() {
+                                let t = if cx.reduce_motion()
+                                    || cx.theme().motion.duration_normal.is_zero()
+                                {
                                     1.
                                 } else {
                                     (elapsed.as_secs_f32() / motion::FAST.as_secs_f32()).min(1.)

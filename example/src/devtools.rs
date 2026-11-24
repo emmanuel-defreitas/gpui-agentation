@@ -14,14 +14,27 @@ impl Devtools {
         }
         #[cfg(not(debug_assertions))]
         {
-            app
+            app.with_assets(gpui::assets::Assets)
         }
     }
 
     pub(super) fn init(cx: &mut App) {
         #[cfg(debug_assertions)]
         {
-            gpui_agentation::init(cx).expect("initialize Agentation");
+            if std::env::args().any(|arg| arg == "--host-initialized") {
+                gpui::init(cx);
+                gpui::component::Theme::change(gpui::component::ThemeMode::Dark, None, cx);
+                gpui_agentation::init_with_options(
+                    gpui_agentation::InitOptions {
+                        host: gpui_agentation::HostMode::KitInitialized,
+                        inspector: gpui_agentation::RendererPolicy::Replace,
+                    },
+                    cx,
+                )
+                .expect("initialize Agentation in Kit host");
+            } else {
+                gpui_agentation::init(cx).expect("initialize Agentation");
+            }
             cx.set_menus(vec![
                 gpui::Menu::new("Agentation consumer")
                     .items([gpui::MenuItem::action("Quit", crate::Quit)]),
@@ -29,7 +42,7 @@ impl Devtools {
             ]);
         }
         #[cfg(not(debug_assertions))]
-        let _ = cx;
+        gpui::init(cx);
     }
 
     pub(super) fn mount(window: &mut Window, cx: &mut App) -> Self {
@@ -37,8 +50,12 @@ impl Devtools {
         {
             // Choose a distinct port and store for each app. Running from any
             // working directory uses the same workspace-local ignored store.
-            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../target/consumer/feedback.json");
+            let path = std::env::var_os("GPUI_AGENTATION_STORE")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| {
+                    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join("../target/consumer/feedback.json")
+                });
             let feedback = gpui_agentation::Agentation::mount(
                 "Consumer example",
                 "gpui://consumer/overview",
@@ -151,7 +168,7 @@ mod tests {
 
     #[gpui::test]
     fn plain_host_controls_work_without_any_ui_initialization(cx: &mut TestAppContext) {
-        // Same host fallback used in release. No Agentation/Ely setup at all.
+        // Same host fallback used in release. No Agentation/GPUI Kit setup at all.
         let (host, cx) = cx.add_window_view(|window, cx| crate::Consumer {
             devtools: Devtools { feedback: None },
             page: crate::Page::Overview,

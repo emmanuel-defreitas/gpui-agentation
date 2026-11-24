@@ -1,5 +1,5 @@
 //! GPUI Kit presentation of Agentation-owned inspection services.
-//! Compiled by the cutover consumer until the atomic native dependency switch.
+//! Used by the production toolbar and in-host inspector.
 use crate::inspection::{self as service, inspector_target, style::*};
 use gpui::base::FocusTrapElement;
 use gpui::component::{
@@ -16,7 +16,6 @@ use gpui::{
 };
 
 mod box_model;
-pub mod companion;
 mod source;
 
 /// A host renderer cannot be inspected/restored through GPUI's public API.
@@ -31,20 +30,9 @@ pub enum RendererPolicy {
 
 /// Install the presentation once, only when the host explicitly grants ownership.
 pub fn install(policy: RendererPolicy, cx: &mut App) {
-    if policy == RendererPolicy::Preserve {
-        return;
+    if policy == RendererPolicy::Replace {
+        crate::overlay::inspector::install(cx);
     }
-    if !service::claim_renderer(service::RendererOwner::Agentation, cx) {
-        return;
-    }
-    companion::initialize(cx);
-    register_element(cx);
-    cx.set_inspector_renderer(Box::new(|inspector, window, cx| {
-        if let Some(hidden) = companion::render(inspector, window, cx) {
-            return hidden;
-        }
-        panel(inspector, window, cx, None, |_, _, _| None)
-    }));
 }
 
 const FIELDS: [(&str, EditableStyle, f32, f32, f32); 6] = [
@@ -151,7 +139,7 @@ impl Controls {
     }
 }
 
-fn register_element(cx: &mut App) {
+pub(crate) fn register_element(cx: &mut App) {
     if !service::register_element_renderer(cx) {
         return;
     }
@@ -318,16 +306,6 @@ pub fn panel(
     if picking {
         window.request_animation_frame();
     }
-    let target = inspector_target(window, cx);
-    let header = header.or_else(|| {
-        (target != window.window_handle()).then(|| {
-            Button::new("inspector-stop")
-                .label("Stop")
-                .small()
-                .on_click(move |_, _, cx| companion::stop(target.window_id(), cx))
-                .into_any_element()
-        })
-    });
     let source = inspector
         .active_element_id()
         .map(|id| source::breadcrumb(id.path.source_location, window, cx));
@@ -345,6 +323,7 @@ pub fn panel(
     };
     div()
         .id("agentation-inspector")
+        .debug_selector(move || format!("inspector-picking-{picking}"))
         .size_full()
         .flex()
         .flex_col()
@@ -354,6 +333,7 @@ pub fn panel(
         .text_sm()
         .child(
             div()
+                .debug_selector(|| "inspector-header".into())
                 .flex()
                 .flex_col()
                 .gap_1()

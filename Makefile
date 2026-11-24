@@ -3,7 +3,6 @@
 
 CARGO ?= cargo
 
-KIT_PROBE_MANIFEST := migration/kit-probe/Cargo.toml
 
 
 .PHONY: help fetch example example-app bridge bridge-check bridge-install-check build check fmt fmt-check lint test test-doc doc release-check version-check version-test release-prepare release-version-check platform-check snapshot-check site-check verify ci
@@ -76,8 +75,8 @@ release-version-check: ## Verify metadata and the version required for promotion
 platform-check: ## Require macOS for the supported native library and local checks
 	@test "$$(uname -s)" = Darwin || { echo 'Native development and verification require macOS.' >&2; exit 1; }
 
-snapshot-check: ## Verify the pinned bundled Ely snapshot
-	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-ely-snapshot.py
+snapshot-check: ## Verify the pinned Kit source bundle
+	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-kit-bundle.py
 
 site-check: ## Install website dependencies and validate the website locally
 	cd site && npm ci && npm run check
@@ -95,20 +94,3 @@ verify: ## Run the complete local macOS verification suite before merging or pro
 	$(MAKE) bridge-install-check
 
 ci: verify ## Alias for local verification; GitHub Actions only promotes and releases
-
-.PHONY: kit-probe-check
-kit-probe-check: ## Verify the isolated Kit migration compatibility probe
-	$(CARGO) fmt --manifest-path $(KIT_PROBE_MANIFEST) -- --check
-	$(CARGO) clippy --manifest-path $(KIT_PROBE_MANIFEST) --all-targets --locked -- -D warnings
-	$(CARGO) test --manifest-path $(KIT_PROBE_MANIFEST) --locked
-	PYTHONDONTWRITEBYTECODE=1 python3 migration/kit-probe/check-graph.py
-
-.PHONY: kit-inspector-check kit-inspector-example
-kit-inspector-check: ## Verify the isolated Kit inspector presentation and patched graph
-	$(CARGO) fmt --manifest-path migration/kit-inspector/Cargo.toml -- --check
-	python3 migration/kit-inspector/cargo.py clippy --all-targets --locked -- -D warnings
-	python3 migration/kit-inspector/cargo.py test --locked
-	python3 migration/kit-inspector/check-graph.py
-
-kit-inspector-example: ## Run the Kit-only inspector consumer with an external panel
-	python3 migration/kit-inspector/cargo.py run --locked

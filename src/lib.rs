@@ -16,29 +16,16 @@ mod overlay;
 mod store;
 mod target;
 
-/// Bundled components based on the pinned Ely revision and recorded local patches.
-///
-/// These types and globals belong to Agentation, independently of any host Ely crate.
-#[allow(missing_docs, deprecated, unexpected_cfgs, clippy::all)]
-pub mod ely {
-    include!(concat!(env!("OUT_DIR"), "/ely/lib.rs"));
-}
-
-#[cfg(test)]
-#[path = "tests/ely.rs"]
-mod ely_tests;
-
-/// Runs the unit tests of the build-script helper that bundles Ely.
-#[cfg(test)]
-#[path = "../build/ely.rs"]
-#[allow(dead_code)]
-mod ely_build;
+mod ui;
 
 pub use drawing::AnnotationShape;
+/// The exact GPUI Kit dependency shared by Agentation and its host.
+pub use gpui as kit;
 pub use http::Server;
+pub use inspection::kit::RendererPolicy;
 #[cfg(feature = "test-support")]
 pub use integration::init_for_tests;
-pub use integration::{Agentation, Assets, init};
+pub use integration::{Agentation, Assets, HostMode, InitOptions, init, init_with_options};
 pub use model::{
     Annotation, AnnotationInput, AnnotationPatch, AnnotationStatus, Event, GpuiConfiguration,
     GpuiStyleChange, InspectionSnapshot, Rect, Session, ThreadMessage,
@@ -50,6 +37,6 @@ pub use target::{begin_frame, target};
 
 #[cfg(test)]
 fn init_inspection_tests(cx: &mut gpui::App) {
-    ely::init_for_tests(cx);
-    ely::tooling::install_inspector(cx);
+    gpui::init(cx);
+    overlay::inspector::install(cx);
 }

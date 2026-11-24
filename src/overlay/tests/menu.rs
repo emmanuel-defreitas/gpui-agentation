@@ -48,7 +48,7 @@ fn native_menu_groups_use_real_disabled_states_and_checkmarks() {
 #[gpui::test]
 fn menu_tracks_window_state_and_preserves_host_menus(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        crate::ely::init_for_tests(cx);
+        crate::integration::init_for_tests(cx);
         cx.set_menus([
             Menu::new("Host").items([MenuItem::action("Host Action", gpui::NoAction)]),
             debug_menu(),

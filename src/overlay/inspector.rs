@@ -8,10 +8,6 @@
 //! renders the same `Inspector` entity as its own panel, so the toolbar grows
 //! while inspecting and the consumer does not move.
 use super::*;
-use crate::ely::{
-    buttons::{Button, ButtonVariant},
-    tooling,
-};
 use crate::inspection;
 use gpui::{EntityId, Global, Inspector, InspectorElementId, Pixels, WeakEntity, WindowId, rems};
 use std::collections::HashMap;
@@ -32,21 +28,20 @@ struct Sidebar {
 }
 
 /// The sidebar GPUI reserves at the window's right while its inspector is on.
-/// Mirrors `Window::draw_roots` in `gpui-pre 0.3.8`.
+/// Mirrors `Window::draw_roots` in `gpui-pre 0.3.14`.
 pub(super) fn sidebar_width(window: &Window) -> Pixels {
     rems(30.0).to_pixels(window.rem_size())
 }
 
 pub(crate) fn install(cx: &mut App) {
-    if cx.has_global::<Sidebars>() {
-        return;
+    if !cx.has_global::<Sidebars>() {
+        cx.set_global(Sidebars::default());
     }
-    crate::ely::tooling::inspector::register_inspector_element(cx);
     let owns_renderer = inspection::claim_renderer(inspection::RendererOwner::Agentation, cx);
-    cx.set_global(Sidebars::default());
     if !owns_renderer {
         return;
     }
+    inspection::kit::register_element(cx);
     cx.set_inspector_renderer(Box::new(|inspector, window, cx| {
         let target = inspection::inspector_target(window, cx);
         let native_owner = cx.entity().downgrade();
@@ -107,13 +102,14 @@ pub(crate) fn install(cx: &mut App) {
             .into_any_element();
         }
         let toggle_owner = owner.clone();
-        // Ely already titles the panel "Inspector"; the header is only Stop.
+        // Kit already titles the panel "Inspector"; the header is only Stop.
         let header = div()
             .debug_selector(|| "feedback-inspect-stop".into())
             .child(
-                Button::new("feedback-inspect-stop", "Stop")
-                    .variant(ButtonVariant::Primary)
-                    .size(ControlSize::Sm)
+                Button::new("feedback-inspect-stop")
+                    .label("Stop")
+                    .primary()
+                    .small()
                     .on_click(move |_, _, cx| {
                         let owner = toggle_owner.clone();
                         cx.defer(move |cx| {
@@ -127,7 +123,7 @@ pub(crate) fn install(cx: &mut App) {
                     }),
             )
             .into_any_element();
-        tooling::inspector_panel_with_header(
+        inspection::kit::panel(
             inspector,
             window,
             cx,
@@ -160,7 +156,9 @@ pub(super) fn is_external(window: &Window, cx: &App) -> bool {
 }
 
 pub(super) fn register(owner: WeakEntity<AnnotationOverlay>, window: &Window, cx: &mut App) {
-    install(cx);
+    if !cx.has_global::<Sidebars>() {
+        cx.set_global(Sidebars::default());
+    }
     cx.global_mut::<Sidebars>()
         .0
         .entry(window.window_handle().window_id())
@@ -188,6 +186,11 @@ pub(super) fn unregister(id: WindowId, owner: EntityId, cx: &mut App) {
         return;
     }
     let sidebar = sidebars.remove(&id).unwrap();
+    let active_id = sidebar
+        .inspector
+        .as_ref()
+        .and_then(|inspector| inspector.upgrade())
+        .and_then(|inspector| inspector.read(cx).active_element_id().cloned());
     inspection::forget_window(id, cx);
     if let Some(margin) = sidebar.margin {
         margin.release(cx);
@@ -200,7 +203,19 @@ pub(super) fn unregister(id: WindowId, owner: EntityId, cx: &mut App) {
                 return;
             }
             if let Some(host) = cx.windows().into_iter().find(|host| host.window_id() == id) {
-                let _ = host.update(cx, |_, window, cx| window.toggle_inspector(cx));
+                let _ = host.update(cx, |_, window, cx| {
+                    if window.is_inspector_picking(cx)
+                        || window
+                            .with_inspector_state::<gpui::DivInspectorState, _>(
+                                active_id.as_ref(),
+                                cx,
+                                |_, _| (),
+                            )
+                            .is_some()
+                    {
+                        window.toggle_inspector(cx);
+                    }
+                });
             }
         });
     }
@@ -267,22 +282,29 @@ fn present(window: &Window, presented: bool, cx: &mut App) {
 /// window filling its display, where the companion does not show) the panel
 /// stays inside the host.
 pub(super) fn start(window: &mut Window, companion: bool, cx: &mut App) {
+    if !inspection::owns_renderer(cx) {
+        return;
+    }
     present(window, true, cx);
-    if let Some(inspector) = native_inspector(window, cx) {
-        inspector.update(cx, |inspector, cx| {
-            inspector.start_picking();
-            cx.notify();
-        });
+    let was_open = actual_open(window, cx);
+    if was_open {
+        if let Some(inspector) = native_inspector(window, cx) {
+            inspector.update(cx, |inspector, cx| {
+                inspector.start_picking();
+                cx.notify();
+            });
+        }
         window.refresh();
-        return;
+        if sidebar_mut(window, cx).is_some_and(|sidebar| sidebar.opened) {
+            return;
+        }
+    } else {
+        if let Some(margin) = sidebar_mut(window, cx).and_then(|sidebar| sidebar.margin.take()) {
+            margin.release(cx);
+        }
+        inspection::clear_inspector_selection(window, cx);
+        window.toggle_inspector(cx);
     }
-    // Already toggled on and awaiting its first draw: toggling again would
-    // close it and widen the window twice.
-    if sidebar_mut(window, cx).is_some_and(|sidebar| sidebar.opened) {
-        return;
-    }
-    inspection::clear_inspector_selection(window, cx);
-    window.toggle_inspector(cx);
     let margin = (companion && !toolbar_window::fills_display(window))
         .then(|| toolbar_window::HostMargin::reserve(window, sidebar_width(window), cx));
     if let Some(sidebar) = sidebar_mut(window, cx) {
@@ -292,13 +314,50 @@ pub(super) fn start(window: &mut Window, companion: bool, cx: &mut App) {
     }
 }
 
+/// Keep the inspector visible when its companion becomes unavailable.
+pub(super) fn reconcile_placement(window: &Window, companion: bool, cx: &mut App) {
+    if !inspection::owns_renderer(cx) {
+        return;
+    }
+    let external = companion && !toolbar_window::fills_display(window);
+    let Some(sidebar) = sidebar_mut(window, cx) else {
+        return;
+    };
+    if !sidebar.opened {
+        return;
+    }
+    if !external {
+        if let Some(margin) = sidebar.margin.take() {
+            margin.release(cx);
+        }
+    } else if sidebar.margin.is_none() {
+        let margin = toolbar_window::HostMargin::reserve(window, sidebar_width(window), cx);
+        if let Some(sidebar) = sidebar_mut(window, cx) {
+            sidebar.margin = Some(margin);
+        }
+    }
+}
+
+fn actual_open(window: &mut Window, cx: &mut App) -> bool {
+    if window.is_inspector_picking(cx) {
+        return true;
+    }
+    let id = native_inspector(window, cx).and_then(|i| i.read(cx).active_element_id().cloned());
+    window
+        .with_inspector_state::<gpui::DivInspectorState, _>(id.as_ref(), cx, |_, _| ())
+        .is_some()
+}
+
 pub(super) fn close(window: &mut Window, cx: &mut App) {
-    let (opened, margin) = sidebar_mut(window, cx).map_or((false, None), |sidebar| {
+    if !inspection::owns_renderer(cx) {
+        return;
+    }
+    let (_opened, margin) = sidebar_mut(window, cx).map_or((false, None), |sidebar| {
         sidebar.presented = false;
         sidebar.announced = None;
         (std::mem::take(&mut sidebar.opened), sidebar.margin.take())
     });
-    if opened || native_inspector(window, cx).is_some() || window.is_inspector_picking(cx) {
+    if actual_open(window, cx) {
         window.toggle_inspector(cx);
     }
     if let Some(margin) = margin {
@@ -345,6 +404,11 @@ impl AnnotationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !inspection::owns_renderer(cx) {
+            self.notice = "Inspection is managed by the host application.".into();
+            cx.notify();
+            return;
+        }
         let Ok(note) = self.store.annotation(id) else {
             return;
         };

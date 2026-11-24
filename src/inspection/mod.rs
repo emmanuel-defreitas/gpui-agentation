@@ -1,5 +1,6 @@
 //! Agentation-owned inspection state, routing and lifecycle.
 //! Presentation adapters consume GPUI primitives and owned data only.
+pub(crate) mod kit;
 pub(crate) mod source;
 pub(crate) mod style;
 
@@ -10,7 +11,7 @@ use gpui::{
 use std::collections::{BTreeMap, HashMap};
 use style::{ColorTarget, Side, StyleEditState, describe_color, layers, length_pixels, number};
 
-// Compatibility exports: the public Ely tooling names remain available until #120.
+// Compatibility exports: the public previous presentation tooling names remain available until #120.
 pub use crate::{
     GpuiConfiguration as InspectorStyleConfiguration, GpuiStyleChange as InspectorStyleChange,
 };
@@ -75,26 +76,14 @@ pub(crate) fn claim_renderer(owner: RendererOwner, cx: &mut App) -> bool {
     }
 }
 
+pub(crate) fn owns_renderer(cx: &App) -> bool {
+    cx.try_global::<State>()
+        .is_some_and(|state| state.renderer == Some(RendererOwner::Agentation))
+}
+
 pub(crate) fn register_element_renderer(cx: &mut App) -> bool {
     initialize(cx);
     !std::mem::replace(&mut cx.global_mut::<State>().element_registered, true)
-}
-
-/// Route a detached inspector's controls to its host window.
-pub fn set_inspector_target(view: WindowId, target: Option<AnyWindowHandle>, cx: &mut App) {
-    initialize(cx);
-    let targets = &mut cx.global_mut::<State>().targets;
-    if let Some(target) = target {
-        targets.insert(
-            view,
-            Route {
-                target,
-                owner: None,
-            },
-        );
-    } else {
-        targets.remove(&view);
-    }
 }
 
 pub(crate) fn register_target(

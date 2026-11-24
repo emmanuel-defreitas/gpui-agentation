@@ -32,7 +32,7 @@
 </div>
 
 > **Version: 0.6.0.** Debug builds only — release builds expose no annotation API.
-> macOS is the only supported native platform. Pinned to `gpui-pre =0.3.8`.
+> macOS is the only supported native platform. Pinned to `gpui-pre =0.3.14`.
 
 <!-- TABLE OF CONTENTS -->
 <details>
@@ -111,14 +111,15 @@ initialize once at launch, then mount and wrap your screen.
 - **macOS** with Xcode command-line tools
 - **Rust** via [rustup](https://rustup.rs/) (the repository pins the toolchain)
 
-Ely is bundled, so there is nothing else to install.
+GPUI Kit is bundled. This unreleased migration uses Git/path dependencies;
+follow the [setup guide](site/docs/consumer-setup.md) to share the exact Kit source with your host.
 
 ### Installation
 
 1. Add the crate with the native feature set:
 
    ```sh
-   cargo add gpui-agentation --no-default-features --features native
+   cargo add gpui-agentation --path ../gpui-agentation --no-default-features --features native
    ```
 
 2. The crate does not exist in release builds, so every call sits behind
@@ -126,7 +127,7 @@ Ely is bundled, so there is nothing else to install.
 
    ```rust
    // Launch: serve Agentation's assets, then initialize.
-   let app = gpui_platform::application();
+   let app = gpui::application();
    #[cfg(debug_assertions)]
    let app = app.with_assets(gpui_agentation::Assets);
    app.run(|cx| {
@@ -149,8 +150,7 @@ Ely is bundled, so there is nothing else to install.
    ```
 
 3. Add `target(id, label, child)` only where you want finer inspection. Ordinary
-   controls need no wrappers. Agentation handles its Ely setup, assets, and focus
-   internally.
+   controls need no wrappers. Use a Kit Root for the host window. Agentation owns its tool windows; an existing Kit host uses explicit initialization and inspector ownership options described in the setup guide.
 
 Want your agent to do this for you? Use the [setup skill](#agent-skills).
 
@@ -362,13 +362,10 @@ Project Link: [https://github.com/emmanuel-defreitas/gpui-agentation](https://gi
   implementation. Original MIT attribution is preserved in [ORIGIN.md](ORIGIN.md).
 - Built on [GPUI](https://www.gpui.rs/) and the
   [Model Context Protocol](https://modelcontextprotocol.io/).
-- [Ely GPUI Components](https://elygpui.com/) by the Ely contributors
-  ([source](https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components)).
-  The toolbar, theme, and assets are Ely, bundled at a pinned
-  revision under the MIT license.
+- [GPUI Kit](https://github.com/longbridge/gpui-kit), pinned at 0.11.0 with a local inspector-picking fix. See [distribution](site/docs/kit-distribution.md).
 - [gpui-devtools](https://github.com/joris-gallot/gpui-devtools) by
   [Joris Gallot](https://github.com/joris-gallot). The inspector's style editing
-  and export approach comes from it (MIT), rewritten on Ely components.
+  and export approach comes from it (MIT), rewritten on GPUI Kit components.
 - [Best-README-Template](https://github.com/othneildrew/Best-README-Template)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

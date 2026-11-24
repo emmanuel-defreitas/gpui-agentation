@@ -1,8 +1,9 @@
 # External inspector
 
 Inspect opens its panel in the toolbar window, not inside your app, on stock
-`gpui-pre =0.3.8`. No patched GPUI, build script, or Cargo override is
-involved; `cargo run` and the published crate behave the same way.
+`gpui-pre =0.3.14`. The bundled Kit patch makes transparent overlay containers
+transparent to picking. GPUI itself is unmodified. The unreleased cutover is
+supported through Git/path dependencies; see [distribution](kit-distribution.md).
 
 ## How it works
 

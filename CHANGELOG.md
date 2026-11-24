@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Replace the previous UI library and generated namespace with GPUI Kit 0.11.0
+  on GPUI 0.3.14, including toolbar, settings, comments and inspector controls.
+- Share Kit initialization, assets and Root with native hosts through explicit
+  ownership options. Keep the annotation model and loopback API independent.
+- Remove the previous source/assets bundle, build script and migration harnesses.
+- Support Git/path consumers with a coherent patched Kit family. Disable registry
+  publication until the required picking fix is available in a published Kit release.
+
+## Unreleased
+
 - Drawn annotations (pin, box, arrow, pen, textbox) now scroll with the
   registered host element under them instead of staying fixed to the window.
   A note anchors where it is first laid out; before an edit, drag, resize or
@@ -24,7 +34,7 @@
 - Reopening a saved inspection restarts picking; picking the same element
   continues the note. Inspection pins keep the position where the element was
   inspected rather than following later layout changes.
-- Edit the surface (background) and text color of a picked element with Ely
+- Edit the surface (background) and text color of a picked element with UI
   color pickers. Changes publish as `Background` and `Text color` overrides with
   `.bg(rgb(..))` / `.text_color(rgb(..))` lines; snapshots gain both properties.
 - Rework textboxes after Freeform and Sketch: drag the Textbox tool to frame a
@@ -53,17 +63,17 @@
   windows, and an MCP toggle prefixed by the official MCP mark.
 - Expose a host-composable Debug menu and route its commands through Agentation.
 - Refine the banner with an icon/switch pill, extra padding, icon-only controls
-  and Ely keycaps in tooltips; reduce floating comment width by one third and use
+  and UI keycaps in tooltips; reduce floating comment width by one third and use
   smaller placeholders, 50% text opacity, quieter headers and subtle shadows.
 - Mention notes through an @ dropdown with mouse/keyboard selection and animated
   pin previews; typing a note number previews its pin directly.
 - Add annotation Edit, Delete and Color context menus using AppKit on macOS and
-  themed Ely menus elsewhere, with undo support.
+  themed UI menus elsewhere, with undo support.
 - Add the Text shape variant and optional persisted Annotation.color field;
   downstream exhaustive matches and struct literals must account for these.
 - Group native Debug commands with history availability, mode-dependent New/Color,
   toolbar visibility and checked positions, Comments, Settings and GitHub links.
-- Keep the GPUI/Ely pins, loopback API guards, and debug-only crate boundary.
+- Keep the dependency pins, loopback API guards, and debug-only crate boundary.
 
 ## 0.5.1
 
@@ -71,7 +81,7 @@
   crates.io's 10 MiB upload limit. The media remains in the repository and site.
 - Check the actual package archive size before compiling publication candidates,
   with regression coverage for missing archives and the size boundary.
-- Preserve all native sources, bundled Ely assets, licenses, examples, and skills.
+- Preserve all native sources, bundled UI assets, licenses, examples, and skills.
 
 ## 0.5.0
 
@@ -89,7 +99,7 @@
   using its disclosure wrapper in the Settings UI.
 - Align contribution examples with lifecycle branches and conventional commits;
   keep the advisory dev version preview separate from production versioning.
-- Preserve the native public API, loopback guards, GPUI pin, bundled Ely snapshot,
+- Preserve the native public API, loopback guards, GPUI pin, bundled UI snapshot,
   and the empty release-build annotation API.
 
 ## 0.4.2
@@ -102,7 +112,7 @@
 - Move MCP status before Comments in the development banner and hide annotation
   count badges when there are no notes.
 - Update setup instructions to match the new Settings labels. Keep the public
-  API, loopback protections, GPUI pin, and bundled Ely snapshot unchanged.
+  API, loopback protections, GPUI pin, and bundled UI snapshot unchanged.
 
 ## 0.4.1
 
@@ -124,5 +134,5 @@
 - Add an opt-in Settings Hot reload switch backed by a rebuild/restart supervisor.
 - Simplify the README and reuse the website logo.
 - Add website Markdown copying and Claude Code, Codex and Cursor handoff links.
-- Keep GPUI 0.3.8 and the bundled Ely snapshot unchanged. MCP-only installs
+- Keep GPUI 0.3.8 and the bundled UI snapshot unchanged. MCP-only installs
   continue to skip native UI compilation.

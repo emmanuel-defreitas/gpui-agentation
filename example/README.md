@@ -5,7 +5,7 @@
 # Consumer app
 
 A complete plain GPUI app using Agentation through its public API, with no
-direct Ely dependency, initialization, or focus scope. It belongs to
+direct GPUI Kit dependency, initialization, or focus scope. It belongs to
 the root Cargo workspace and runs in both debug and release builds.
 
 ```sh
@@ -35,3 +35,13 @@ annotation mode on, right-clicking the canvas opens the tools menu.
 
 Follow the [consumer setup guide](../site/docs/consumer-setup.md) to adapt the
 example, choose dependencies and storage, and connect an agent.
+
+## Native migration smoke
+
+Run `cargo run -p agentation-consumer --features native-smoke -- --smoke` on
+macOS for automated checks against the production toolbar and inspector.
+Add `--host-initialized --from-in-host` to exercise host-owned Kit initialization
+and adoption of an already-open inspector. The smoke run exits after verifying
+Root/content identity, visible size, Inspect/Stop, Settings and tool-window cleanup.
+Set `GPUI_AGENTATION_STORE` to use an isolated JSON store. Normal example launches
+keep running. These assertions are separate from manual visual and IME review.

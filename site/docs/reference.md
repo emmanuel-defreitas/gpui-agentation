@@ -16,29 +16,21 @@ Start with the [consumer setup guide](consumer-setup.md) and
 keeps debug gates in one module and registers one screen at a time, so ordinary
 controls need no annotation wrappers. A reusable
 [setup skill](../../skills/gpui-agentation-setup/SKILL.md) helps agents apply the same
-pattern to another GPUI app. The consumer can use plain GPUI: Agentation owns
-its internal Ely setup and focus handling.
+pattern to another GPUI app. Use the same GPUI Kit source in the host and Agentation. This unreleased
+migration supports Git/path consumers; see [consumer setup](consumer-setup.md)
+for the manifest, Kit Root, and debug/release adapter.
 
-This library is a native GPUI integration using Ely internally. It is not a Codex plugin bundle.
-Its loopback server exposes both REST/SSE and a Streamable HTTP MCP endpoint.
+GPUI Kit 0.11.0 and `gpui-pre =0.3.14` share one set of types and globals.
+`init` initializes Kit for a standalone host. An existing Kit application uses
+`init_with_options` with `HostMode::KitInitialized` and an explicit inspector
+policy. `RendererPolicy::Preserve` leaves inspection to the host; Agentation's
+Inspect action is unavailable in that mode. Annotation drawing remains available.
+When Agentation initializes Kit, its theme follows system appearance. An already
+initialized host retains control of its theme. Development uses Rust 1.98.1.
 
-```toml
-[dependencies]
-gpui-agentation = { version = "0.6.0", default-features = false, features = ["native"] }
-gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
-```
-
-Enable `native` and disable default features for a host app:
-
-```toml
-gpui-agentation = { version = "0.6.0", default-features = false, features = ["native"] }
-```
-
-Keep `gpui-pre =0.3.8`. Source and assets for Ely revision
-`da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721` are bundled. Agentation’s internal
-Ely globals are independent of host Ely globals. When Agentation creates its own theme, its toolbar, inspector and
-Settings follow the operating system's light or dark setting and switch live.
-A host that already initialized Ely keeps control of the theme. Development uses Rust 1.98.1.
+The native integration exposes REST/SSE and Streamable HTTP MCP over loopback.
+It is not a Codex plugin bundle. The [distribution contract](kit-distribution.md)
+explains the bundled picking fix and the crates.io publication prerequisite.
 
 ## Toolbar and editor
 
@@ -63,7 +55,7 @@ kept past the window's edge (see [external inspector](external-inspector.md)).
 The Inspect button reads **Stop inspecting** while inspecting. The toolbar stays outside the
 consumer's inspectable element tree in every mode. **Box**, **Arrow**, and **Pen**
 draw over the live consumer; the selecting click does not activate its controls.
-Inspect uses the normal arrow cursor; drawing tools use a crosshair with an Ely glyph.
+Inspect uses the normal arrow cursor; drawing tools use a crosshair with a GPUI Kit glyph.
 
 **Close** hides the toolbar without stopping inspection. **Debug → Show Toolbar**
 or its shortcut restores it. **Esc** closes the editor or inspector while leaving
@@ -94,14 +86,11 @@ open with the draft and error message. **Escape** cancels without saving.
 **Delete** deletes a saved note or discards an unfinished note. Saved unresolved annotations remain
 visible after leaving annotation mode; resolved notes remain in **Notes**.
 
-The pinned Ely ImageAnnotator combines an opaque image canvas with its toolbar
-and has no transparent-surface API. Live drawing therefore adapts its public
-`media::Mark` and `media::Tool` model to a transparent GPUI surface; it does not
-mount the standalone image widget or capture a screenshot. Tool buttons, color
-swatches, inputs, and the floating ActionBar are Ely components.
+Drawing uses Agentation-owned shape and tool types on a transparent GPUI
+surface. Buttons, color controls and text inputs use GPUI Kit components.
 
 **Notes** counts and lists every annotation across the app, including resolved
-and dismissed notes. Its Ely SelectableList shows each note's type icon and
+and dismissed notes. Its GPUI Kit list rows show each note's type icon and
 route, with trailing edit and delete icon buttons. Select a row with the mouse
 or arrow keys; double-click or Enter opens its editor. The edit button opens
 the saved text, including notes from other routes, and preserves its original
@@ -146,13 +135,12 @@ have their own icon.
 The icon is removed when the last mounted consumer is gone. A surviving consumer
 is selected by activation order. Native Debug → Settings and the existing shortcut
 remain alternate entry points. Where native tray support is unavailable, Settings
-continues to open an Ely **Sheet** inside the consumer, with a Settings icon and
-**Overline** section labels and typography components for field labels and
+continues to open a GPUI Kit **Sheet** inside the consumer, with a Settings icon and
+section labels for field labels and
 descriptions. Its content scrolls independently; Escape, the close button, or
 a click on the scrim dismisses it and restores focus.
 **MCP** shows read-only, pretty-printed JSON
-in an Ely JsonInput that wraps and grows to fit its content without internal
-scrolling using the actual listening endpoint. The collapsible header has a
+in a read-only GPUI Kit Editor using the actual listening endpoint. The collapsible header has a
 left-aligned MCP label, a trailing **Copy** action, and a disclosure chevron.
 Copy remains visible when collapsed and does not expand the section. It copies
 that exact JSON and shows green **copied!** feedback for two seconds; another
@@ -183,20 +171,18 @@ let feedback = gpui_agentation::Agentation::mount(
 ```
 
 Render through `feedback.root("screen-id", "Screen name", content, window, cx)`.
-It owns root focus traversal/restoration, starts frame registration, inserts the
-banner, and registers the screen. No Ely initializer, theme import, or focus
-scope is required. Use `Assets::before(HostAssets)` to retain existing app assets;
-repeated `init` calls preserve an already-initialized Ely theme.
-
-Place this root below native/custom chrome, outside content padding and
-scrolling. Do not add another Ely root focus scope around it. Call
-`feedback.set_route(url, window, cx)` on navigation to switch feedback buckets.
+It starts frame registration, inserts the overlay, and registers the screen.
+Keep one GPUI Kit Root around the host view for Kit's focus and overlay services.
+Use `Assets::before(HostAssets)` to retain host assets with host paths taking
+precedence. Existing Kit hosts use the explicit initialization mode above.
+Place the annotation root below native/custom chrome, outside content padding
+and scrolling. Call `feedback.set_route(url, window, cx)` on navigation.
 The screen target records the Rust caller's file/line/column. Optional finer
 targets use `gpui_agentation::target("stable-id", "Readable name", component)`
 at meaningful view boundaries, with unique stable IDs within the window.
 
 The existing `AnnotationOverlay`, `begin_frame`, and `target` APIs remain
-available for hosts that already manage their own Ely initialization and root
+available for hosts that already manage their own GPUI Kit initialization and root
 focus scope. Those are lower-level integrations; don't mount both root paths.
 
 **Inspect** uses GPUI's native picker. Selecting an element creates or updates a
@@ -204,8 +190,8 @@ numbered inspection annotation (IA) with its source and a snapshot of the
 displayed properties, including unchanged values. Its numbered pin sits where
 the element was when inspected; reopening the IA from the Comments list
 re-enters picking, and picking the same element continues it. Width, height, padding,
-margin, border, and opacity can be previewed with Ely sliders, and the surface
-(background) and text colors with Ely color pickers; all save into the same
+margin, border, and opacity can be previewed with GPUI Kit sliders, and the surface
+(background) and text colors with GPUI Kit color pickers; all save into the same
 annotation as they change, with `.bg(rgb(..))` and `.text_color(rgb(..))` lines
 in the suggested Rust. Clicking its numbered pin opens the optional
 comment editor. Both the comment and property snapshot appear in the notes,
@@ -221,8 +207,8 @@ Comments opens in the companion and shares the inspector panel's expand and
 collapse animation. Undo, Redo, Save, and Delete remain available through
 shortcuts and the native Debug menu; there is no power icon.
 
-The source path uses Ely's breadcrumb component and is relative to the process
-working directory. Generated bundled Ely paths resolve back to `vendor/ely/src`.
+The source path uses GPUI Kit's breadcrumb component and is relative to the process
+working directory. Kit source paths resolve directly to the bundled source under `vendor/`.
 Only the final segment is actionable: it opens the file at its source line using
 `$EDITOR`, defaulting to Zed. Zed, VS Code, Cursor, and VSCodium CLI conventions
 are supported, including quoted command paths and arguments. Commands run
@@ -304,7 +290,7 @@ metadata are outside this API.
 
 For clients that launch stdio servers, use the optional
 [GPUI Agentation MCP bridge](package-layout.md#mcp-client). `make bridge`
-builds its release executable with no GPUI/Ely dependency. It forwards to the
+builds its release executable with no GPUI/GPUI Kit dependency. It forwards to the
 same running app endpoint; direct HTTP configuration below remains supported.
 
 Run a debug host app first. The default port is **4748**; the
@@ -383,7 +369,7 @@ the native UI; API updates appear on the overlay's existing refresh cycle.
 
 Run `make help` to list the development commands. The pinned Rust toolchain
 includes Rustfmt and Clippy; native builds require macOS with
-Xcode command-line tools and Git access to Ely.
+Xcode command-line tools.
 
 ```sh
 make fetch           # Fetch locked dependencies
@@ -396,7 +382,7 @@ make verify          # Run the complete local macOS verification suite
 make site-check      # Validate website changes locally
 ```
 
-`make verify` (`make ci` is an alias) checks the platform and pinned Ely snapshot,
+`make verify` (`make ci` is an alias) checks the platform and pinned GPUI Kit snapshot,
 then runs formatting, Clippy, workspace tests, version checks and release-script
 tests, release compilation, MCP-only checks, and a default-install smoke test.
 It stops on failure. Clippy and
@@ -428,7 +414,7 @@ See [ORIGIN.md](../../ORIGIN.md) for the source snapshot and license attribution
 
 ## Annotation controls
 
-Annotation mode uses an icon-and-switch pill. Tool shortcuts appear as Ely
+Annotation mode uses an icon-and-switch pill. Tool shortcuts appear as GPUI Kit
 keycaps inside tooltips while mode is on; buttons retain accessible names. The
 companion uses a vertical layout. Floating
 comment panels are 16 rem wide, with smaller headers, icon-only actions and a
@@ -468,7 +454,7 @@ Escape closes the list while keeping the comment open. Motion respects the
 theme's reduced-motion setting.
 
 Right-click any annotation for Edit…, Delete and a checked Color submenu.
-macOS uses an AppKit system context menu; bundled upstream code also contains a themed Ely
+macOS uses an AppKit system context menu; Agentation uses a themed GPUI Kit fallback
 context menu. Color and Delete actions participate in local undo/redo. The
 optional persisted `Annotation.color` field retains element-note colors without
 changing their annotation type; older records fall back to their shape color.

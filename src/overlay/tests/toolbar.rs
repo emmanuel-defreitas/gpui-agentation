@@ -23,7 +23,7 @@ fn click_toolbar(
 }
 
 fn overlay(cx: &mut TestAppContext) -> (Entity<AnnotationOverlay>, &mut VisualTestContext) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let store = Store::memory();
     let session = store
         .ensure_session("UI integration test", "gpui://test")
@@ -80,7 +80,12 @@ fn inspect_command_should_open_the_single_sidebar(cx: &mut TestAppContext) {
 #[gpui::test]
 fn comments_should_render_in_the_companion_with_a_filling_list(cx: &mut TestAppContext) {
     let (overlay, cx) = overlay(cx);
-    cx.update(|_, cx| crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true));
+    cx.update(|_, cx| {
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        })
+    });
     cx.update(|_, cx| {
         overlay.update(cx, |this, _| {
             this.store
@@ -188,7 +193,7 @@ fn closing_settings_should_resume_inspection_with_the_stop_control(cx: &mut Test
 }
 
 fn setup(cx: &mut TestAppContext) -> (Entity<AnnotationOverlay>, &mut VisualTestContext) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let (overlay, cx) = cx.add_window_view(|window, cx| {
         let store = Store::memory();
         let session = store.ensure_session("Companion", "gpui://toolbar").unwrap();
@@ -218,7 +223,10 @@ fn dock_tracks_host_edges_and_height_with_fourteen_pixel_gap() {
 fn expanded_comments_panel_is_380_wide(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
     cx.update(|_, cx| {
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
     });
     cx.update(|window, cx| {
         overlay.update(cx, |this, cx| {
@@ -243,7 +251,10 @@ fn expanded_comments_panel_is_380_wide(cx: &mut TestAppContext) {
 fn companion_is_permanent_vertical_and_changes_mode_in_the_host(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
     cx.update(|_, cx| {
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
     });
     assert!(cx.debug_bounds("feedback-floating-toolbar").is_none());
     assert!(cx.debug_bounds("feedback-banner").is_none());
@@ -480,7 +491,7 @@ impl Render for HostWithMatchingToolbarIds {
 
 #[gpui::test]
 fn host_elements_with_matching_toolbar_ids_should_remain_inspectable(cx: &mut TestAppContext) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let (host, cx) = cx.add_window_view(|window, cx| {
         let store = Store::memory();
         let session = store.ensure_session("Host IDs", "gpui://ids").unwrap();
@@ -558,7 +569,10 @@ fn grown_toolbar(
 fn with_the_sidebar_out_of_sight_the_companion_renders_the_inspector(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
     cx.update(|_, cx| {
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
         cx.set_global(super::super::toolbar_window::SimulateHiddenMargin);
     });
     let narrow = {
@@ -605,4 +619,34 @@ fn with_the_sidebar_out_of_sight_the_companion_renders_the_inspector(cx: &mut Te
     let mut tools = toolbar(&overlay, cx);
     assert!(tools.debug_bounds("companion-panel").is_none());
     tools.update(|window, _| assert_eq!(window.bounds().size.width, narrow));
+}
+
+#[gpui::test]
+fn preserved_host_inspector_stays_owned_by_the_host(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        gpui::init(cx);
+        crate::inspection::kit::install(crate::RendererPolicy::Preserve, cx);
+        cx.set_inspector_renderer(Box::new(|_, _, _| {
+            div().child("Host inspector").into_any_element()
+        }));
+    });
+    let store = Store::memory();
+    let session = store.ensure_session("Host", "gpui://host").unwrap();
+    let (overlay, visual) =
+        cx.add_window_view(|window, cx| AnnotationOverlay::new(store, session, 0, window, cx));
+    visual.update(|window, cx| window.toggle_inspector(cx));
+    draw(visual);
+    visual.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.choose_tool(None, window, cx);
+            assert!(!this.inspecting);
+            assert!(!inspector::is_external(window, cx));
+            assert!(window.is_inspector_picking(cx));
+            this.stop_inspection(window, cx);
+            assert!(
+                window.is_inspector_picking(cx),
+                "Agentation cannot close the preserved host inspector"
+            );
+        });
+    });
 }

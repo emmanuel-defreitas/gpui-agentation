@@ -14,12 +14,14 @@ name = "Agentation Example"
 identifier = "com.agentation.consumer-example"
 icon = ["assets/icon.png"]
 
+[features]
+native-smoke = ["gpui/test-support"]
+
 [dependencies]
 gpui_agentation = { package = "gpui-agentation", path = "..", default-features = false, features = ["native"] }
-gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
-gpui-platform = { package = "gpui-pre-platform", version = "=0.3.8" }
+gpui = { package = "gpui-kit", version = "=0.11.0", path = "../vendor/gpui-kit", default-features = false, features = ["component", "assets", "inspector"] }
 
 [dev-dependencies]
-gpui = { package = "gpui-pre", version = "=0.3.8", features = ["test-support"] }
+gpui = { package = "gpui-kit", version = "=0.11.0", path = "../vendor/gpui-kit", features = ["test-support"] }
 gpui_agentation = { package = "gpui-agentation", path = "..", default-features = false, features = ["test-support"] }
 tempfile = "3.27.0"

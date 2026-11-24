@@ -4,7 +4,7 @@ use std::{cell::Cell, rc::Rc};
 use super::*;
 use gpui::{
     AnyElement, AvailableSpace, Bounds, Element, ElementId, GlobalElementId, InspectorElementId,
-    IntoElement, LayoutId, Pixels, Style, point, px, size,
+    LayoutId, Pixels, Style, point, px, size,
 };
 
 /// Where a target sat when its pin was first laid out; `None` until then.
@@ -16,13 +16,6 @@ pub(super) struct FollowMark {
     /// Saved pin center in window pixels.
     pub center: (f32, f32),
     pub marker: AnyElement,
-}
-
-impl IntoElement for FollowMark {
-    type Element = Self;
-    fn into_element(self) -> Self {
-        self
-    }
 }
 
 impl Element for FollowMark {

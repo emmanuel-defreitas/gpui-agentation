@@ -159,7 +159,7 @@ impl AnnotationOverlay {
         match name {
             "save" => {
                 self.draft.is_some()
-                    && (!self.input.read(cx).text().trim().is_empty()
+                    && (!self.input.read(cx).value().trim().is_empty()
                         || self.inspected_configuration.is_some())
             }
             "delete" => {

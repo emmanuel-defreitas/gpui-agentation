@@ -1,6 +1,5 @@
 //! Comments use the same companion surface and width transition as inspection.
 use super::*;
-use crate::ely::buttons::{ButtonVariant, IconButton};
 
 pub(super) struct Comments {
     owner: WeakEntity<AnnotationOverlay>,
@@ -45,7 +44,7 @@ impl Render for Comments {
             .min_h_0()
             .border_l_1()
             .border_color(cx.theme().colors.border)
-            .text_color(cx.theme().colors.fg)
+            .text_color(cx.theme().colors.foreground)
             .child(
                 div()
                     .debug_selector(|| "feedback-sheet-header".into())
@@ -59,10 +58,16 @@ impl Render for Comments {
                     .border_color(cx.theme().colors.border)
                     // Heading carries its own themed color; a bare div would
                     // fall back to GPUI's black in this separate window.
-                    .child(crate::ely::typography::Heading::new(5, "Comments"))
                     .child(
-                        IconButton::new("companion-comments-close", IconName::X)
-                            .variant(ButtonVariant::Ghost)
+                        div()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().foreground)
+                            .child("Comments"),
+                    )
+                    .child(
+                        Button::new("companion-comments-close")
+                            .icon(IconName::X)
+                            .ghost()
                             .tooltip("Close comments")
                             .on_click(move |_, window, cx| close(window, cx)),
                     ),

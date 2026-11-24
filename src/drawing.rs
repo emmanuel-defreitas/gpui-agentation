@@ -20,7 +20,7 @@ impl AnnotationTool {
             Self::Arrow => "Arrow",
             Self::Pen => "Pen",
             Self::Pin => "Pin",
-            // Textboxes historically used Ely's Select tool label.
+            // Textboxes historically used previous presentation's Select tool label.
             Self::Text => "Select",
         }
     }

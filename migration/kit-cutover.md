@@ -1,29 +1,48 @@
-# Atomic Kit cutover
+# Production Kit cutover
 
-Active root branch: `migration/kit-cutover`, based on dev
-`2a370c4a420ccfb8c1e68dea5467baf18161026c`.
+Draft root PR #131 targets dev. The production library, consumer example,
+inspector, toolbar, comment/textbox editors and Settings now use Kit 0.11.0
+on GPUI 0.3.14. The old source bundle and generated component namespace are
+removed. The standalone prototype workspaces have been retired in favor of
+production tests.
 
-At the user's request to continue presentation work, this isolated branch locally
-integrates the reviewed preparation heads #129 (`7e2e598`) and #130 (`0233eca`).
-They remain separate PRs targeting dev; this is not a claim that they have merged.
-Refresh/reconcile their final merge commits before the root is ready for review.
+The branch began at dev `2a370c4a420ccfb8c1e68dea5467baf18161026c` and includes
+preparation heads #129 (`7e2e598`) and #130 (`0233eca`). Reconcile their final
+merge state before merging this root. No release or promotion is implied.
 
-The first presentation implementation is the Kit inspector consumer described in
-`kit-inspector/README.md`. It uses one selected snapshot, Kit 0.11.0 / GPUI 0.3.14,
-and compiles real owned services. The full production native library deliberately
-still builds on its existing Ely/GPUI graph. A Kit-only harness is the transitional
-compile gate allowed by #116; full-native Kit compilation remains pending the
-other presentation ports. No process or consumer mixes the two GPUI families.
+Run `make verify` and `make site-check`. `snapshot-check` verifies the complete
+Kit inventory, one active GPUI backend, and the portable MCP dependency graph.
+Native interaction acceptance must be recorded separately from compilation.
 
-The root PR stays draft until #117–#121 are satisfied. Pending gates:
+The source bundle fixes inspector picking through transparent Kit overlays.
+Git/path consumers share its direct dependency edges; registry publication
+requires a published Kit family with that fix. See
+[distribution](../site/docs/kit-distribution.md) and
+[consumer migration](../site/docs/consumer-setup.md).
 
-- Land/reconcile #114 and #115 preparation PRs; complete bootstrap integration.
-- Port toolbar/comments/text editors and Settings/menu bar; wire this inspector
-  into the production overlay and annotation synchronization.
-- Resolve delivery of the version-checked Kit picking patch; remove Ely and its
-  generator, dependencies, public exports and assets with consumer migration docs.
-- Run full production/site/package checks and native acceptance on the final head.
-- Merge the reviewed atomic root into dev and retire temporary branches afterward.
+## Verified production acceptance
 
-Owner: @emmanuel-defreitas, with implementation in this chat. No release or
-promotion is part of this branch's current work.
+- `make verify`: formatting, strict Clippy, 141 library tests, two consumer
+  tests, eight bridge tests, 29 release-script tests, release compilation,
+  seven portable MCP tests and the default bridge install smoke all pass.
+- `make site-check`: Astro build, documentation export and link checks pass.
+- Native production consumer smoke exercises standalone and already-initialized
+  Kit hosts, an already-open inspector, retained Root/content and visible host
+  size, Inspect/Stop, Settings, and host-close cleanup.
+- A separate consumer outside the workspace passes debug and release checks
+  using direct paths, with no consumer-level patch table.
+- Headless regressions cover editing/reset, annotation persistence and input,
+  asset composition, preserved host renderer, picked-inspector cleanup, and
+  fullscreen/hidden-toolbar placement without losing selection.
+
+Native smoke commands (macOS):
+
+```sh
+cargo run -p agentation-consumer --features native-smoke -- --smoke
+cargo run -p agentation-consumer --features native-smoke -- --host-initialized --from-in-host --smoke
+```
+
+Use `GPUI_AGENTATION_STORE` to select an isolated annotation store for these runs.
+Automated native checks do not constitute manual visual/IME acceptance. The
+OS-level appearance switch was skipped at the user's request. Publishing is
+explicitly disabled until the registry Kit dependency carries the picking fix.

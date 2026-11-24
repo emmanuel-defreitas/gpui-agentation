@@ -119,12 +119,6 @@ struct Registered {
     child: AnyElement,
     target: Target,
 }
-impl IntoElement for Registered {
-    type Element = Self;
-    fn into_element(self) -> Self {
-        self
-    }
-}
 impl Element for Registered {
     type RequestLayoutState = ();
     type PrepaintState = ();

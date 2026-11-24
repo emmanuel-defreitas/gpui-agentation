@@ -1,9 +1,5 @@
-//! Figma Examples/Menubar (49:1621), implemented with Ely controls.
+//! Figma Examples/Menubar (49:1621), implemented with previous presentation controls.
 use super::*;
-use crate::ely::{
-    forms::{JsonInput, Switch},
-    layout::Collapsible,
-};
 use gpui::{AnyElement, FontWeight, IntoElement, RenderOnce, SharedString};
 
 fn card(height: f32, cx: &App) -> gpui::Div {
@@ -14,7 +10,7 @@ fn card(height: f32, cx: &App) -> gpui::Div {
         .flex()
         .flex_col()
         .rounded(px(12.))
-        .bg(cx.theme().colors.fg.opacity(0.1))
+        .bg(cx.theme().colors.foreground.opacity(0.1))
 }
 
 fn detail(text: impl Into<SharedString>, cx: &App) -> gpui::Div {
@@ -23,7 +19,7 @@ fn detail(text: impl Into<SharedString>, cx: &App) -> gpui::Div {
         .line_height(px(13.))
         .font_weight(FontWeight::NORMAL)
         .line_clamp(2)
-        .text_color(cx.theme().colors.fg.opacity(0.55))
+        .text_color(cx.theme().colors.foreground.opacity(0.55))
         .child(text.into())
 }
 
@@ -52,19 +48,16 @@ fn symbol(path: &'static str, width: f32, height: f32, cx: &App) -> AnyElement {
             .w(px(width))
             .h(px(height))
             .flex_none()
-            .text_color(cx.theme().colors.fg.opacity(0.85))
+            .text_color(cx.theme().colors.foreground.opacity(0.85))
             .into_any_element()
     }
 }
 
 fn menu_switch(id: &'static str, on: bool) -> Switch {
-    Switch::new(id, on)
-        .geometry(size(px(36.), px(20.)), size(px(17.), px(17.)))
-        .tint(gpui::rgb(0x0a38ff).into())
-        .thumb_color(gpui::rgb(0xffffff).into())
+    Switch::new(id).checked(on).color(gpui::rgb(0x0a38ff))
 }
 
-/// Ely owns focus, disabled state, and click handling; only presentation changes.
+/// previous presentation owns focus, disabled state, and click handling; only presentation changes.
 #[derive(IntoElement)]
 struct MenuButton {
     button: Button,
@@ -77,18 +70,10 @@ struct MenuButton {
 }
 
 impl RenderOnce for MenuButton {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let fg = cx.theme().colors.fg;
-        let mut element = self
-            .button
-            .hover_color(fg.opacity(0.10))
-            .render(window, cx)
-            .into_any_element();
-        let root = element
-            .downcast_mut::<gpui::Stateful<gpui::Div>>()
-            .expect("pinned Ely Button root");
-        let root = std::mem::replace(root, div().id("unused-menu-button"));
-        root.aria_label(self.label)
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let fg = cx.theme().foreground;
+        self.button
+            .accessibility_label(self.label)
             .h(px(self.height))
             .flex_none()
             .gap_0()
@@ -99,8 +84,13 @@ impl RenderOnce for MenuButton {
             .font_weight(FontWeight::MEDIUM)
             .text_size(px(13.))
             .line_height(px(16.))
-            .bg(fg.opacity(0.08))
-            .when_some(self.width, |root, width| root.w(px(width)))
+            .custom(
+                ButtonCustomVariant::new(cx)
+                    .color(fg.opacity(0.08))
+                    .foreground(fg)
+                    .hover(fg.opacity(0.1)),
+            )
+            .when_some(self.width, |button, width| button.w(px(width)))
             .child(self.visual)
     }
 }
@@ -112,7 +102,6 @@ pub(super) fn render(
 ) -> gpui::Div {
     let overlay = owner.read(cx);
     let mcp_owner = owner.downgrade();
-    let mcp_key_owner = mcp_owner.clone();
     let copy = cx.entity().downgrade();
     let disclosure = copy.clone();
     let enabled = if overlay.mcp_starting {
@@ -140,10 +129,11 @@ pub(super) fn render(
         .child(div().flex_1().child(copy_label))
         .child(detail("⌃⌘C", cx).text_size(px(13.)).line_height(px(16.)));
     let copy_button = MenuButton {
-        button: Button::new("feedback-mcp-copy-config", "")
-            .variant(ButtonVariant::Ghost)
-            .size(ControlSize::Sm)
-            .full_width()
+        button: Button::new("feedback-mcp-copy-config")
+            .label("")
+            .ghost()
+            .small()
+            .w_full()
             .disabled(!available)
             .on_click(move |_, _, cx| {
                 let _ = copy.update(cx, |this, cx| this.copy(cx));
@@ -161,7 +151,7 @@ pub(super) fn render(
             .flex().items_center().gap(px(6.))
             .child(div().debug_selector(|| "feedback-mcp-config-toggle".into())
                 .child(MenuButton {
-                    button: Button::new("tray-config-disclosure", "").variant(ButtonVariant::Ghost).size(ControlSize::Sm)
+                    button: Button::new("tray-config-disclosure").label("").ghost().small()
                         .on_click(move |_, _, cx| { let _ = disclosure.update(cx, |this, cx| { this.expanded = !this.expanded; cx.notify(); }); }),
                     label: if popup.expanded { "Hide MCP configuration" } else { "Show MCP configuration" }.into(),
                     visual: div().w_full().h_full().flex().items_center().justify_center()
@@ -172,24 +162,19 @@ pub(super) fn render(
             .child(title("MCP Server"))
             .child(detail(if overlay.mcp_starting { "Starting…" } else if enabled { "6 tools" } else { "Off" }, cx).text_size(px(11.)).line_height(px(16.)))
             .child(div().debug_selector(|| "feedback-mcp-server-toggle".into())
-                .on_key_down(move |event, _, cx| {
-                    if matches!(event.keystroke.key.as_str(), "space" | "enter")
-                        && !event.keystroke.modifiers.modified() && !event.is_held {
-                        let _ = mcp_key_owner.update(cx, |this, cx| this.toggle_mcp(cx)); cx.stop_propagation();
-                    }
-                })
-                .child(menu_switch("tray-mcp", enabled).name("MCP Server").disabled(overlay.mcp_starting)
-                    .on_change(move |enabled, _, cx| { let _ = mcp_owner.update(cx, |this, cx| this.set_mcp_enabled(enabled, cx)); }))))
+                .child(menu_switch("tray-mcp", enabled).accessibility_label("MCP Server").disabled(overlay.mcp_starting)
+                    .on_change(move |enabled, _, cx| { let _ = mcp_owner.update(cx, |this, cx| this.set_mcp_enabled(*enabled, cx)); }))))
         .child(detail("Copy the MCP streamable HTTP configuration below and paste it into your IDE or AI provider.", cx).mx(px(9.)).mt(px(4.)))
         .child(div().debug_selector(|| "feedback-mcp-copy-config-target".into()).mx(px(11.)).mt(px(10.)).child(copy_button))
-        .when(popup.expanded, |card| card.child(Collapsible::new("tray-config", true).child(
+        .when(popup.expanded, |card| card.child(Collapsible::new().open(true).content(
             div().id("tray-config-scroll").debug_selector(|| "feedback-mcp-config-code".into())
-                .mx(px(9.)).mt(px(8.)).max_h(px(160.)).overflow_y_scroll().child(JsonInput::new(&popup.config)))))
+                .mx(px(9.)).mt(px(8.)).max_h(px(160.)).overflow_y_scroll().child(Editor::new(&popup.config).readonly(true).aria_label("MCP config")))))
         .when(!overlay.settings_status.is_empty(), |card| card.child(detail(overlay.settings_status.clone(), cx).mx(px(9.)).mt(px(5.))));
     let crates = MenuButton {
-        button: Button::new("feedback-crates", "")
-            .variant(ButtonVariant::Ghost)
-            .size(ControlSize::Sm)
+        button: Button::new("feedback-crates")
+            .label("")
+            .ghost()
+            .small()
             .on_click(|_, _, cx| cx.open_url("https://crates.io/crates/gpui-agentation")),
         label: "crates.io".into(),
         width: Some(94.),
@@ -205,9 +190,10 @@ pub(super) fn render(
             .into_any_element(),
     };
     let github = MenuButton {
-        button: Button::new("feedback-github", "")
-            .variant(ButtonVariant::Ghost)
-            .size(ControlSize::Sm)
+        button: Button::new("feedback-github")
+            .label("")
+            .ghost()
+            .small()
             .on_click(|_, _, cx| {
                 cx.open_url("https://github.com/emmanuel-defreitas/gpui-agentation")
             }),
@@ -266,7 +252,7 @@ pub(super) fn render(
         .font_family(".SystemUIFont")
         .text_size(px(13.))
         .line_height(px(16.))
-        .text_color(cx.theme().colors.fg.opacity(0.85))
+        .text_color(cx.theme().colors.foreground.opacity(0.85))
         .child(
             div()
                 .flex_none()
@@ -288,7 +274,7 @@ pub(super) fn render(
                 )
                 .child(
                     detail(format!("v{}", env!("CARGO_PKG_VERSION")), cx)
-                        .text_color(cx.theme().colors.fg.opacity(0.18)),
+                        .text_color(cx.theme().colors.foreground.opacity(0.18)),
                 ),
         )
         .child(
