@@ -1,30 +1,25 @@
-# Pinned GPUI Kit source
+# Registry GPUI Kit dependency
 
-Agentation uses GPUI Kit 0.11.0 with the standard GPUI 0.3.14 backend.
-The three local crates in `vendor/` form one dependency family with direct path
-edges. The consumer and Agentation must share this family: registry Kit and
-bundled Kit have different Rust types and globals despite matching versions.
+Agentation uses the published GPUI Kit 0.11.0 family with the standard
+GPUI 0.3.14 backend. Host applications and Agentation must resolve the same
+registry Kit version so component types and globals are shared.
 
-The bundle contains a small inspector-picking fix. Transparent overlay
-containers do not become inspector targets; actual controls, notifications,
-focus, layout and accessibility remain intact. `vendor/KIT-UPSTREAM.json`
-records every upstream and modified hash. `make snapshot-check` verifies the
-inventory and the active native/MCP dependency graphs.
+Only `gpui-agentation` is released by this repository. No Kit fork packages,
+vendor directories, or consumer-level Cargo patches are required.
 
-## Distribution
+## Inspector compatibility
 
-This unreleased migration supports repository and Git/path consumers. Use the
-same checkout's `vendor/gpui-kit` dependency in your host, or the debug-only
-`gpui_agentation::kit` re-export. A host that uses Kit in release needs its own
-direct dependency on that same bundled package because Agentation's entire
-library is absent in release builds.
+Agentation skips the known invisible overlay containers in Kit 0.11.0 using
+GPUI public inspector depth controls. Visible notification and dialog content
+stays rendered and inspectable. Correction runs only during inspection;
+synthetic depth changes never dispatch host scroll or click handlers.
 
-Do not mix this source with registry Kit or a different GPUI backend. No
-consumer-level `[patch.crates-io]` section is required.
+The source-location filter is deliberately tied to the exact pinned Kit
+version. When upgrading Kit, review those call sites and run the host, toast,
+dialog, fast-click, wheel traversal, and style-editing regression tests.
 
-Crates.io publication requires a published Kit release containing the picking
-fix, or a published coherent fork family. Cargo normalizes path dependencies
-to registry versions when packaging; publishing this native candidate before
-that dependency is available would discard the fix. No release is claimed.
+Run `make snapshot-check` to verify the registry dependency identities and
+checksums, one GPUI backend, and the portable MCP graph. Run the complete
+`make verify` suite and a Cargo publication dry run before release.
 
 See [source provenance](../../ORIGIN.md) and [consumer setup](consumer-setup.md).

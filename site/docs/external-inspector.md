@@ -1,9 +1,9 @@
 # External inspector
 
 Inspect opens its panel in the toolbar window, not inside your app, on stock
-`gpui-pre =0.3.14`. The bundled Kit patch makes transparent overlay containers
-transparent to picking. GPUI itself is unmodified. The unreleased cutover is
-supported through Git/path dependencies; see [distribution](kit-distribution.md).
+`gpui-pre =0.3.14`. Agentation skips known invisible Kit containers through GPUI's public
+pick-depth controls. Both Kit and GPUI come unmodified from crates.io;
+see [distribution](kit-distribution.md).
 
 ## How it works
 

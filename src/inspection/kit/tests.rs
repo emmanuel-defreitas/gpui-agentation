@@ -176,6 +176,48 @@ fn visible_toast_and_underlying_host_remain_pickable(cx: &mut TestAppContext) {
         .advance_clock(std::time::Duration::from_secs(1));
     visual.update(|window, _| window.refresh());
     visual.run_until_parked();
+    // Move between the host and visible overlay without restarting picking.
+    // The native depth must reset at each position, not remain underneath a toast.
+    for selector in ["kit-sample", "toast-pick-target", "kit-sample"] {
+        let bounds = visual.debug_bounds(selector).unwrap();
+        visual.simulate_mouse_move(bounds.center(), None, Modifiers::none());
+        visual.run_until_parked();
+        visual.update(|window, cx| {
+            let picked = service::inspector_selection(window, cx).expect(selector);
+            assert!(
+                picked
+                    .id
+                    .path
+                    .global_id
+                    .iter()
+                    .any(|id| id.to_string() == selector),
+                "hovering {selector} picked {:?}",
+                picked.id
+            );
+        });
+    }
+    // Native wheel traversal still works in both directions. Returning past
+    // the top must settle on the visible control, never on an empty scaffold.
+    for selector in ["toast-pick-target", "kit-sample"] {
+        let position = visual.debug_bounds(selector).unwrap().center();
+        visual.simulate_mouse_move(position, None, Modifiers::none());
+        visual.run_until_parked();
+        let first =
+            visual.update(|window, cx| service::inspector_selection(window, cx).unwrap().id);
+        for delta in [36., 36., -36., -3600.] {
+            visual.simulate_event(gpui::ScrollEvent {
+                position,
+                delta: gpui::ScrollDelta::Pixels(point(px(0.), px(delta))),
+                modifiers: Modifiers::none(),
+                touch_phase: gpui::TouchPhase::Moved,
+                source: Default::default(),
+            });
+            visual.run_until_parked();
+        }
+        visual.update(|window, cx| {
+            assert_eq!(service::inspector_selection(window, cx).unwrap().id, first);
+        });
+    }
     for selector in ["toast-pick-target", "kit-sample"] {
         let bounds = visual.debug_bounds(selector).unwrap();
         visual.simulate_mouse_move(bounds.center(), None, Modifiers::none());
@@ -222,4 +264,143 @@ fn visible_toast_and_underlying_host_remain_pickable(cx: &mut TestAppContext) {
         });
         visual.run_until_parked();
     }
+}
+
+#[gpui::test]
+fn fast_pick_does_not_click_host_and_closing_restores_input(cx: &mut TestAppContext) {
+    struct ClickTarget(Rc<Cell<usize>>);
+    impl Render for ClickTarget {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let clicks = self.0.clone();
+            div().size_full().child(
+                div()
+                    .id("fast-pick")
+                    .debug_selector(|| "fast-pick".into())
+                    .w(px(120.))
+                    .h(px(60.))
+                    .on_click(move |_, _, _| clicks.set(clicks.get() + 1)),
+            )
+        }
+    }
+    let clicks = Rc::new(Cell::new(0));
+    cx.update(|cx| {
+        gpui::init(cx);
+        install(RendererPolicy::Replace, cx);
+    });
+    let (_, visual) = cx.add_window_view(|window, cx| {
+        let content = cx.new(|_| ClickTarget(clicks.clone()));
+        gpui::base::Root::new(content, window, cx)
+    });
+    visual.update(|window, cx| window.toggle_inspector(cx));
+    visual.run_until_parked();
+    let position = visual.debug_bounds("fast-pick").unwrap().center();
+    // No frame between movement, press and release: correction must preserve
+    // the completed pick rather than leave the inspector in hover mode.
+    visual.update(|window, cx| {
+        window.dispatch_event(
+            gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                position,
+                modifiers: Modifiers::none(),
+                pressed_button: None,
+            }),
+            cx,
+        );
+        window.dispatch_event(
+            gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                position,
+                click_count: 1,
+                ..Default::default()
+            }),
+            cx,
+        );
+        window.dispatch_event(
+            gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                position,
+                button: gpui::MouseButton::Left,
+                modifiers: Modifiers::none(),
+                click_count: 1,
+            }),
+            cx,
+        );
+        window.refresh();
+    });
+    visual.run_until_parked();
+    visual.update(|window, cx| {
+        assert!(!window.is_inspector_picking(cx));
+        let picked = service::inspector_selection(window, cx).unwrap();
+        assert!(
+            picked
+                .id
+                .path
+                .global_id
+                .iter()
+                .any(|id| id.to_string() == "fast-pick"),
+            "{:?}",
+            picked.id
+        );
+        window.toggle_inspector(cx);
+    });
+    visual.run_until_parked();
+    assert_eq!(
+        clicks.get(),
+        0,
+        "inspector events must never activate the host"
+    );
+    visual.simulate_click(position, Modifiers::none());
+    assert_eq!(
+        clicks.get(),
+        1,
+        "normal clicks must resume after inspection"
+    );
+}
+
+#[gpui::test]
+fn published_kit_dialog_stays_visible_and_pickable(cx: &mut TestAppContext) {
+    use gpui::component::WindowExt;
+    cx.update(|cx| {
+        gpui::init(cx);
+        install(RendererPolicy::Replace, cx);
+    });
+    let (_, visual) = cx.add_window_view(|window, cx| {
+        let content = cx.new(|_| Sample);
+        gpui::base::Root::new(content, window, cx)
+    });
+    visual.update(|window, cx| {
+        window.open_dialog(cx, |dialog, _, _| {
+            dialog.child(
+                div()
+                    .id("dialog-pick")
+                    .debug_selector(|| "dialog-pick".into())
+                    .w(px(100.))
+                    .h(px(40.))
+                    .bg(gpui::rgb(0xcc6633)),
+            )
+        });
+        window.toggle_inspector(cx);
+    });
+    visual.run_until_parked();
+    visual
+        .background_executor
+        .advance_clock(std::time::Duration::from_secs(1));
+    visual.update(|window, _| window.refresh());
+    visual.run_until_parked();
+    let position = visual.debug_bounds("dialog-pick").unwrap().center();
+    visual.simulate_mouse_move(position, None, Modifiers::none());
+    visual.run_until_parked();
+    visual.simulate_click(position, Modifiers::none());
+    visual.run_until_parked();
+    assert!(visual.debug_bounds("dialog-pick").is_some());
+    visual.update(|window, cx| {
+        let picked = service::inspector_selection(window, cx).unwrap();
+        assert!(
+            picked
+                .id
+                .path
+                .global_id
+                .iter()
+                .any(|id| id.to_string() == "dialog-pick"),
+            "{:?}",
+            picked.id
+        );
+    });
 }

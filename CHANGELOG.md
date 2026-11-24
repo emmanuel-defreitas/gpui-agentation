@@ -1,48 +1,28 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 (2026-11-24)
 
-- Replace the previous UI library and generated namespace with GPUI Kit 0.11.0
-  on GPUI 0.3.14, including toolbar, settings, comments and inspector controls.
-- Share Kit initialization, assets and Root with native hosts through explicit
-  ownership options. Keep the annotation model and loopback API independent.
-- Remove the previous source/assets bundle, build script and migration harnesses.
-- Support Git/path consumers with a coherent patched Kit family. Disable registry
-  publication until the required picking fix is available in a published Kit release.
-
-## Unreleased
-
-- Drawn annotations (pin, box, arrow, pen, textbox) now scroll with the
-  registered host element under them instead of staying fixed to the window.
-  A note anchors where it is first laid out; before an edit, drag, resize or
-  menu reads its stored position, the scroll offset is folded into the note.
-- Give the toolbar room below the annotation switch and make the rule between
-  Inspect and the drawing tools span the rail. The right-click menu's Inspect /
-  Stop row shows the Debug menu's Inspect element shortcut, and the Comments
-  panel title uses the themed heading so it reads in dark mode.
-- Open the inspector in the toolbar window on stock GPUI: the host's native
-  content view is kept GPUI's sidebar width wider than the window shows, so the
-  sidebar lays out past the right edge and the app keeps its visible width,
-  while the companion renders the inspector entity and grows by its panel. The
-  patched GPUI copy, `scripts/inspector-poc.py`, the
-  `agentation_external_inspector` cfg, and the `example-stock` and
-  `test-external` targets are gone; `make example` is plain `cargo run`. With
-  the toolbar hidden or a window filling its display, the panel stays in-window.
-- Keep the toolbar's Inspect button while inspecting as **Stop inspecting**:
-  GPUI swallows host clicks during picking, so the exit lives outside the host.
-  Picks that land on an in-window sidebar resume picking instead of selecting it.
-- Reopening a saved inspection restarts picking; picking the same element
-  continues the note. Inspection pins keep the position where the element was
-  inspected rather than following later layout changes.
-- Edit the surface (background) and text color of a picked element with UI
-  color pickers. Changes publish as `Background` and `Text color` overrides with
-  `.bg(rgb(..))` / `.text_color(rgb(..))` lines; snapshots gain both properties.
-- Rework textboxes after Freeform and Sketch: drag the Textbox tool to frame a
-  box (click still places an auto-sized one), the dashed bounding box shows only
-  while selected or editing, and six grips resize it from either side or corner.
-  `AnnotationShape::Text` gains an optional `height`; existing notes read as before.
-- Open the companion window after the overlay update that requested it, so the
-  window's first draw never reads the overlay while it is being updated.
+- Replace the previous UI library with GPUI Kit 0.11.0 on GPUI 0.3.14,
+  including toolbar, settings, comments and inspector controls. Native hosts
+  must share the pinned registry Kit dependency and use the updated initialization,
+  assets and Root integration; see the consumer setup guide.
+- Keep inspector picking compatibility inside Agentation using public GPUI
+  APIs. Use unmodified registry Kit dependencies, with no additional fork
+  packages or consumer patch tables.
+- Keep pins, shapes, text and note previews attached to registered content as
+  it scrolls. Pause host scrolling while the note input has focus and preserve
+  anchors across edits and undo/redo.
+- Show the inspector in the companion toolbar, with style editing, resets,
+  source navigation and project-relative breadcrumbs that wrap.
+- Give empty notes compact numbered titles, match sidebar badges to note
+  colors, and enlarge the corresponding pin when hovering a sidebar note.
+- Improve light and dark contrast, use a white light-mode toolbar, distinguish
+  selected tools and color swatches, and use readable pale note-editor fills.
+- Remove toolbar tooltips, enlarge the native menu-bar icon, and simplify
+  the About GitHub label while retaining keyboard shortcuts and accessibility.
+- Preserve textbox labels, resize and edit plain text annotations, and keep
+  the annotation model, loopback API and debug-only boundary independent of
+  the host application.
 
 ## 0.6.0 (2026-10-25)
 

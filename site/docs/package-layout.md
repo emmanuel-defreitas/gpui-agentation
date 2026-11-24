@@ -1,6 +1,6 @@
 # One package, two uses
 
-> **Version: 0.6.0.** Unreleased Git/path migration candidate.
+> **Version: 0.7.0.** Registry GPUI Kit integration.
 
 The `gpui-agentation` package provides a debug-only native annotation library
 and a portable stdio MCP executable.
@@ -18,18 +18,17 @@ binary is a separate target and works in release builds.
 
 ## Native app
 
-Follow [consumer setup](consumer-setup.md). This migration uses the pinned
-Kit 0.11.0 bundle on GPUI 0.3.14. Host and Agentation share that exact dependency
-family; initialization and inspector ownership are explicit. See
-[Kit distribution](kit-distribution.md) for the Git/path consumer instructions
-and the unresolved registry publication boundary.
+Follow [consumer setup](consumer-setup.md). Host and Agentation share registry
+Kit 0.11.0 on GPUI 0.3.14; initialization and inspector ownership are explicit.
+The inspector workaround is part of Agentation, with no patched dependencies.
+See [Kit distribution](kit-distribution.md).
 
 ## MCP client
 
-Install the portable bridge from this checkout:
+Install the portable bridge from crates.io:
 
 ```sh
-cargo install --path . --locked
+cargo install gpui-agentation --locked
 ```
 
 The executable is `gpui-agentation`; use `--url` for the running debug app's
@@ -37,11 +36,7 @@ loopback MCP endpoint and `--timeout-ms` for the request timeout. The default
 feature does not activate Kit, GPUI or native assets. Native consumers can
 exclude the bridge with `default-features = false`.
 
-Crates.io publication of this migration is not claimed. The patched native Kit
-family must be available from a publishable source before releasing the new
-native library. Existing immutable package releases are unchanged.
-
 ## Earlier packages
 
 Version 0.3.0 bundles the previous native UI implementation. Existing published
-archives are immutable; the Kit cutover applies to this source candidate.
+archives are immutable; the Kit cutover applies to subsequent versions.

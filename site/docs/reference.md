@@ -1,6 +1,6 @@
 # Development reference
 
-Detailed native integration and API behavior for gpui-agentation 0.6.0.
+Detailed native integration and API behavior for gpui-agentation 0.7.0.
 Start with the [README](../../README.md) or [consumer setup guide](consumer-setup.md).
 
 Native feedback for GPUI development builds: select a registered element, write
@@ -16,8 +16,7 @@ Start with the [consumer setup guide](consumer-setup.md) and
 keeps debug gates in one module and registers one screen at a time, so ordinary
 controls need no annotation wrappers. A reusable
 [setup skill](../../skills/gpui-agentation-setup/SKILL.md) helps agents apply the same
-pattern to another GPUI app. Use the same GPUI Kit source in the host and Agentation. This unreleased
-migration supports Git/path consumers; see [consumer setup](consumer-setup.md)
+pattern to another GPUI app. Use the same registry GPUI Kit version in the host and Agentation; see [consumer setup](consumer-setup.md)
 for the manifest, Kit Root, and debug/release adapter.
 
 GPUI Kit 0.11.0 and `gpui-pre =0.3.14` share one set of types and globals.
@@ -208,7 +207,7 @@ collapse animation. Undo, Redo, Save, and Delete remain available through
 shortcuts and the native Debug menu; there is no power icon.
 
 The source path uses GPUI Kit's breadcrumb component and is relative to the process
-working directory. Kit source paths resolve directly to the bundled source under `vendor/`.
+working directory. Kit source paths resolve to Cargo's registry source cache.
 Only the final segment is actionable: it opens the file at its source line using
 `$EDITOR`, defaulting to Zed. Zed, VS Code, Cursor, and VSCodium CLI conventions
 are supported, including quoted command paths and arguments. Commands run

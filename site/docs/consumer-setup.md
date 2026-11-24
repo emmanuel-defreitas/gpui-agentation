@@ -1,23 +1,23 @@
 # Add Agentation to a GPUI Kit app
 
-> **Version: 0.6.0.** Unreleased Git/path migration candidate.
+> **Version: 0.7.0.** Registry GPUI Kit integration.
 
 This migration uses GPUI Kit 0.11.0 and the standard GPUI 0.3.14 backend.
-It is currently a Git/path candidate; see [Kit distribution](kit-distribution.md)
-for the local picking fix and registry publication boundary.
+The inspector compatibility fix is inside Agentation; Kit is unmodified.
+See [Kit distribution](kit-distribution.md).
 
 ## 1. Share the exact Kit dependency
 
-For a local checkout:
+For a crates.io installation:
 
 ```toml
 [dependencies]
-gpui-agentation = { path = "../gpui-agentation", default-features = false, features = ["native"] }
-gpui = { package = "gpui-kit", path = "../gpui-agentation/vendor/gpui-kit", version = "=0.11.0", default-features = false, features = ["component", "assets", "inspector"] }
+gpui-agentation = { version = "0.7.0", default-features = false, features = ["native"] }
+gpui = { package = "gpui-kit", version = "=0.11.0", default-features = false, features = ["component", "assets", "inspector"] }
 ```
 
-Both dependencies must resolve to the same Kit source. Do not combine registry
-Kit with the bundled Kit family: their component entities and globals differ.
+Both dependencies must resolve to the same registry Kit version. Do not add
+Git/path overrides for only one dependency: component entities and globals must match.
 The debug-only `gpui_agentation::kit` re-export also exposes the exact dependency.
 A host that uses Kit in release needs the direct dependency shown above because
 Agentation exposes no library API in release builds.

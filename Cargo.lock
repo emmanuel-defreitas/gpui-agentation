@@ -2336,7 +2336,7 @@ dependencies = [
 
 [[package]]
 name = "gpui-agentation"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "atomic-write-file",
@@ -2345,6 +2345,8 @@ dependencies = [
  "cocoa 0.26.1",
  "futures",
  "futures-util",
+ "gpui-base",
+ "gpui-component",
  "gpui-kit",
  "log",
  "objc",
@@ -2362,6 +2364,8 @@ dependencies = [
 [[package]]
 name = "gpui-base"
 version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "604d277dd339c63d13a3016d22a84622cc7511fdfd8e88573c0709088ede3500"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -2405,6 +2409,8 @@ dependencies = [
 [[package]]
 name = "gpui-component"
 version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdfec0424e4d9d78dcec4b4410e310b43ac1c4ef3efb971cfb63f5855754798b"
 dependencies = [
  "anyhow",
  "core-text",
@@ -2796,6 +2802,8 @@ dependencies = [
 [[package]]
 name = "gpui-kit"
 version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60c0655c4af9fe268693531ebfe6d322809e7771e8a5cd5faceca358d479dd90"
 dependencies = [
  "gpui-base",
  "gpui-component",
