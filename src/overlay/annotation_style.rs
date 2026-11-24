@@ -1,5 +1,5 @@
 //! Stable annotation colors and geometry supplied by the Kit theme.
-use gpui::component::ActiveTheme;
+use gpui::component::{ActiveTheme, Colorize};
 use gpui::{App, Hsla, Window, rems};
 pub(super) fn palette(cx: &App) -> [Hsla; 4] {
     let t = cx.theme();
@@ -7,6 +7,23 @@ pub(super) fn palette(cx: &App) -> [Hsla; 4] {
 }
 
 pub(super) const COLOR_NAMES: [&str; 4] = ["Blue", "Green", "Red", "Yellow"];
+
+pub(super) fn toolbar_background(cx: &App) -> Hsla {
+    if cx.theme().is_dark() {
+        cx.theme().secondary
+    } else {
+        gpui::rgb(0xffffff).into()
+    }
+}
+
+pub(super) fn note_background(color: usize, cx: &App) -> Hsla {
+    let color = palette(cx)[color];
+    if cx.theme().is_dark() {
+        color
+    } else {
+        color.mix_oklab(gpui::rgb(0xffffff).into(), 0.18)
+    }
+}
 
 /// Keep labels readable on every annotation fill in either system appearance.
 pub(super) fn foreground(background: Hsla) -> Hsla {
@@ -60,7 +77,18 @@ mod tests {
                     };
                     0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b)
                 };
-                for color in palette(cx) {
+                for (index, color) in palette(cx).into_iter().enumerate() {
+                    let note = note_background(index, cx);
+                    let note_fill = luminance(note.into());
+                    let note_ink = luminance(foreground(note).into());
+                    let ratio = (note_fill.max(note_ink) + 0.05) / (note_fill.min(note_ink) + 0.05);
+                    if !mode.is_dark() {
+                        assert!(note_fill > 0.7, "light notes use pale backgrounds");
+                        assert!(ratio >= 7., "light note text has strong contrast");
+                    } else {
+                        assert!(ratio >= 4.5);
+                    }
+
                     let fill = luminance(color.into());
                     let ink = luminance(foreground(color).into());
                     assert!(

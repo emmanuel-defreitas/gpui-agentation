@@ -811,8 +811,8 @@ impl AnnotationOverlay {
         }
         let this = cx.entity().downgrade();
         let theme = cx.theme();
-        let background =
-            annotation_style::palette(cx)[self.draft.as_ref().map_or(self.color, |d| d.color)];
+        let color = self.draft.as_ref().map_or(self.color, |d| d.color);
+        let background = annotation_style::note_background(color, cx);
         let foreground = annotation_style::foreground(background);
         div()
             .id("feedback-editor-panel")
@@ -855,7 +855,7 @@ impl AnnotationOverlay {
                 .bg(background)
                 .text_color(foreground)
                 .border_1()
-                .border_color(foreground.opacity(0.25))
+                .border_color(annotation_style::palette(cx)[color])
                 .rounded(theme.radius_tokens().lg)
                 .shadow(theme.shadow_tokens().sm)
                 .child(

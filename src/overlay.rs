@@ -756,7 +756,7 @@ impl AnnotationOverlay {
             .unwrap_or_else(|| self.store.next_index(&self.session.id).unwrap_or(1));
         let editing = draft.editing;
         let textbox = matches!(draft.shape, Some(crate::AnnotationShape::Text { .. }));
-        let background = annotation_style::palette(cx)[draft.color];
+        let background = annotation_style::note_background(draft.color, cx);
         let foreground = annotation_style::foreground(background);
         let confirm = surface_button::SurfaceButton::new(
             "feedback-save",

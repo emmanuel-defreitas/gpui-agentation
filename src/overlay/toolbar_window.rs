@@ -556,11 +556,16 @@ impl Render for ToolbarWindow {
                     .pt_1()
                     .children((0..4).map(|color| {
                         let owner = cx.entity().downgrade();
+                        let selected = color == self.state.color;
+                        let ink = annotation_style::palette(cx)[color];
+                        let selected_bg =
+                            ink.mix_oklab(annotation_style::toolbar_background(cx), 0.16);
                         div()
                             .opacity(if self.state.active { 1. } else { 0.4 })
                             .child(
                                 Button::new(("feedback-color", color))
                                     .small()
+                                    .ghost()
                                     .accessibility_label(format!(
                                         "{} annotation color",
                                         annotation_style::COLOR_NAMES[color]
@@ -572,7 +577,18 @@ impl Render for ToolbarWindow {
                                             .rounded_full()
                                             .bg(annotation_style::palette(cx)[color]),
                                     )
-                                    .selected(color == self.state.color)
+                                    .toggled(selected)
+                                    .bg(if selected {
+                                        selected_bg
+                                    } else {
+                                        gpui::transparent_black()
+                                    })
+                                    .border_1()
+                                    .border_color(if selected {
+                                        ink
+                                    } else {
+                                        gpui::transparent_black()
+                                    })
                                     .when(self.state.active, |swatch| {
                                         swatch.on_click(move |_, _, cx| {
                                             let _ = owner.update(cx, |this, cx| {
@@ -718,7 +734,7 @@ impl Render for ToolbarWindow {
             .rounded_xl()
             .border_1()
             .border_color(theme.colors.border)
-            .bg(theme.colors.secondary)
+            .bg(annotation_style::toolbar_background(cx))
             .shadow(theme.shadow_tokens().sm)
             .child(contents)
             .when(self.width.opacity < 1., |surface| {

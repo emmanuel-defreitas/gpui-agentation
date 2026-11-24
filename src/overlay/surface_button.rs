@@ -78,7 +78,10 @@ impl RenderOnce for SurfaceButton {
                     // Kit weights the first color: keep most of the background.
                     .hover(bg.mix_oklab(fg, 0.86))
                     .active(bg.mix_oklab(fg, 0.78)),
-            );
+            )
+            // Kit's custom variant tints its idle fill to 20% opacity. A
+            // selected tool needs an opaque fill behind its contrasting icon.
+            .when(self.selected && !self.disabled, |button| button.bg(bg));
         if self.icon_only {
             let tooltip = self
                 .shortcut
