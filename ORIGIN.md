@@ -28,6 +28,16 @@ at commit `e967606d18709e89cad002db49f7d3b6eae19646` (MIT). The controls and
 published configuration model are rewritten against the bundled Ely components
 and Agentation note pipeline.
 
+### Source navigation extraction (#115)
+
+`src/inspection/source.rs` moves the path resolution, editor command/launch,
+and clipboard fallback logic from the locally patched
+`vendor/ely/src/tooling/inspector/source.rs` at Agentation commit
+`2a370c4a420ccfb8c1e68dea5467baf18161026c`. The temporary Ely file retains only
+breadcrumb presentation and calls the owned service. The original MIT licenses
+and inspector attribution above remain in place; `UPSTREAM.json` is unchanged,
+and `LOCAL_PATCHES.json` records the updated adapter hash.
+
 ## Model Context Protocol mark
 
 `src/assets/mcp.svg` is the official MCP mark from

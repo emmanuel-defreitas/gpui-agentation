@@ -246,7 +246,7 @@ fn mounting_requires_initialization_and_preserves_existing_host_focus(cx: &mut T
 
 #[test]
 fn inspector_source_paths_should_be_relative_and_map_generated_ely_to_editable_files() {
-    use crate::ely::tooling::inspector::source::SourceLocation;
+    use crate::inspection::source::SourceLocation;
     let cwd = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let normal = SourceLocation::new("src/overlay.rs", 42, 7, cwd);
     assert_eq!(normal.relative, std::path::Path::new("src/overlay.rs"));
@@ -273,7 +273,7 @@ fn inspector_source_paths_should_be_relative_and_map_generated_ely_to_editable_f
 
 #[test]
 fn inspector_editor_commands_should_preserve_quoted_arguments_and_location() {
-    use crate::ely::tooling::inspector::source::{SourceLocation, editor_command};
+    use crate::inspection::source::{SourceLocation, editor_command};
     let source = SourceLocation::new(
         "src/file with spaces.rs",
         42,
@@ -310,7 +310,7 @@ fn inspector_editor_commands_should_preserve_quoted_arguments_and_location() {
 
 #[gpui::test]
 fn unsupported_editor_should_copy_source_with_inline_feedback(cx: &mut TestAppContext) {
-    use crate::ely::tooling::inspector::source::{SourceLocation, activate_source};
+    use crate::inspection::source::{SourceLocation, activate_source};
     cx.update(|cx| {
         let source = SourceLocation::new(
             "src/overlay.rs",
@@ -356,7 +356,7 @@ fn source_breadcrumb_last_segment_should_be_clickable(cx: &mut TestAppContext) {
 
 #[test]
 fn own_source_should_resolve_from_compile_root_when_runtime_cwd_differs() {
-    use crate::ely::tooling::inspector::source::SourceLocation;
+    use crate::inspection::source::SourceLocation;
     let other = tempfile::tempdir().unwrap();
     std::fs::create_dir(other.path().join("src")).unwrap();
     std::fs::write(other.path().join("src/overlay.rs"), "unrelated file").unwrap();
@@ -371,7 +371,7 @@ fn own_source_should_resolve_from_compile_root_when_runtime_cwd_differs() {
 
 #[gpui::test]
 fn failed_editor_launch_should_copy_source_and_finish_inline_feedback(cx: &mut TestAppContext) {
-    use crate::ely::tooling::inspector::source::{SourceLocation, activate_source};
+    use crate::inspection::source::{SourceLocation, activate_source};
     let notice = cx.update(|cx| {
         let notice = cx.new(|_| String::new());
         let source = SourceLocation::new(
