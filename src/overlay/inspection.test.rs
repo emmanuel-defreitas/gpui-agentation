@@ -12,16 +12,19 @@ impl Render for Host {
             .size_full()
             .child(self.overlay.clone())
             .children(self.shown.then(|| {
-                div()
-                    .id("anchored-card")
-                    .debug_selector(|| "inspection-target".into())
-                    .ml(px(self.offset))
-                    .mt(px(40.))
-                    .w(px(220.))
-                    .h(px(120.))
-                    .p_3()
-                    .border_1()
-                    .child("Inspect this element")
+                div().ml(px(self.offset)).child(crate::target::target(
+                    "card",
+                    "Card",
+                    div()
+                        .id("anchored-card")
+                        .debug_selector(|| "inspection-target".into())
+                        .mt(px(40.))
+                        .w(px(220.))
+                        .h(px(120.))
+                        .p_3()
+                        .border_1()
+                        .child("Inspect this element"),
+                ))
             }))
     }
 }
@@ -96,6 +99,43 @@ fn setup(
     draw(&mut palette);
     draw(cx);
     (host, overlay, cx)
+}
+
+#[gpui::test]
+fn inspection_pin_follows_its_content_after_inspecting_stops(cx: &mut TestAppContext) {
+    let (host, overlay, cx) = setup(cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.choose_tool(None, window, cx)));
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.offset += 75.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after.center().x, before.center().x + px(75.));
+    assert_eq!(after.center().y, before.center().y);
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.offset = -400.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    assert!(cx.debug_bounds("feedback-marker-number-1").is_none());
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.offset = 20.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    assert_eq!(cx.debug_bounds("feedback-marker-number-1").unwrap(), before);
 }
 
 #[gpui::test]
@@ -376,9 +416,8 @@ fn editing_an_older_inspection_keeps_undo_transactions_valid(cx: &mut TestAppCon
 }
 
 #[gpui::test]
-fn inspection_pin_stays_where_the_element_was_inspected(cx: &mut TestAppContext) {
-    let (host, overlay, cx) = setup(cx);
-    cx.update(|window, cx| overlay.update(cx, |this, cx| this.stop_inspection(window, cx)));
+fn inspection_pin_follows_while_inspecting(cx: &mut TestAppContext) {
+    let (host, _, cx) = setup(cx);
     draw(cx);
     let inspected = cx.debug_bounds("inspection-target").unwrap();
     let pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
@@ -390,13 +429,11 @@ fn inspection_pin_stays_where_the_element_was_inspected(cx: &mut TestAppContext)
         })
     });
     draw(cx);
-    // Stock GPUI exposes no element identity outside picking, so the pin keeps
-    // the saved position rather than following the moved element.
     assert_eq!(
         cx.debug_bounds("feedback-marker-number-1")
             .unwrap()
             .center(),
-        pin.center()
+        pin.center() + point(px(160.), px(0.))
     );
 }
 

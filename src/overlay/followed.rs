@@ -10,6 +10,33 @@ use gpui::{
 /// Where a target sat when its pin was first laid out; `None` until then.
 pub(super) type Baseline = Rc<Cell<Option<(f32, f32)>>>;
 
+pub(super) struct Anchor {
+    pub target: String,
+    pub baseline: Baseline,
+}
+
+/// Bind inspector pins to their deepest registered ancestor, not whichever
+/// element happens to occupy the saved screen coordinates after scrolling.
+pub(super) fn inspection_target(path: &str, window: &Window, cx: &App) -> Option<String> {
+    let path = path.strip_prefix("gpui:")?.split('@').next()?;
+    target::registered_targets(window, cx)
+        .into_iter()
+        .filter_map(|target| {
+            let marker = format!("agentation-target-{}", target.id);
+            path.match_indices(&marker)
+                .filter(|(start, _)| {
+                    (*start == 0 || path.as_bytes()[start - 1] == b'.')
+                        && (start + marker.len() == path.len()
+                            || path[start + marker.len()..].starts_with('.'))
+                })
+                .map(|(start, _)| start)
+                .max()
+                .map(|depth| (depth, target.id))
+        })
+        .max_by_key(|(depth, _)| *depth)
+        .map(|(_, id)| id)
+}
+
 pub(super) struct FollowMark {
     pub target: String,
     pub baseline: Baseline,
@@ -66,10 +93,16 @@ impl Element for FollowMark {
             .theme()
             .control_height(ControlSize::Lg)
             .to_pixels(window.rem_size());
-        let at = point(
-            (px(self.center.0 + origin.0 - base.0) - side / 2.).max(px(0.)),
-            (px(self.center.1 + origin.1 - base.1) - side / 2.).max(px(0.)),
+        let center = (
+            self.center.0 + origin.0 - base.0,
+            self.center.1 + origin.1 - base.1,
         );
+        if !target::clip(window, cx, &self.target)
+            .is_some_and(|clip| clip.contains(center.0, center.1))
+        {
+            return false;
+        }
+        let at = point(px(center.0) - side / 2., px(center.1) - side / 2.);
         self.marker.prepaint_as_root(
             at,
             size(

@@ -83,7 +83,7 @@ pub struct AnnotationOverlay {
     textbox_resize: Option<textbox::TextboxResize>,
     /// Measured bounds of the unsaved textbox draft's body, for its grips.
     draft_textbox_bounds: Option<gpui::Bounds<gpui::Pixels>>,
-    follow_baselines: std::collections::HashMap<String, followed::Baseline>,
+    follow_anchors: std::collections::HashMap<String, followed::Anchor>,
     /// Drawn notes' scroll anchors, so they move with the content under them.
     anchors: std::collections::HashMap<String, scrolled::Anchor>,
     annotation_press: Option<gpui::Point<gpui::Pixels>>,
@@ -338,7 +338,7 @@ impl AnnotationOverlay {
             textbox_drag: None,
             textbox_resize: None,
             draft_textbox_bounds: None,
-            follow_baselines: Default::default(),
+            follow_anchors: Default::default(),
             anchors: Default::default(),
             annotation_press: None,
             textbox_bounds: Default::default(),
@@ -391,7 +391,7 @@ impl AnnotationOverlay {
                 self.textbox_drag = None;
                 self.textbox_resize = None;
                 self.draft_textbox_bounds = None;
-                self.follow_baselines.clear();
+                self.follow_anchors.clear();
                 self.anchors.clear();
                 self.textbox_bounds.clear();
                 self.mentions = Default::default();

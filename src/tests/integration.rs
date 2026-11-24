@@ -240,6 +240,18 @@ fn mounting_requires_initialization_and_preserves_existing_host_focus(cx: &mut T
 }
 
 #[test]
+fn inspector_breadcrumb_starts_at_source_package_regardless_of_launch_directory() {
+    use crate::inspection::source::SourceLocation;
+    use std::path::Path;
+    let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("example/src/main.rs");
+    for cwd in [Path::new("/"), Path::new("/tmp"), file.parent().unwrap()] {
+        let source = SourceLocation::new(file.to_str().unwrap(), 42, 7, cwd);
+        assert_eq!(source.display_path(), Path::new("example/src/main.rs"));
+        assert_eq!(source.path, file);
+    }
+}
+
+#[test]
 fn inspector_source_paths_resolve_owned_and_kit_sources() {
     use crate::inspection::source::SourceLocation;
     let cwd = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));

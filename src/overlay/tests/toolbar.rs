@@ -650,3 +650,84 @@ fn preserved_host_inspector_stays_owned_by_the_host(cx: &mut TestAppContext) {
         });
     });
 }
+
+struct HoverSample(bool);
+impl Render for HoverSample {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().size_full().child(
+            surface_button::SurfaceButton::new(
+                "hover-sample",
+                "Inspect",
+                IconName::Settings,
+                self.0,
+            )
+            .icon_only(),
+        )
+    }
+}
+
+#[gpui::test]
+fn toolbar_hover_keeps_icon_contrast_in_light_and_dark_themes(cx: &mut TestAppContext) {
+    use gpui::component::{Theme, ThemeMode};
+    cx.update(crate::integration::init_for_tests);
+    let (sample, cx) = cx.add_window_view(|_, _| HoverSample(false));
+    cx.update(|window, _| window.activate_window());
+    for mode in [ThemeMode::Light, ThemeMode::Dark] {
+        for selected in [false, true] {
+            cx.update(|_, cx| {
+                Theme::change(mode, None, cx);
+                sample.update(cx, |sample, cx| {
+                    sample.0 = selected;
+                    cx.notify();
+                });
+            });
+            draw(cx);
+            let bounds = cx.update(|window, _| {
+                gpui::base::test_support::find(window, &[], &"hover-sample".into())
+                    .unwrap()
+                    .bounds()
+            });
+            cx.simulate_mouse_move(bounds.center(), None, Modifiers::none());
+            draw(cx);
+            cx.update(|window, cx| {
+                let foreground = if selected {
+                    cx.theme().primary_foreground
+                } else {
+                    cx.theme().foreground
+                };
+                let scale = window.scale_factor();
+                let background = window
+                    .painted_quads()
+                    .iter()
+                    .find_map(|quad| {
+                        ((quad.bounds.origin.x.0 - f32::from(bounds.origin.x) * scale).abs() < 1.
+                            && (quad.bounds.origin.y.0 - f32::from(bounds.origin.y) * scale).abs()
+                                < 1.
+                            && (quad.bounds.size.width.0 - f32::from(bounds.size.width) * scale)
+                                .abs()
+                                < 1.)
+                            .then(|| quad.background.as_solid())
+                            .flatten()
+                    })
+                    .expect("painted toolbar button");
+                fn luminance(color: gpui::Hsla) -> f32 {
+                    let color: gpui::Rgba = color.into();
+                    let linear = |c: f32| {
+                        if c <= 0.04045 {
+                            c / 12.92
+                        } else {
+                            ((c + 0.055) / 1.055).powf(2.4)
+                        }
+                    };
+                    0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b)
+                }
+                let (a, b) = (luminance(background), luminance(foreground));
+                let contrast = (a.max(b) + 0.05) / (a.min(b) + 0.05);
+                assert!(
+                    contrast >= 3.,
+                    "{mode:?}, selected={selected}: contrast {contrast}"
+                );
+            });
+        }
+    }
+}

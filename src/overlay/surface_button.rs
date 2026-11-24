@@ -75,8 +75,9 @@ impl RenderOnce for SurfaceButton {
                 ButtonCustomVariant::new(cx)
                     .color(bg)
                     .foreground(fg)
-                    .hover(bg.mix(fg, 0.14))
-                    .active(bg.mix(fg, 0.22)),
+                    // Kit weights the first color: keep most of the background.
+                    .hover(bg.mix_oklab(fg, 0.86))
+                    .active(bg.mix_oklab(fg, 0.78)),
             );
         if self.icon_only {
             let tooltip = self

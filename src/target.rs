@@ -20,9 +20,14 @@ pub(crate) struct Target {
     pub bounds: Rect,
 }
 
-/// Unclipped top-left per target, so pins can follow content as it scrolls.
+struct Geometry {
+    origin: (f32, f32),
+    clip: Rect,
+}
+
+/// Unclipped top-left and scroll viewport per target.
 #[derive(Default)]
-struct Origins(HashMap<(WindowId, String), (f32, f32)>);
+struct Origins(HashMap<(WindowId, String), Geometry>);
 impl Global for Origins {}
 
 #[derive(Default)]
@@ -95,13 +100,32 @@ pub(crate) fn nearest(window: &Window, cx: &App, x: f32, y: f32) -> Option<Targe
 pub(crate) fn origin(window: &Window, cx: &App, id: &str) -> Option<(f32, f32)> {
     let window_id = window.window_handle().window_id();
     targets(window, cx).iter().find(|t| t.id == id)?;
-    cx.try_global::<Origins>()?
-        .0
-        .get(&(window_id, id.to_owned()))
-        .copied()
+    Some(
+        cx.try_global::<Origins>()?
+            .0
+            .get(&(window_id, id.to_owned()))?
+            .origin,
+    )
+}
+
+pub(crate) fn clip(window: &Window, cx: &App, id: &str) -> Option<Rect> {
+    Some(
+        cx.try_global::<Origins>()?
+            .0
+            .get(&(window.window_handle().window_id(), id.to_owned()))?
+            .clip,
+    )
 }
 
 pub(crate) fn targets(window: &Window, cx: &App) -> Vec<Target> {
+    registered_targets(window, cx)
+        .into_iter()
+        .filter(|t| t.bounds.width > 0.0 && t.bounds.height > 0.0)
+        .collect()
+}
+
+/// Includes clipped targets so saved pins retain their ancestor while offscreen.
+pub(crate) fn registered_targets(window: &Window, cx: &App) -> Vec<Target> {
     cx.try_global::<Registry>()
         .and_then(|r| r.0.get(&window.window_handle().window_id()))
         .map(|targets| {
@@ -109,7 +133,6 @@ pub(crate) fn targets(window: &Window, cx: &App) -> Vec<Target> {
                 .iter()
                 .filter_map(Weak::upgrade)
                 .map(|t| t.borrow().clone())
-                .filter(|t| t.bounds.width > 0.0 && t.bounds.height > 0.0)
                 .collect()
         })
         .unwrap_or_default()
@@ -164,7 +187,15 @@ impl Element for Registered {
         }
         cx.global_mut::<Origins>().0.insert(
             (window.window_handle().window_id(), self.target.id.clone()),
-            (f32::from(bounds.origin.x), f32::from(bounds.origin.y)),
+            Geometry {
+                origin: (f32::from(bounds.origin.x), f32::from(bounds.origin.y)),
+                clip: Rect {
+                    x: clip.origin.x.into(),
+                    y: clip.origin.y.into(),
+                    width: clip.size.width.into(),
+                    height: clip.size.height.into(),
+                },
+            },
         );
         if let Some(global_id) = global_id {
             if !cx.has_global::<Registry>() {

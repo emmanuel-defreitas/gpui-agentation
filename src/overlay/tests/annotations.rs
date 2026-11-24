@@ -1497,6 +1497,28 @@ fn pins_on_a_registered_target_scroll_with_it_while_annotating_is_off(cx: &mut T
             },
         )
         .unwrap();
+    // A saved inspector pin can have an offset outside its ancestor's bounds
+    // (the same geometry produced by dragging an ordinary pin away from it).
+    store
+        .add(
+            &session.id,
+            AnnotationInput {
+                inspection: Some(crate::InspectionSnapshot {
+                    properties: [("Opacity".into(), "1".into())].into(),
+                }),
+                comment: "Offset inspector pin".into(),
+                element_path: "gpui:view.agentation-target-card.child@example/src/main.rs:1:1#1"
+                    .into(),
+                element: "Child".into(),
+                x: 60.,
+                y: 140.,
+                bounding_box: crate::Rect::default(),
+                source_file: None,
+                gpui_configuration: None,
+                shape: None,
+            },
+        )
+        .unwrap();
     let session = store.session(&session.id).unwrap();
     let (host, cx) = cx.add_window_view(|window, cx| ScrollHost {
         overlay: cx.new(|cx| AnnotationOverlay::new(store, session, 0, window, cx)),
@@ -1505,17 +1527,23 @@ fn pins_on_a_registered_target_scroll_with_it_while_annotating_is_off(cx: &mut T
     cx.update(|window, _| window.activate_window());
     draw(cx);
     let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
-    cx.update(|_, cx| {
-        host.update(cx, |host, cx| {
-            host.scroll = 30.;
-            cx.notify();
-        })
+    let offset_before = cx.debug_bounds("feedback-marker-number-2").unwrap();
+    cx.simulate_event(gpui::ScrollEvent {
+        position: point(px(100.), px(100.)),
+        delta: gpui::ScrollDelta::Pixels(point(px(0.), px(30.))),
+        modifiers: Modifiers::none(),
+        touch_phase: gpui::TouchPhase::Moved,
+        source: gpui::ScrollSource::default(),
     });
+    assert_eq!(cx.update(|_, cx| host.read(cx).scroll), 30.);
     draw(cx);
     draw(cx);
     let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
     assert_eq!(after.center().y, before.center().y - px(30.));
     assert_eq!(after.center().x, before.center().x);
+    let offset_after = cx.debug_bounds("feedback-marker-number-2").unwrap();
+    assert_eq!(offset_after.center().y, offset_before.center().y - px(30.));
+    assert_eq!(offset_after.center().x, offset_before.center().x);
 }
 
 #[gpui::test]

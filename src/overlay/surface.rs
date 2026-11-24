@@ -539,7 +539,7 @@ impl AnnotationOverlay {
         }
         if let Some((before, offset)) = self.pin_drag.take() {
             // The dropped spot is the new anchor; re-seed it from the target's current position.
-            self.follow_baselines.remove(&before.id);
+            self.follow_anchors.remove(&before.id);
             let mut after = before.clone();
             let p = normalized(at, window, cx);
             let p = (
@@ -1092,20 +1092,35 @@ impl AnnotationOverlay {
             };
             if matches!(a.feedback.shape, Some(AnnotationShape::Text { .. })) {
                 layer = layer.child(self.textbox(a, window, cx));
-            } else if a.feedback.shape.is_none() && !a.feedback.element_path.starts_with("gpui:") {
-                let baseline = self
-                    .follow_baselines
-                    .entry(a.id.clone())
-                    .or_default()
-                    .clone();
-                layer = layer.child(super::followed::FollowMark {
-                    target: a.feedback.element_path.clone(),
-                    baseline,
-                    center: (bounds.x, bounds.y),
-                    marker: self
-                        .marker(&a.id, a.index, Rect::default(), window, cx)
-                        .into_any_element(),
-                });
+            } else if a.feedback.shape.is_none() {
+                if !self.follow_anchors.contains_key(&a.id) {
+                    let target = if a.feedback.element_path.starts_with("gpui:") {
+                        super::followed::inspection_target(&a.feedback.element_path, window, cx)
+                    } else {
+                        Some(a.feedback.element_path.clone())
+                    };
+                    if let Some(target) = target {
+                        // Selection geometry and this origin come from the same
+                        // completed frame, before the host's next prepaint.
+                        let baseline = std::rc::Rc::new(std::cell::Cell::new(target::origin(
+                            window, cx, &target,
+                        )));
+                        self.follow_anchors
+                            .insert(a.id.clone(), super::followed::Anchor { target, baseline });
+                    }
+                }
+                if let Some(anchor) = self.follow_anchors.get(&a.id) {
+                    layer = layer.child(super::followed::FollowMark {
+                        target: anchor.target.clone(),
+                        baseline: anchor.baseline.clone(),
+                        center: (bounds.x, bounds.y),
+                        marker: self
+                            .marker(&a.id, a.index, Rect::default(), window, cx)
+                            .into_any_element(),
+                    });
+                } else {
+                    layer = layer.child(self.marker(&a.id, a.index, bounds, window, cx));
+                }
             } else {
                 layer = layer.child(self.marker(&a.id, a.index, bounds, window, cx));
             }

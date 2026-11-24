@@ -561,6 +561,8 @@ impl AnnotationOverlay {
             };
             match result {
                 Ok(note) => {
+                    // The persisted center now describes the current layout.
+                    self.follow_anchors.remove(&note.id);
                     if existing.is_none() {
                         self.record_change(None, Some(note.clone()));
                     } else if let Some(previous) = existing {
