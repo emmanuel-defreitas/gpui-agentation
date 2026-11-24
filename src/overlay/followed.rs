@@ -42,6 +42,7 @@ pub(super) struct FollowMark {
     pub baseline: Baseline,
     /// Saved pin center in window pixels.
     pub center: (f32, f32),
+    pub scale: f32,
     pub marker: AnyElement,
 }
 
@@ -92,7 +93,8 @@ impl Element for FollowMark {
         let side = cx
             .theme()
             .control_height(ControlSize::Lg)
-            .to_pixels(window.rem_size());
+            .to_pixels(window.rem_size())
+            * self.scale;
         let center = (
             self.center.0 + origin.0 - base.0,
             self.center.1 + origin.1 - base.1,

@@ -180,14 +180,19 @@ impl AnnotationOverlay {
     }
 
     pub(super) fn pin_scale(&self, id: &str, window: &mut Window, cx: &App) -> f32 {
+        let hover_scale: f32 = if self.hovered_note.as_deref() == Some(id) {
+            1.15
+        } else {
+            1.0
+        };
         let Some(motion) = self.mentions.motions.get(id) else {
-            return 1.0;
+            return hover_scale;
         };
         let (scale, animating) = motion.sample(motion::duration(motion::FAST, cx));
         if animating {
             window.request_animation_frame();
         }
-        scale
+        scale.max(hover_scale)
     }
 
     fn insert_mention(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {

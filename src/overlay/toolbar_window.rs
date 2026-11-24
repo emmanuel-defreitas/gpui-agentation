@@ -561,7 +561,11 @@ impl Render for ToolbarWindow {
                             .child(
                                 Button::new(("feedback-color", color))
                                     .small()
-                                    .accessibility_label(format!("Annotation color {}", color + 1))
+                                    .accessibility_label(format!(
+                                        "{} annotation color",
+                                        annotation_style::COLOR_NAMES[color]
+                                    ))
+                                    .tooltip(annotation_style::COLOR_NAMES[color])
                                     .child(
                                         div()
                                             .size_4()

@@ -50,14 +50,14 @@ pub(super) fn comment_input(
     window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
-    let colors = &cx.theme().colors;
+    let foreground = annotation_style::foreground(background);
     let focused = input.focus_handle(cx).is_focused(window);
     let field = Textarea::new(input)
         .appearance(false)
         .bordered(false)
         .aria_label("Feedback")
         .bg(background)
-        .text_color(colors.background)
+        .text_color(foreground)
         .p_0()
         .rounded_none();
     div()
@@ -72,7 +72,7 @@ pub(super) fn comment_input(
                     .top_0()
                     .left_0()
                     .text_size(cx.theme().typography_tokens().sm.size)
-                    .text_color(colors.background.opacity(0.65))
+                    .text_color(foreground.opacity(0.65))
                     .child(if textbox {
                         "Type text…"
                     } else {
@@ -185,6 +185,20 @@ pub(super) fn consumer_action(
     }
 }
 
+fn note_preview(note: &crate::Annotation) -> String {
+    let preview = note
+        .feedback
+        .comment
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if preview.is_empty() {
+        format!("Note {}", note.index)
+    } else {
+        preview
+    }
+}
+
 pub(super) fn notes_body(
     this: &AnnotationOverlay,
     owner: Entity<AnnotationOverlay>,
@@ -252,19 +266,10 @@ pub(super) fn notes_body(
                             },
                         );
                     });
-                // previous presentation ListItem uses a single-line ellipsis renderer. Keep the
-                // complete comment in storage/editor, flatten only its preview.
-                let preview = note
-                    .feedback
-                    .comment
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let preview = if preview.is_empty() && note.feedback.inspection.is_some() {
-                    format!("Inspection: {}", note.feedback.element)
-                } else {
-                    preview
-                };
+                let preview = note_preview(&note);
+                let hover_owner = owner.clone();
+                let hover_id = id.clone();
+                let index = note.index;
                 let selected = this.selected_note.as_deref() == Some(id.as_str());
                 let row_owner = owner.clone();
                 let row_close = close.clone();
@@ -275,6 +280,19 @@ pub(super) fn notes_body(
                         gpui::component::list::ListItem::new(format!("feedback-note-{id}"))
                             .selected(selected)
                             .accessibility_label(preview.clone())
+                            .debug_selector(move || format!("feedback-note-row-{index}"))
+                            .on_hover(move |hovered, _, cx| {
+                                hover_owner.update(cx, |this, cx| {
+                                    if *hovered {
+                                        this.hovered_note = Some(hover_id.clone());
+                                    } else if this.hovered_note.as_ref() == Some(&hover_id) {
+                                        this.hovered_note = None;
+                                    } else {
+                                        return;
+                                    }
+                                    cx.notify();
+                                });
+                            })
                             .child(
                                 div()
                                     .flex()
@@ -787,6 +805,9 @@ impl AnnotationOverlay {
         }
         let this = cx.entity().downgrade();
         let theme = cx.theme();
+        let background =
+            annotation_style::palette(cx)[self.draft.as_ref().map_or(self.color, |d| d.color)];
+        let foreground = annotation_style::foreground(background);
         div()
             .id("feedback-editor-panel")
             .debug_selector(|| "feedback-editor-panel".into())
@@ -825,11 +846,10 @@ impl AnnotationOverlay {
                 .w(px(width))
                 .max_h(px((h - 16.0).max(1.0)))
                 .p_3()
-                .bg(annotation_style::palette(cx)
-                    [self.draft.as_ref().map_or(self.color, |d| d.color)])
-                .text_color(theme.colors.background)
+                .bg(background)
+                .text_color(foreground)
                 .border_1()
-                .border_color(theme.colors.background.opacity(0.25))
+                .border_color(foreground.opacity(0.25))
                 .rounded(theme.radius_tokens().lg)
                 .shadow(theme.shadow_tokens().sm)
                 .child(
@@ -1146,6 +1166,7 @@ impl AnnotationOverlay {
                         target: anchor.target.clone(),
                         baseline: anchor.baseline.clone(),
                         center: (bounds.x, bounds.y),
+                        scale: self.pin_scale(&a.id, window, cx),
                         marker: self
                             .marker(&a.id, a.index, Rect::default(), window, cx)
                             .into_any_element(),
@@ -1381,6 +1402,7 @@ impl AnnotationOverlay {
             .size(side)
             .text_size(cx.theme().typography_tokens().sm.size * scale)
             .bg(amber)
+            .text_color(annotation_style::foreground(amber))
             .debug_selector(move || format!("feedback-marker-number-{index}"))
             .id(format!("feedback-marker-{id}"))
             .role(Role::Button)
@@ -1518,4 +1540,39 @@ pub(super) fn annotation_count(count: usize, over: impl IntoElement, cx: &App) -
                     .child(badge),
             )
         })
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+    #[test]
+    fn missing_comment_uses_note_number_without_changing_the_annotation() {
+        let store = crate::Store::memory();
+        let session = store.ensure_session("Preview", "gpui://preview").unwrap();
+        let mut note = store
+            .add(
+                &session.id,
+                crate::AnnotationInput {
+                    inspection: Some(crate::InspectionSnapshot {
+                        properties: [("Opacity".into(), "1".into())].into(),
+                    }),
+                    comment: String::new(),
+                    element_path: "gpui:internal.path".into(),
+                    element: "Long internal path".into(),
+                    x: 50.,
+                    y: 100.,
+                    bounding_box: crate::Rect::default(),
+                    source_file: None,
+                    gpui_configuration: None,
+                    shape: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(note_preview(&note), "Note 1");
+        assert!(note.feedback.comment.is_empty());
+        note.feedback.comment = "  \n  ".into();
+        assert_eq!(note_preview(&note), "Note 1");
+        note.feedback.comment = "Keep this\ncomment".into();
+        assert_eq!(note_preview(&note), "Keep this comment");
+    }
 }

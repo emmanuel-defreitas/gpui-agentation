@@ -604,3 +604,54 @@ fn unfocused_inspection_note_and_outline_follow_the_pin(cx: &mut TestAppContext)
         panel.left() + px(75.)
     );
 }
+
+#[gpui::test]
+fn empty_comment_rows_are_compact_and_hover_grows_the_matching_pin(cx: &mut TestAppContext) {
+    let (_, overlay, cx) = setup(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.stop_inspection(window, cx);
+            this.open_sheet(false, window, cx);
+        })
+    });
+    draw(cx);
+    let mut comments = tools(&overlay, cx);
+    draw(&mut comments);
+    draw(cx);
+    let row = comments.debug_bounds("feedback-note-row-1").unwrap();
+    assert!(
+        row.size.height < px(80.),
+        "empty notes must not show the internal element path"
+    );
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    comments.simulate_mouse_move(row.center(), None, Modifiers::none());
+    draw(&mut comments);
+    draw(cx);
+    let hovered = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert!((hovered.size.width / before.size.width - 1.15).abs() < 0.01);
+    assert!((f32::from(hovered.center().x - before.center().x)).abs() < 0.1);
+    assert!((f32::from(hovered.center().y - before.center().y)).abs() < 0.1);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(
+            this.session.annotations[0].feedback.comment.is_empty(),
+            "fallback titles never overwrite saved comments"
+        );
+    });
+    comments.simulate_mouse_move(point(px(2.), px(2.)), None, Modifiers::none());
+    draw(&mut comments);
+    draw(cx);
+    assert_eq!(
+        cx.debug_bounds("feedback-marker-number-1").unwrap().size,
+        before.size
+    );
+    comments.simulate_mouse_move(row.center(), None, Modifiers::none());
+    draw(&mut comments);
+    draw(cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.dismiss_sheet(window, cx)));
+    draw(cx);
+    assert_eq!(
+        cx.debug_bounds("feedback-marker-number-1").unwrap().size,
+        before.size
+    );
+}
