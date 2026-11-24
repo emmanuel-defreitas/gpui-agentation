@@ -12,8 +12,8 @@ consumer's existing architecture; keep ordinary rendering code unchanged.
 
 Read the consumer's instructions, Cargo manifests, root window/render code,
 and navigation handling. Locate the selected Agentation checkout or Cargo Git
-dependency source. Its README, `docs/consumer-setup.md`, and complete
-`examples/consumer` package are the reference implementation. If this skill
+dependency source. Its README, `site/docs/consumer-setup.md`, and complete
+`example` package are the reference implementation. If this skill
 was copied alone, retrieve those files from the same authenticated repository
 and revision selected for the dependency:
 `https://github.com/emmanuel-defreitas/gpui-agentation`.
@@ -21,24 +21,20 @@ Do not assume a development branch's API matches a different installed revision.
 Verify that the selected revision exports `Agentation`, `Assets`, and `init`
 before using this integration pattern.
 
-The current compatibility baseline is `gpui-pre =0.3.8`. Agentation internally uses Ely revision
-`da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721` from
-`https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components`.
-Verify the selected source's manifest before editing. Different GPUI packages
-or sources have incompatible types; adding a second GPUI dependency is not a
-compatibility fix. If the host is incompatible, report the concrete mismatch
-and complete only independent setup work; do not migrate its renderer or
-upgrade its UI dependencies as an incidental installation step.
+The current compatibility baseline is registry GPUI Kit 0.11.0 with
+`gpui-pre =0.3.14`. Use the same registry Kit version in the host and Agentation.
+Do not mix Git/path overrides or GPUI backends.
+Kit globals are shared with the host. Preserve the host's theme and focus setup.
+The inspector picking workaround is contained inside Agentation; no patched
+Kit packages are required. Keep the lockfile. If the host is incompatible, report the mismatch;
+do not migrate its renderer as an incidental installation step.
 
-Add `gpui-agentation` as a normal dependency with `default-features = false` and
-`features = ["native"]`, using version 0.6.0 or an authorized local checkout.
-Keep the lockfile. Source and assets for pinned Ely are bundled; never add a
-separate Ely dependency for Agentation. Its internal Ely globals are independent
-of a host Ely crate. Preserve the host’s existing theme and focus setup.
+Add `gpui-agentation` with `default-features = false` and `features = ["native"]`
+from crates.io or the selected checkout/revision. These instructions target the 0.7.0 Agentation API.
 
 ## Keep integration in one app-local module
 
-Adapt `examples/consumer/src/devtools.rs` when available. It is a consumer
+Adapt `example/src/devtools.rs` when available. It is a consumer
 adapter, not an exported `gpui_agentation::Devtools` type. Use the public
 `Agentation`, `Assets`, and `init` API through this adapter:
 
@@ -46,18 +42,23 @@ adapter, not an exported `gpui_agentation::Devtools` type. Use the public
   launch. If the host has assets, use `Assets::before(HostAssets)` in debug
   and preserve `HostAssets` in release. Do not overwrite unrelated assets.
 - `Devtools::init(cx)`: call `gpui_agentation::init(cx)` inside the launch
-  callback before mounting. This owns fonts, theme, and key bindings; no direct
-  Ely initialization is needed. Report initialization errors rather than
-  silently continuing with incomplete tooling.
+  callback before mounting for standalone hosts. Existing Kit hosts instead
+  call `init_with_options` with `HostMode::KitInitialized` and an explicit
+  renderer policy; Preserve leaves inspection under host control. Report initialization errors rather than
+  silently continuing with incomplete tooling. Also add
+  `gpui_agentation::debug_menu()` to the host's `cx.set_menus(...)` list so the
+  controls appear in the native **Debug** menu. Keep the host's existing menus.
 - `Devtools::mount(window, cx)`: retain one `gpui_agentation::Agentation` on the window's
   root entity. Customize app name, initial route, ignored store path, and local
   port. Storage failure must leave the application usable; listener failure
   already permits local annotations.
 - `frame(id, label, content, window, cx)`: delegate to `Agentation::root`,
-  which owns frame registration, toolbar layout, and root focus handling.
+  which owns frame registration and root focus handling. The toolbar is a
+  separate companion window docked to the host's right edge, so the frame
+  reserves no layout space.
   Mark the helper `#[track_caller]` so registration records the host call site.
-  Preserve `flex_1`, `min_h_0`, and content sizing. Do not manually add Ely's
-  `FocusScope` or duplicate `begin_frame` around this root.
+  Preserve `flex_1`, `min_h_0`, and content sizing. Keep exactly one Kit Root
+  around the host view. Do not duplicate `begin_frame`.
 - `set_route(url, window, cx)`: delegate to the overlay during committed
   navigation, with a stable route matching the initial mount.
 
@@ -70,33 +71,35 @@ app content, and the route hook is a no-op. Do not add
 release stubs to the annotation crate or enable debug assertions in release.
 Compile the consumer's real release binary, not a debug-only example stub.
 
-Place the frame below the native/custom titlebar, outside content padding and
-scrolling. Put padding inside the application's scroll region. Preserve the
+Wrap the screen content, outside its padding and scrolling. Put padding inside
+the application's scroll region. Preserve the
 host's own control focus and keyboard bindings. `Agentation::root` supplies the
-tooling's outer focus boundary; do not nest another Ely root around it. Existing
-lower-level `AnnotationOverlay` integrations may retain their own Ely root and
+annotation focus boundary inside the host's Kit Root. Existing
+lower-level `AnnotationOverlay` integrations may retain their own Kit Root and
 startup, but don't mix both root paths. In a multi-window app, establish
 store/listener ownership before adding overlays to every window; the minimal
 example is for one window.
 
 ## Register meaningful views, not every element
 
-Start with one target per screen through the adapter. This gives screen-level
-inspection and source context; drawing tools remain available across the
-viewport. Explicitly report that child controls are not automatically targets.
+Start with one frame per screen through the adapter. **Inspect** uses GPUI's
+native picker, so ordinary elements can be selected without wrappers. The
+registered frame supplies the route, screen-level source context, and the
+target for the drawing tools, which work across the viewport.
 
-If finer selection is requested, register the roots of selected shared views
-or component constructors, once at their implementation boundary. Keep any
+If host-defined feedback regions are requested, register the roots of selected
+shared views or component constructors with `target(id, label, child)`, once at
+their implementation boundary. Keep any
 additional debug gates in the adapter or a shared helper. Do not instrument
 every `.child`, button, label, or layout div. Do not promise an attribute macro,
 automatic traversal, or source rewriting MCP tool: none exists in this API.
-The native GPUI inspector has different picking behavior and is not a drop-in
-replacement for Agentation registration.
+Registered targets and native inspection are separate: registration does not
+change what the native picker can select.
 
 Use IDs unique within a window and stable across rebuilds. Repeated views
 need record keys rather than indices or source line numbers. Source locations
-describe the registered view's call site, not arbitrary descendants. The
-smallest visible registered target under the pointer is picked.
+describe the registered view's call site. Inspect annotations carry their own
+source location from the picked element.
 
 Navigation changes cancel unfinished editors; saved notes stay on their route.
 Do not silently change this lifecycle policy while wiring the host's router.
@@ -125,7 +128,7 @@ Run the host's format, lint, and test checks and a release check of its actual
 binary. Where feasible, exercise normal controls, Inspect-to-comment, navigation
 between routes, restart persistence, and MCP retrieval of the saved comment.
 For headless GPUI integration tests, enable Agentation's `test-support` feature
-and call `gpui_agentation::init_for_tests`; do not add an Ely test dependency.
+and call `gpui_agentation::init_for_tests`; do not add a second Kit source.
 Report exactly which native interactions were exercised and distinguish build
 checks from visual review. Summarize the adapter changes, selected registration
 coverage, storage location, endpoint, and any unverified checks.

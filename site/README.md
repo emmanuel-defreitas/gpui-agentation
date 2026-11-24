@@ -42,7 +42,7 @@ The site never calls the native loopback API or sends analytics; assets are
 self-hosted. Theme preference uses optional local storage. Clipboard writes
 happen only when a visitor clicks a Copy button or Open in Codex.
 
-Fonts are self-hosted from bundled Ely assets. See `public/assets/Inter-LICENSE.txt`
+Fonts are self-hosted from bundled GPUI Kit assets. See `public/assets/Inter-LICENSE.txt`
 and `public/assets/JetBrainsMono-LICENSE.txt` for their licenses.
 The site and native implementation credit https://www.agentation.com/ for
 inspiration; they do not reuse Agentation's implementation or brand assets.

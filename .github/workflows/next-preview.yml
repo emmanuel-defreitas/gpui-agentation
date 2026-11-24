@@ -1,55 +1,47 @@
-name: Preview CI
+name: Promotion Preview
 
 on:
   push:
     branches: [next]
-  workflow_dispatch:
+  pull_request:
+    branches: [next, main]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
-  group: preview-next
+  group: promotion-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  validate:
+  promotion-metadata:
     runs-on: ubuntu-latest
-    environment: preview
+    timeout-minutes: 5
     env:
-      INSTALL_COMMAND: ${{ vars.INSTALL_COMMAND }}
-      TEST_COMMAND: ${{ vars.TEST_COMMAND }}
-      BUILD_COMMAND: ${{ vars.BUILD_COMMAND }}
-      CONTAINER_IMAGE: ${{ vars.CONTAINER_IMAGE }}
-      CONTAINER_REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
-      CONTAINER_REGISTRY_USERNAME: ${{ vars.CONTAINER_REGISTRY_USERNAME }}
-      PREVIEW_DEPLOY_COMMAND: ${{ vars.PREVIEW_DEPLOY_COMMAND }}
-      CONTAINER_REGISTRY_PASSWORD: ${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
+      - name: Require the same-repository promotion lane
+        if: github.event_name == 'pull_request'
+        env:
+          GH_REPO: ${{ github.repository }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          if [ "$HEAD_REPO" != "$GH_REPO" ]; then
+            echo 'Promotion must come from this repository.' >&2
+            exit 1
+          fi
+          case "$HEAD_REF:$BASE_REF" in
+            dev:next|next:main) ;;
+            *) echo 'Only dev → next → main promotion is allowed.' >&2; exit 1 ;;
+          esac
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Validate release metadata before preview
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Validate the reviewed release metadata
         run: make version-check release-version-check
-      - name: Run configured install, test, and build commands
-        run: |
-          set -euo pipefail
-          for command in "$INSTALL_COMMAND" "$TEST_COMMAND" "$BUILD_COMMAND"; do
-            if [ -n "$command" ]; then
-              bash -o pipefail -c "$command"
-            fi
-          done
-      - name: Build and push configured container image
-        if: env.CONTAINER_IMAGE != '' && env.CONTAINER_REGISTRY != '' && env.CONTAINER_REGISTRY_USERNAME != ''
-        run: |
-          set -euo pipefail
-          test -n "$CONTAINER_REGISTRY_PASSWORD"
-          image="${CONTAINER_REGISTRY}/${CONTAINER_IMAGE}:${GITHUB_SHA}"
-          printf '%s' "$CONTAINER_REGISTRY_PASSWORD" | docker login "$CONTAINER_REGISTRY" --username "$CONTAINER_REGISTRY_USERNAME" --password-stdin
-          docker build --tag "$image" .
-          docker push "$image"
-      - name: Deploy preview
-        if: env.PREVIEW_DEPLOY_COMMAND != ''
-        run: bash -o pipefail -c "$PREVIEW_DEPLOY_COMMAND"

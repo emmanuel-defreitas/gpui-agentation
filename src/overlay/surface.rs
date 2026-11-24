@@ -1,22 +1,12 @@
 use super::*;
-use crate::ely::{
-    buttons::{ActionBar, Button, IconButton},
-    forms::ColorSwatch,
-    lists::{ListItem, SelectableList},
-    media::Tool,
-    motion,
-    overlays::Popover,
-    primitives::{FocusRing, FocusScope, Icon, IconName, Measure, raise},
-    theme::{ActiveTheme, ControlSize, Elevation, Radius, TextSize},
-    typography::{Caption, Label, Overline},
-};
+use crate::drawing::AnnotationTool;
 use crate::{
     AnnotationShape, Rect,
     drawing::{centered_panel, note_panel_position},
 };
 use gpui::{
-    ClipboardItem, CursorStyle, DragMoveEvent, EmptyView, EntityId, MouseButton, RenderOnce, Role,
-    anchored, canvas, point, px,
+    ClipboardItem, CursorStyle, DragMoveEvent, EmptyView, EntityId, MouseButton, Role, anchored,
+    canvas, point, px,
 };
 
 #[derive(Clone)]
@@ -24,141 +14,21 @@ pub(super) struct FeedbackDrag {
     pub owner: EntityId,
 }
 
-const TOOLS: [(Option<Tool>, IconName, &str); 6] = [
-    (None, IconName::Crosshair, "Inspect element"),
-    (Some(Tool::Box), IconName::Square, "Box"),
-    (Some(Tool::Arrow), IconName::ArrowUpRight, "Arrow"),
-    (Some(Tool::Pen), IconName::PenLine, "Pen"),
-    (Some(Tool::Pin), IconName::MessageSquare, "Comment"),
-    (Some(Tool::Select), IconName::Type, "Textbox"),
-];
-
-pub(super) fn tool_shortcut(tool: Option<Tool>) -> &'static str {
+pub(super) fn tool_shortcut(tool: Option<AnnotationTool>) -> &'static str {
     match tool {
         None => "I",
-        Some(Tool::Box) => "B",
-        Some(Tool::Arrow) => "A",
-        Some(Tool::Pen) => "P",
-        Some(Tool::Pin) => "C",
-        Some(Tool::Select) => "T",
+        Some(AnnotationTool::Box) => "B",
+        Some(AnnotationTool::Arrow) => "A",
+        Some(AnnotationTool::Pen) => "P",
+        Some(AnnotationTool::Pin) => "C",
+        Some(AnnotationTool::Text) => "T",
     }
 }
 
-pub(super) struct WidthMotion {
-    from: f32,
-    to: f32,
-    since: Instant,
-}
-
-impl WidthMotion {
-    fn value(&self, length: Duration) -> (f32, bool) {
-        let t = (self.since.elapsed().as_secs_f32() / length.as_secs_f32()).min(1.0);
-        (
-            motion::lerp(self.from, self.to, motion::ease_out_cubic(t)),
-            t < 1.0,
-        )
-    }
-}
-
-fn tool_cursor(tool: Option<Tool>) -> CursorStyle {
+pub(super) fn tool_cursor(tool: Option<AnnotationTool>) -> CursorStyle {
     match tool {
         None => CursorStyle::Arrow,
         Some(_) => CursorStyle::Crosshair,
-    }
-}
-
-// Match Ely's editor references: file identity first, location separate, path
-// secondary. Unlike ReferencesPanel, this hover footer must remain click-through.
-fn inspector_source(source: &str, cx: &App) -> gpui::Div {
-    let theme = cx.theme();
-    let parsed = source.rsplit_once(':').and_then(|(rest, column)| {
-        let (path, line) = rest.rsplit_once(':')?;
-        line.parse::<u32>().ok()?;
-        column.parse::<u32>().ok()?;
-        Some((path, format!("Ln {line}, Col {column}")))
-    });
-    let (path, location) = parsed.unwrap_or((source, String::new()));
-    let (directory, filename) = path.rsplit_once('/').unwrap_or(("", path));
-    div()
-        .w_full()
-        .flex_none()
-        .pt_2()
-        .border_t_1()
-        .border_color(theme.colors.border)
-        .flex()
-        .flex_col()
-        .gap_1()
-        .debug_selector(|| "feedback-inspector-source".into())
-        .child(
-            div()
-                .w_full()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(
-                    Icon::new(IconName::FileCode)
-                        .size(IconSize::Sm)
-                        .color(theme.colors.fg_muted),
-                )
-                .child(
-                    Label::new(filename.to_owned())
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_size(theme.text_size(TextSize::Sm)),
-                )
-                .when(!location.is_empty(), |row| {
-                    row.child(
-                        div()
-                            .flex_none()
-                            .px_1p5()
-                            .py_0p5()
-                            .rounded(theme.radius(Radius::Sm))
-                            .bg(theme.colors.sunken)
-                            .font_family(theme.mono_family.clone())
-                            .text_size(theme.text_size(TextSize::Xs))
-                            .text_color(theme.colors.fg_muted)
-                            .debug_selector(|| "feedback-inspector-location".into())
-                            .child(location),
-                    )
-                }),
-        )
-        .when(!directory.is_empty(), |footer| {
-            footer.child(
-                Caption::new(directory.to_owned())
-                    .w_full()
-                    .truncate()
-                    .text_ellipsis_start()
-                    .font_family(theme.mono_family.clone())
-                    .text_size(theme.text_size(TextSize::Xs))
-                    .text_color(theme.colors.fg_subtle),
-            )
-        })
-}
-
-#[derive(IntoElement)]
-struct NotesTrigger {
-    count: usize,
-    toggle: std::rc::Rc<dyn Fn(&mut Window, &mut App)>,
-    owner: gpui::WeakEntity<AnnotationOverlay>,
-}
-
-impl RenderOnce for NotesTrigger {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let notes = IconButton::new("feedback-review", IconName::MessageSquare)
-            .tooltip(format!("Comments ({})", self.count))
-            .variant(ButtonVariant::Ghost)
-            .on_click(move |_, window, cx| {
-                let dismissed = self
-                    .owner
-                    .update(cx, |this, cx| this.dismiss_note(window, cx))
-                    .unwrap_or(false);
-                if dismissed {
-                    (self.toggle)(window, cx);
-                }
-            });
-        annotation_count(self.count, round_icon(notes, window, cx), cx)
-            .debug_selector(|| "feedback-floating-comments".into())
     }
 }
 
@@ -174,36 +44,35 @@ pub(super) fn annotation_icon(shape: Option<&AnnotationShape>) -> IconName {
 }
 
 pub(super) fn comment_input(
-    input: &gpui::Entity<TextInput>,
+    input: &gpui::Entity<TextareaState>,
     background: gpui::Hsla,
     textbox: bool,
     window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
-    let mut field = Input::new(input).render(window, cx).into_any_element();
-    let colors = &cx.theme().colors;
-    if let Some(root) = field.downcast_mut::<gpui::Div>() {
-        root.style().refine(
-            &gpui::StyleRefinement::default()
-                .bg(background)
-                .text_color(colors.bg.opacity(0.5))
-                .border_0()
-                .rounded_none()
-                .p_0(),
-        );
-    }
+    let foreground = annotation_style::foreground(background);
+    let focused = input.focus_handle(cx).is_focused(window);
+    let field = Textarea::new(input)
+        .appearance(false)
+        .bordered(false)
+        .aria_label("Feedback")
+        .bg(background)
+        .text_color(foreground)
+        .p_0()
+        .rounded_none();
     div()
         .relative()
         .w_full()
         .child(field)
-        .when(input.read(cx).text().is_empty(), |root| {
+        .when(input.read(cx).value().is_empty() && !focused, |root| {
             root.child(
                 div()
+                    .debug_selector(|| "feedback-editor-placeholder".into())
                     .absolute()
                     .top_0()
                     .left_0()
-                    .text_size(cx.theme().text_size(TextSize::Sm))
-                    .text_color(colors.bg.opacity(0.5))
+                    .text_size(cx.theme().typography_tokens().sm.size)
+                    .text_color(foreground.opacity(0.65))
                     .child(if textbox {
                         "Type text…"
                     } else {
@@ -214,7 +83,46 @@ pub(super) fn comment_input(
         .into_any_element()
 }
 
-fn row_action(button: impl IntoElement) -> gpui::Div {
+/// The text field shown inside a textbox on the canvas: transparent, drawn in
+/// the annotation color, with its own placeholder. Used for inline editing.
+pub(super) fn textbox_input(
+    input: &gpui::Entity<TextareaState>,
+    color: gpui::Hsla,
+    _window: &mut Window,
+    cx: &mut App,
+) -> gpui::AnyElement {
+    let field = Textarea::new(input)
+        .appearance(false)
+        .bordered(false)
+        .aria_label("Textbox")
+        .bg(gpui::transparent_black())
+        .text_color(color)
+        .p_0()
+        .rounded_none()
+        .text_size(px(16.))
+        .line_height(px(22.));
+    div()
+        .debug_selector(|| "feedback-textbox-input".into())
+        .relative()
+        .w_full()
+        .text_size(px(16.0))
+        .line_height(px(22.0))
+        .child(field)
+        .when(input.read(cx).value().is_empty(), |root| {
+            root.child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .text_size(px(16.0))
+                    .text_color(color.opacity(0.6))
+                    .child("Type text…"),
+            )
+        })
+        .into_any_element()
+}
+
+pub(super) fn row_action(button: impl IntoElement) -> gpui::Div {
     div()
         .flex_none()
         .on_mouse_down(MouseButton::Left, |_, window, cx| {
@@ -238,54 +146,57 @@ fn row_action(button: impl IntoElement) -> gpui::Div {
         .child(button)
 }
 
-fn viewport(window: &Window) -> (f32, f32) {
+/// The app's content area in window pixels. While GPUI's inspector is open it
+/// owns a sidebar at the window's right, which annotations must not cover and
+/// normalized coordinates must not stretch into.
+pub(super) fn viewport(window: &Window, cx: &App) -> (f32, f32) {
     let size = window.viewport_size();
-    (size.width.into(), size.height.into())
+    let width = if inspector::sidebar_open(window, cx) {
+        (size.width - inspector::sidebar_width(window)).max(px(0.))
+    } else {
+        size.width
+    };
+    (width.into(), size.height.into())
 }
 
-pub(super) fn round_icon(
-    button: IconButton,
-    window: &mut Window,
-    cx: &mut App,
-) -> gpui::AnyElement {
-    let mut button = button.render(window, cx).into_any_element();
-    if let Some(root) = button.downcast_mut::<gpui::Stateful<gpui::Div>>() {
-        root.style()
-            .refine(&gpui::StyleRefinement::default().rounded_full());
-    }
-    button
-}
-
-fn normalized(at: gpui::Point<gpui::Pixels>, window: &Window) -> (f32, f32) {
-    let (w, h) = viewport(window);
+fn normalized(at: gpui::Point<gpui::Pixels>, window: &Window, cx: &App) -> (f32, f32) {
+    let (w, h) = viewport(window, cx);
     (
         (f32::from(at.x) / w.max(1.0)).clamp(0.0, 1.0),
         (f32::from(at.y) / h.max(1.0)).clamp(0.0, 1.0),
     )
 }
 
-fn toolbar_anchor(
-    viewport: (f32, f32),
-    size: (f32, f32),
-    floating_at: Option<(f32, f32)>,
-) -> (f32, f32) {
-    let at = floating_at.unwrap_or(((viewport.0 - size.0) / 2.0, viewport.1 - size.1 - 48.0));
-    (
-        at.0.clamp(8.0, (viewport.0 - size.0 - 8.0).max(8.0)),
-        at.1.clamp(8.0, (viewport.1 - size.1 - 8.0).max(8.0)),
-    )
-}
-
-pub(super) fn notes_content(
-    owner: gpui::WeakEntity<AnnotationOverlay>,
-    close: std::rc::Rc<dyn Fn(&mut Window, &mut App)>,
+pub(super) fn consumer_action(
+    owner: Entity<AnnotationOverlay>,
     window: &mut Window,
     cx: &mut App,
-) -> gpui::Div {
-    let Some(owner) = owner.upgrade() else {
-        return div();
-    };
-    notes_body(owner.read(cx), owner.clone(), close, false, window, cx)
+    action: impl FnOnce(&mut AnnotationOverlay, &mut Window, &mut Context<AnnotationOverlay>) + 'static,
+) {
+    let host = crate::inspection::inspector_target(window, cx);
+    if host == window.window_handle() {
+        owner.update(cx, |this, cx| action(this, window, cx));
+    } else {
+        cx.defer(move |cx| {
+            let _ = host.update(cx, |_, window, cx| {
+                owner.update(cx, |this, cx| action(this, window, cx))
+            });
+        });
+    }
+}
+
+fn note_preview(note: &crate::Annotation) -> String {
+    let preview = note
+        .feedback
+        .comment
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if preview.is_empty() {
+        format!("Note {}", note.index)
+    } else {
+        preview
+    }
 }
 
 pub(super) fn notes_body(
@@ -297,9 +208,14 @@ pub(super) fn notes_body(
     cx: &App,
 ) -> gpui::Div {
     let notes = this.store.app_annotations(&this.session.app_name);
-    let mut rows = SelectableList::new("feedback-notes-list")
-        .label("All app annotations")
-        .selected(this.selected_note.iter().cloned())
+    let mut rows = div()
+        .id("feedback-notes-list")
+        .role(gpui::Role::ListBox)
+        .aria_label("All app annotations")
+        .flex()
+        .flex_col()
+        .overflow_y_scroll()
+        .track_focus(&this.notes_focus)
         .max_h(if sheet {
             (window.viewport_size().height - gpui::rems(14.).to_pixels(window.rem_size()))
                 .max(px(80.))
@@ -318,100 +234,189 @@ pub(super) fn notes_body(
                 let edit_owner = owner.clone();
                 let edit_close = close.clone();
                 let edit_id = id.clone();
-                let edit = IconButton::new(format!("feedback-edit-{id}"), IconName::Pencil)
-                    .size(ControlSize::Sm)
-                    .variant(ButtonVariant::Ghost)
+                let edit = Button::new(format!("feedback-edit-{id}"))
+                    .icon(IconName::Pencil)
+                    .small()
+                    .ghost()
                     .tooltip(format!("Edit note {}", note.index))
                     .on_click(move |_, window, cx| {
                         cx.stop_propagation();
                         edit_close(window, cx);
-                        edit_owner.update(cx, |this, cx| this.edit(&edit_id, window, cx));
+                        let edit_id = edit_id.clone();
+                        consumer_action(edit_owner.clone(), window, cx, move |this, window, cx| {
+                            this.edit(&edit_id, window, cx)
+                        });
                     });
                 let delete_owner = owner.clone();
                 let delete_id = id.clone();
-                let delete = IconButton::new(format!("feedback-delete-{id}"), IconName::Trash2)
-                    .size(ControlSize::Sm)
-                    .variant(ButtonVariant::Ghost)
+                let delete = Button::new(format!("feedback-delete-{id}"))
+                    .icon(IconName::Trash)
+                    .small()
+                    .ghost()
                     .tooltip(format!("Delete note {}", note.index))
                     .on_click(move |_, window, cx| {
                         cx.stop_propagation();
-                        delete_owner.update(cx, |this, cx| {
-                            this.delete(&delete_id, window, cx);
-                        });
+                        let delete_id = delete_id.clone();
+                        consumer_action(
+                            delete_owner.clone(),
+                            window,
+                            cx,
+                            move |this, window, cx| {
+                                this.delete(&delete_id, window, cx);
+                            },
+                        );
                     });
-                // Ely ListItem uses a single-line ellipsis renderer. Keep the
-                // complete comment in storage/editor, flatten only its preview.
-                let preview = note
-                    .feedback
-                    .comment
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                rows = rows.row(
-                    id.clone(),
-                    ListItem::new(
-                        format!("feedback-note-{id}"),
-                        if sheet {
-                            preview.clone()
-                        } else {
-                            format!("{}. {}", note.index, preview)
-                        },
-                    )
-                    .description(note.url.clone())
-                    .leading(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .when(sheet, |leading| {
-                                leading.child(number_badge(
-                                    note.index.to_string(),
-                                    ControlSize::Sm,
+                let preview = note_preview(&note);
+                let hover_owner = owner.clone();
+                let hover_id = id.clone();
+                let index = note.index;
+                let selected = this.selected_note.as_deref() == Some(id.as_str());
+                let row_owner = owner.clone();
+                let row_close = close.clone();
+                let focus = this.notes_focus.clone();
+                let row_id = id.clone();
+                rows = rows.child(
+                    gpui::component::list::ListItem::new(format!("feedback-note-{id}"))
+                        .selected(selected)
+                        .accessibility_label(preview.clone())
+                        .debug_selector(move || format!("feedback-note-row-{index}"))
+                        .on_hover(move |hovered, _, cx| {
+                            hover_owner.update(cx, |this, cx| {
+                                if *hovered {
+                                    this.hovered_note = Some(hover_id.clone());
+                                } else if this.hovered_note.as_ref() == Some(&hover_id) {
+                                    this.hovered_note = None;
+                                } else {
+                                    return;
+                                }
+                                cx.notify();
+                            });
+                        })
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .w_full()
+                                .when(sheet, |body| {
+                                    let color =
+                                        annotation_style::palette(cx)[note.annotation_color()];
+                                    body.child(
+                                        number_badge(note.index.to_string(), ControlSize::Sm, cx)
+                                            .bg(color)
+                                            .text_color(annotation_style::foreground(color))
+                                            .debug_selector(move || {
+                                                format!("feedback-note-badge-{index}")
+                                            }),
+                                    )
+                                })
+                                .child(Icon::new(annotation_icon(note.feedback.shape.as_ref())))
+                                .child(
+                                    div().flex_1().min_w_0().child(preview).child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(note.url.clone()),
+                                    ),
+                                )
+                                .child(row_action(edit))
+                                .child(row_action(delete)),
+                        )
+                        .on_click(move |event, window, cx| {
+                            window.focus(&focus, cx);
+                            row_owner.update(cx, |this, cx| {
+                                this.selected_note = Some(row_id.clone());
+                                cx.notify();
+                            });
+                            if event.click_count() > 1 {
+                                row_close(window, cx);
+                                let id = row_id.clone();
+                                consumer_action(
+                                    row_owner.clone(),
+                                    window,
                                     cx,
-                                ))
-                            })
-                            .child(Icon::new(annotation_icon(note.feedback.shape.as_ref()))),
-                    )
-                    .trailing(
-                        div()
-                            .flex()
-                            .gap_1()
-                            .child(row_action(edit))
-                            .child(row_action(delete)),
-                    ),
+                                    move |this, window, cx| {
+                                        if this
+                                            .store
+                                            .annotation(&id)
+                                            .is_ok_and(|note| note.feedback.inspection.is_some())
+                                        {
+                                            this.open_inspection(&id, window, cx);
+                                        } else {
+                                            this.edit(&id, window, cx);
+                                        }
+                                    },
+                                );
+                            }
+                        }),
                 );
             }
         }
         Err(error) => message = Some(error.to_string()),
     }
-    let select_owner = owner.clone();
-    let activate_owner = owner.clone();
-    let activate_close = close.clone();
-    rows = rows
-        .on_change(move |keys, _, cx| {
-            select_owner.update(cx, |this, cx| {
-                this.selected_note = keys.first().map(|key| key.to_string());
-                cx.notify();
-            });
-        })
-        .on_activate(move |id, window, cx| {
-            activate_close(window, cx);
-            activate_owner.update(cx, |this, cx| this.edit(id, window, cx));
+    let keyboard_owner = owner.clone();
+    let keyboard_close = close.clone();
+    rows = rows.on_key_down(move |event, window, cx| {
+        let key = event.keystroke.key.as_str();
+        if !matches!(key, "up" | "down" | "enter" | "space") {
+            return;
+        }
+        let selected = keyboard_owner.update(cx, |this, cx| {
+            let notes = this
+                .store
+                .app_annotations(&this.session.app_name)
+                .unwrap_or_default();
+            if notes.is_empty() {
+                return None;
+            }
+            let current = notes
+                .iter()
+                .position(|n| Some(&n.id) == this.selected_note.as_ref());
+            let index = match key {
+                "up" => current.unwrap_or(0).saturating_sub(1),
+                "down" => current.map(|i| (i + 1).min(notes.len() - 1)).unwrap_or(0),
+                _ => current.unwrap_or(0),
+            };
+            this.selected_note = Some(notes[index].id.clone());
+            cx.notify();
+            Some((
+                notes[index].id.clone(),
+                notes[index].feedback.inspection.is_some(),
+            ))
         });
+        if matches!(key, "enter" | "space") {
+            if let Some((id, inspection)) = selected {
+                keyboard_close(window, cx);
+                consumer_action(
+                    keyboard_owner.clone(),
+                    window,
+                    cx,
+                    move |this, window, cx| {
+                        if inspection {
+                            this.open_inspection(&id, window, cx);
+                        } else {
+                            this.edit(&id, window, cx);
+                        }
+                    },
+                );
+            }
+        }
+        cx.stop_propagation();
+    });
     let add_owner = owner.clone();
     let add_close = close.clone();
     let owner = owner.clone();
-    let add = Button::new("feedback-add", "Add")
+    let add = Button::new("feedback-add")
+        .label("Add")
         .icon(IconName::Plus)
         .on_click(move |_, window, cx| {
             add_close(window, cx);
-            add_owner.update(cx, |this, cx| {
-                this.active = false;
-                this.draft = None;
-                this.toggle(window, cx);
+            consumer_action(add_owner.clone(), window, cx, |this, window, cx| {
+                this.choose_tool(None, window, cx);
             });
         });
-    let copy = Button::new("feedback-copy-markdown", "Copy")
+    let copy = Button::new("feedback-copy-markdown")
+        .label("Copy")
         .icon(IconName::Copy)
         .on_click(move |_, _, cx| {
             owner.update(cx, |this, cx| {
@@ -434,7 +439,7 @@ pub(super) fn notes_body(
             panel.child(
                 div()
                     .py_2()
-                    .text_color(cx.theme().colors.fg_muted)
+                    .text_color(cx.theme().colors.muted_foreground)
                     .child(message),
             )
         })
@@ -471,7 +476,7 @@ pub(super) fn notes_body(
                                 div()
                                     .w_full()
                                     .debug_selector(|| "feedback-comments-add".into())
-                                    .child(add.full_width()),
+                                    .child(add.w_full()),
                             ),
                     ),
             )
@@ -515,24 +520,34 @@ pub(super) fn notes_body(
 }
 
 impl AnnotationOverlay {
+    fn annotation_interaction_started(&self) -> bool {
+        self.draft.is_some()
+            || !self.stroke.is_empty()
+            || self.pin_drag.is_some()
+            || self.textbox_drag.is_some()
+            || self.textbox_resize.is_some()
+    }
+
     pub(super) fn finish_stroke(
         &mut self,
         at: gpui::Point<gpui::Pixels>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.toolbar_drag.take().is_some() {
-            self.persist_toolbar(cx);
+        if self.finish_textbox_resize(cx) {
+            return;
         }
         if let Some((before, offset)) = self.textbox_drag.take() {
-            let p = normalized(at, window);
+            let p = normalized(at, window, cx);
             let after = super::textbox::moved_textbox(
                 &before,
-                (
-                    (p.0 - offset.0).clamp(0.0, 1.0),
-                    (p.1 - offset.1).clamp(0.0, 1.0),
+                self.textbox_drag_position(
+                    &before.id,
+                    (p.0 - offset.0, p.1 - offset.1),
+                    window,
+                    cx,
                 ),
-                viewport(window),
+                viewport(window, cx),
             );
             if before != after {
                 match self.store.replace_note(Some(&before), Some(&after)) {
@@ -547,13 +562,15 @@ impl AnnotationOverlay {
             return;
         }
         if let Some((before, offset)) = self.pin_drag.take() {
+            // The dropped spot is the new anchor; re-seed it from the target's current position.
+            self.follow_anchors.remove(&before.id);
             let mut after = before.clone();
-            let p = normalized(at, window);
+            let p = normalized(at, window, cx);
             let p = (
                 (p.0 - offset.0).clamp(0.0, 1.0),
                 (p.1 - offset.1).clamp(0.0, 1.0),
             );
-            let (_, h) = viewport(window);
+            let (_, h) = viewport(window, cx);
             after.feedback.x = p.0 * 100.0;
             after.feedback.y = p.1 * h;
             if let Some(AnnotationShape::Pin { at, .. }) = &mut after.feedback.shape {
@@ -579,20 +596,23 @@ impl AnnotationOverlay {
         let Some(tool) = self.tool else {
             return;
         };
-        let shape = if tool == Tool::Select && !points.is_empty() {
-            Some(AnnotationShape::Text {
-                at: points[0],
-                text: String::new(),
-                color: self.color,
-            })
+        let shape = if tool == AnnotationTool::Text && !points.is_empty() {
+            // A drag frames the box; a click places one sized to its text.
+            Some(crate::drawing::text_box(
+                points[0],
+                normalized(at, window, cx),
+                viewport(window, cx),
+                self.color,
+            ))
         } else {
-            crate::drawing::finish_shape(tool, points, normalized(at, window), self.color)
+            crate::drawing::finish_shape(tool, points, normalized(at, window, cx), self.color)
         };
         let Some(shape) = shape else {
             return;
         };
-        let (w, h) = viewport(window);
+        let (w, h) = viewport(window, cx);
         let bounds = shape.bounds(w, h);
+        self.draft_textbox_bounds = None;
         self.draft = Some(Draft {
             index: None,
             editing: true,
@@ -601,7 +621,7 @@ impl AnnotationOverlay {
             url: self.session.url.clone(),
             target: Target {
                 id: format!("drawing:{}", uuid::Uuid::new_v4()),
-                label: format!("{tool:?}"),
+                label: tool.persisted_label().into(),
                 source: String::new(),
                 bounds,
             },
@@ -611,7 +631,8 @@ impl AnnotationOverlay {
             y: bounds.y + bounds.height / 2.0,
         });
         self.notice.clear();
-        self.input.update(cx, |input, cx| input.set_text("", cx));
+        self.input
+            .update(cx, |input, cx| input.set_comment("", window, cx));
         window.focus(&self.input.focus_handle(cx), cx);
         cx.notify();
     }
@@ -622,15 +643,20 @@ impl AnnotationOverlay {
         window: &Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some((before, offset)) = &self.textbox_drag {
-            let p = normalized(at, window);
+        if self.textbox_resize.is_some() {
+            let pointer = normalized(at, window, cx);
+            self.advance_textbox_resize(pointer, window, cx);
+        } else if let Some((before, offset)) = &self.textbox_drag {
+            let p = normalized(at, window, cx);
             let after = super::textbox::moved_textbox(
                 before,
-                (
-                    (p.0 - offset.0).clamp(0.0, 1.0),
-                    (p.1 - offset.1).clamp(0.0, 1.0),
+                self.textbox_drag_position(
+                    &before.id,
+                    (p.0 - offset.0, p.1 - offset.1),
+                    window,
+                    cx,
                 ),
-                viewport(window),
+                viewport(window, cx),
             );
             if let Some(note) = self
                 .session
@@ -642,7 +668,7 @@ impl AnnotationOverlay {
             }
             cx.notify();
         } else if let Some((before, offset)) = &self.pin_drag {
-            let p = normalized(at, window);
+            let p = normalized(at, window, cx);
             let p = (
                 (p.0 - offset.0).clamp(0.0, 1.0),
                 (p.1 - offset.1).clamp(0.0, 1.0),
@@ -660,14 +686,9 @@ impl AnnotationOverlay {
                 }
             }
             cx.notify();
-        } else if let Some(offset) = self.toolbar_drag {
-            let (w, h) = viewport(window);
-            self.toolbar_at = Some((f32::from(at.x) - offset.0, f32::from(at.y) - offset.1));
-            self.toolbar_at = Some(self.toolbar_position((w, h)));
-            cx.notify();
         } else if !self.stroke.is_empty() && self.stroke.len() < 4096 {
             self.pointer = Some((at.x.into(), at.y.into()));
-            let next = normalized(at, window);
+            let next = normalized(at, window, cx);
             if self.stroke.last() != Some(&next) {
                 self.stroke.push(next);
                 cx.notify();
@@ -675,251 +696,19 @@ impl AnnotationOverlay {
         }
     }
 
-    pub(super) fn history_controls(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let mut controls = div().flex().items_center().gap_1();
-        for (name, label, icon, disabled) in [
-            ("undo", "Undo", IconName::Undo2, self.history.is_empty()),
-            ("redo", "Redo", IconName::Redo2, self.future.is_empty()),
-            ("save", "Save", IconName::Save, self.draft.is_none()),
-            (
-                "delete",
-                "Delete",
-                IconName::Trash2,
-                self.draft.as_ref().and_then(|d| d.id.as_ref()).is_none()
-                    && self.selected_note.is_none(),
-            ),
-        ] {
-            controls = controls.child(
-                div()
-                    .debug_selector(move || format!("feedback-history-{name}"))
-                    .child(
-                        super::surface_button::SurfaceButton::new(
-                            format!("feedback-history-{name}"),
-                            label,
-                            icon,
-                            false,
-                        )
-                        .icon_only()
-                        .when(self.active, |button| {
-                            button.when_some(super::commands::shortcut(name), |button, keys| {
-                                button.shortcut(keys)
-                            })
-                        })
-                        .disabled(disabled)
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| {
-                                this.dispatch_command(
-                                    &super::commands::AnnotationCommand { name: name.into() },
-                                    window,
-                                    cx,
-                                )
-                            },
-                        )),
-                    ),
-            );
-        }
-        controls
-    }
-
-    fn toolbar_position(&self, viewport: (f32, f32)) -> (f32, f32) {
-        toolbar_anchor(viewport, self.toolbar_size, self.toolbar_at)
-    }
-
-    fn toolbar(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let owner = cx.entity_id();
-        let start_drag = cx.entity().downgrade();
-        let handle = div()
-            .id("feedback-drag-handle")
-            .role(Role::Button)
-            .aria_label("Move annotation toolbar; drag or use arrow keys")
-            .tab_index(0)
-            .focus_ring(cx)
-            .cursor_move()
-            .p_1()
-            .child(Icon::new(IconName::GripVertical))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
-                    let at = this.toolbar_position(viewport(window));
-                    this.toolbar_drag = Some((
-                        f32::from(event.position.x) - at.0,
-                        f32::from(event.position.y) - at.1,
-                    ));
-                    cx.stop_propagation();
-                }),
-            )
-            .on_drag(FeedbackDrag { owner }, move |_, _, window, cx| {
-                let _ = start_drag.update(cx, |this, cx| {
-                    this.advance_drag(window.mouse_position(), window, cx)
-                });
-                cx.new(|_| EmptyView)
-            })
-            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-                let delta = match event.keystroke.key.as_str() {
-                    "left" => (-8.0, 0.0),
-                    "right" => (8.0, 0.0),
-                    "up" => (0.0, -8.0),
-                    "down" => (0.0, 8.0),
-                    _ => return,
-                };
-                let at = this.toolbar_position(viewport(window));
-                this.toolbar_at = Some((at.0 + delta.0, at.1 + delta.1));
-                this.persist_toolbar(cx);
-                cx.stop_propagation();
-                cx.notify();
-            }));
-        let mut content = div()
-            .flex()
-            .flex_wrap()
-            .max_w(window.viewport_size().width - px(32.0))
-            .items_center()
-            .gap_2()
-            .flex_none()
-            .child(handle);
-        if self.active {
-            for (index, (tool, icon, name)) in TOOLS.into_iter().enumerate() {
-                content = content.child(
-                    super::surface_button::SurfaceButton::new(
-                        ("feedback-tool", index),
-                        name,
-                        icon,
-                        self.tool == tool,
-                    )
-                    .shortcut(tool_shortcut(tool).to_ascii_lowercase())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.choose_tool(tool, window, cx);
-                    })),
-                );
-            }
-            if self.tool.is_some() {
-                for color in 0..4 {
-                    let owner = cx.entity().downgrade();
-                    content = content.child(
-                        ColorSwatch::new(("feedback-color", color), cx.theme().colors.chart[color])
-                            .selected(color == self.color)
-                            .on_click(move |_, cx| {
-                                let _ = owner.update(cx, |this, cx| {
-                                    this.color = color;
-                                    cx.notify();
-                                });
-                            }),
-                    );
-                }
-            }
-            content = content
-                .child(self.notes(window, cx))
-                .child(self.settings(cx));
-            let done = IconButton::new("feedback-done", IconName::Power)
-                .tooltip("Done · Esc")
-                .on_click(cx.listener(|this, _, window, cx| this.close(window, cx)));
-            content = content.child(round_icon(done, window, cx));
-        } else {
-            let add = IconButton::new("feedback-toggle", IconName::Power)
-                .tooltip("Add annotation")
-                .variant(ButtonVariant::Ghost)
-                .on_click(cx.listener(|this, _, window, cx| {
-                    if this.draft.is_none() {
-                        this.previous_focus = window.focused(cx);
-                    }
-                    this.active = true;
-                    this.tool = None;
-                    this.draft = None;
-                    this.stroke.clear();
-                    this.over_shape = false;
-                    window.focus(&this.focus, cx);
-                    cx.notify();
-                }));
-            content = content
-                .child(round_icon(add, window, cx))
-                .child(self.notes(window, cx))
-                .child(self.settings(cx));
-        }
-        content = content.child(self.history_controls(cx));
-        let length = motion::duration(motion::BASE, cx);
-        // Floating ActionBar uses p_1p5 and a one-pixel border on each side.
-        let padding = f32::from(gpui::rems(0.75).to_pixels(window.rem_size())) + 2.0;
-        let owner = cx.entity().downgrade();
-        let mut bar = ActionBar::new().floating().overflow_x_hidden().child(
-            Measure::new("feedback-toolbar-content", move |bounds, _, cx| {
-                let width = f32::from(bounds.size.width) + padding;
-                let _ = owner.update(cx, |this, cx| {
-                    if this
-                        .toolbar_width
-                        .as_ref()
-                        .is_none_or(|motion| motion.to != width)
-                    {
-                        let from = this
-                            .toolbar_width
-                            .as_ref()
-                            .map(|motion| motion.value(length).0)
-                            .unwrap_or(width);
-                        this.toolbar_width = Some(WidthMotion {
-                            from,
-                            to: width,
-                            since: Instant::now(),
-                        });
-                        cx.notify();
-                    }
-                });
-            })
-            .flex_none()
-            .child(div().id("feedback-toolbar-scroll").child(content)),
-        );
-        if let Some(motion) = &self.toolbar_width {
-            let (width, moving) = motion.value(length);
-            bar = bar.w(px(width));
-            if moving {
-                window.request_animation_frame();
-            }
-        }
-        let at = self.toolbar_position(viewport(window));
-        let this = cx.entity().downgrade();
-        div()
-            .absolute()
-            .left(px(at.0))
-            .top(px(at.1))
-            .occlude()
-            .cursor_default()
-            .on_mouse_move(cx.listener(|this, _: &gpui::MouseMoveEvent, _, cx| {
-                if this.pointer.take().is_some() {
-                    cx.notify();
-                }
-            }))
-            .child(
-                Measure::new("feedback-toolbar-measure", move |bounds, _, cx| {
-                    let size = (f32::from(bounds.size.width), f32::from(bounds.size.height));
-                    let _ = this.update(cx, |this, cx| {
-                        if this.toolbar_size != size {
-                            this.toolbar_size = size;
-                            cx.notify();
-                        }
-                    });
-                })
-                .max_w(window.viewport_size().width - px(16.0))
-                .child(bar),
-            )
-    }
-
-    fn notes(&self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let count = self
+    fn activate_annotation(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self
             .store
-            .app_annotations(&self.session.app_name)
-            .map(|notes| notes.len())
-            .unwrap_or(0);
-        let owner = cx.entity().downgrade();
-        let trigger_owner = owner.clone();
-        Popover::with_opener(
-            "feedback-notes",
-            move |toggle| NotesTrigger {
-                count,
-                toggle,
-                owner: trigger_owner,
-            },
-            move |close, window, cx| notes_content(owner, close, window, cx),
-        )
+            .annotation(id)
+            .is_ok_and(|note| note.feedback.inspection.is_some())
+        {
+            self.open_inspection(id, window, cx);
+        } else {
+            self.edit(id, window, cx);
+        }
     }
 
-    fn shape_at(&self, at: gpui::Point<gpui::Pixels>, window: &Window) -> Option<String> {
+    fn shape_at(&self, at: gpui::Point<gpui::Pixels>, window: &Window, cx: &App) -> Option<String> {
         self.session
             .annotations
             .iter()
@@ -933,24 +722,55 @@ impl AnnotationOverlay {
                     .get(&note.id)
                     .is_some_and(|bounds| bounds.contains(&at))
                     || note.feedback.shape.as_ref().is_some_and(|shape| {
-                        shape.hit((at.x.into(), at.y.into()), viewport(window), 8.0)
+                        // Hit the shape where it is drawn: undo its scroll shift.
+                        self.scroll_shift(note, window, cx).is_some_and(|shift| {
+                            shape.hit(
+                                (f32::from(at.x) - shift.0, f32::from(at.y) - shift.1),
+                                viewport(window, cx),
+                                8.0,
+                            )
+                        })
                     }))
             })
             .map(|note| note.id.clone())
     }
 
-    fn panel(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let (w, h) = viewport(window);
-        let annotation = if let Some(draft) = &self.draft {
-            let mut bounds = if let Some(shape) = &draft.shape {
-                shape.bounds(w, h)
+    fn draft_bounds(&self, window: &Window, cx: &App) -> Option<Rect> {
+        let draft = self.draft.as_ref()?;
+        let (w, h) = viewport(window, cx);
+        let mut bounds = draft
+            .shape
+            .as_ref()
+            .map_or(draft.target.bounds, |shape| shape.bounds(w, h));
+        if let Some(id) = &draft.id {
+            let shift = if draft.shape.is_some() {
+                self.session
+                    .annotations
+                    .iter()
+                    .find(|note| &note.id == id)
+                    .map(|note| self.scroll_shift(note, window, cx))
+                    .unwrap_or(Some((0., 0.)))?
+            } else if let Some(anchor) = self.follow_anchors.get(id) {
+                let at = target::origin(window, cx, &anchor.target)?;
+                let base = anchor.baseline.get().unwrap_or(at);
+                (at.0 - base.0, at.1 - base.1)
             } else {
-                target::targets(window, cx)
-                    .into_iter()
-                    .find(|t| draft.url == self.session.url && t.id == draft.target.id)
-                    .map(|t| t.bounds)
-                    .unwrap_or(draft.target.bounds)
+                (0., 0.)
             };
+            bounds.x += shift.0;
+            bounds.y += shift.1;
+        } else if draft.shape.is_none() {
+            bounds = target::targets(window, cx)
+                .into_iter()
+                .find(|t| draft.url == self.session.url && t.id == draft.target.id)
+                .map_or(bounds, |target| target.bounds);
+        }
+        Some(bounds)
+    }
+
+    fn panel(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let (w, h) = viewport(window, cx);
+        let annotation = self.draft_bounds(window, cx).map(|mut bounds| {
             let marker_height = f32::from(
                 cx.theme()
                     .control_height(ControlSize::Lg)
@@ -960,10 +780,8 @@ impl AnnotationOverlay {
                 bounds.y -= (marker_height - bounds.height) / 2.0;
                 bounds.height = marker_height;
             }
-            Some(bounds)
-        } else {
-            None
-        };
+            bounds
+        });
         let width =
             f32::from(gpui::rems(16.0).to_pixels(window.rem_size())).min((w - 16.0).max(1.0));
         let panel_size = (width, self.editor_size.1.min((h - 16.0).max(1.0)));
@@ -993,6 +811,9 @@ impl AnnotationOverlay {
         }
         let this = cx.entity().downgrade();
         let theme = cx.theme();
+        let color = self.draft.as_ref().map_or(self.color, |d| d.color);
+        let background = annotation_style::note_background(color, cx);
+        let foreground = annotation_style::foreground(background);
         div()
             .id("feedback-editor-panel")
             .debug_selector(|| "feedback-editor-panel".into())
@@ -1019,7 +840,7 @@ impl AnnotationOverlay {
             .top(px(at.1))
             .occlude()
             .child(
-                Measure::new("feedback-editor-measure", move |bounds, _, cx| {
+                BoundsObserver::new("feedback-editor-measure", move |bounds, _, cx| {
                     let size = (f32::from(bounds.size.width), f32::from(bounds.size.height));
                     let _ = this.update(cx, |this, cx| {
                         if this.editor_size != size {
@@ -1031,12 +852,12 @@ impl AnnotationOverlay {
                 .w(px(width))
                 .max_h(px((h - 16.0).max(1.0)))
                 .p_3()
-                .bg(theme.colors.chart[self.draft.as_ref().map_or(self.color, |d| d.color)])
-                .text_color(theme.colors.bg)
+                .bg(background)
+                .text_color(foreground)
                 .border_1()
-                .border_color(theme.colors.bg.opacity(0.25))
-                .rounded(theme.radius(Radius::Lg))
-                .shadow(theme.elevation(Elevation::Raised))
+                .border_color(annotation_style::palette(cx)[color])
+                .rounded(theme.radius_tokens().lg)
+                .shadow(theme.shadow_tokens().sm)
                 .child(
                     div()
                         .id("feedback-editor-scroll")
@@ -1047,35 +868,91 @@ impl AnnotationOverlay {
             )
     }
 
+    /// A border around the element a draft comment is attached to, echoing the
+    /// outline Inspect draws. Only for element-attached drafts (no drawn shape).
+    fn selection_outline(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui::AnyElement> {
+        let draft = self.draft.as_ref()?;
+        if draft.shape.is_some() || self.inspected_id.is_some() {
+            return None;
+        }
+        let bounds = self.draft_bounds(window, cx)?;
+        if bounds.width <= 0.0 || bounds.height <= 0.0 {
+            return None;
+        }
+        let color = annotation_style::palette(cx)[draft.color];
+        Some(
+            div()
+                .debug_selector(|| "feedback-selection-outline".into())
+                .absolute()
+                .left(px(bounds.x))
+                .top(px(bounds.y))
+                .w(px(bounds.width))
+                .h(px(bounds.height))
+                .border_2()
+                .border_color(color)
+                .rounded(cx.theme().radius_tokens().sm)
+                .into_any_element(),
+        )
+    }
+
     pub(super) fn surface(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
+    ) -> gpui::AnyElement {
+        // Full-window annotation divs are inspectable hitboxes in GPUI. Omit
+        // them while inspecting so the picker reaches the host's real elements.
+        if self.inspecting
+            && window.is_inspector_picking(cx)
+            && !self.settings_open
+            && !self.review_open
+        {
+            return div().into_any_element();
+        }
         let active = self.active || self.draft.is_some();
-        let (w, h) = viewport(window);
+        let (w, h) = viewport(window, cx);
         let owner = cx.entity_id();
         let start_drag = cx.entity().downgrade();
         let mut layer = div().absolute().size_full();
-        if self.active {
+        // A reopened editor can be focused while drawing mode is off. Keep
+        // its editable geometry stable, but leave scrolling available for
+        // unfocused previews and preserve the editor's own scrolling.
+        if self.draft.as_ref().is_some_and(|draft| draft.editing)
+            && self.input.focus_handle(cx).contains_focused(window, cx)
+        {
+            layer = layer.child(
+                div()
+                    .id("feedback-editor-scroll-guard")
+                    .absolute()
+                    .size_full()
+                    .on_scroll(|_, _, cx| cx.stop_propagation()),
+            );
+        }
+        if self.active && !self.inspecting && !self.review_open && self.tool.is_some() {
             let drawing = self.active && self.tool.is_some() && self.draft.is_none();
             let picker = div()
                 .id("feedback-picker")
                 .absolute()
                 .w_full()
-                .top(px(if self.banner && !self.toolbar_hidden {
-                    self.banner_bottom
-                } else {
-                    0.
-                }))
+                .top_0()
                 .bottom_0()
-                .occlude()
+                .when(self.annotation_interaction_started(), |picker| {
+                    picker.occlude()
+                })
                 .cursor(if self.draft.is_some() {
                     CursorStyle::Arrow
                 } else {
                     tool_cursor(self.tool)
                 })
-                .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                .on_scroll(cx.listener(|this, _, _, cx| {
+                    if this.annotation_interaction_started() {
+                        cx.stop_propagation();
+                    }
+                }))
                 .on_hover(cx.listener(|this, hovered, _, cx| {
                     if !hovered && this.draft.is_none() && this.hovered.take().is_some() {
                         cx.notify();
@@ -1115,16 +992,16 @@ impl AnnotationOverlay {
                         if window.default_prevented() || this.draft.is_some() {
                             return;
                         }
-                        if let Some(id) = this.shape_at(event.position, window) {
-                            this.edit(&id, window, cx);
+                        if let Some(id) = this.shape_at(event.position, window, cx) {
+                            this.activate_annotation(&id, window, cx);
                             return;
                         }
                         if this.tool.is_some() {
-                            this.stroke = vec![normalized(event.position, window)];
+                            this.stroke = vec![normalized(event.position, window, cx)];
                             cx.notify();
                             return;
                         }
-                        let size = viewport(window);
+                        let size = viewport(window, cx);
                         let at = (f32::from(event.position.x), f32::from(event.position.y));
                         if this.tool.is_none() {
                             if let Some(target) = target::pick(window, cx, at.0, at.1) {
@@ -1143,6 +1020,19 @@ impl AnnotationOverlay {
                         }
                     }),
                 )
+                // The picker occludes the surface, so right click reaches the
+                // element or tools menu (or a note's menu) here, not the root.
+                .on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
+                        cx.stop_propagation();
+                        if let Some(id) = this.shape_at(event.position, window, cx) {
+                            this.show_annotation_menu(&id, event.position, window, cx);
+                        } else {
+                            this.open_canvas_menu(event.position, window, cx);
+                        }
+                    }),
+                )
                 .when(drawing, |pad| {
                     pad.on_drag(FeedbackDrag { owner }, move |_, _, window, cx| {
                         let _ = start_drag.update(cx, |this, cx| {
@@ -1152,113 +1042,28 @@ impl AnnotationOverlay {
                     })
                 });
             layer = layer.child(picker);
-            if self.tool.is_none() {
-                if let Some(selected) = self
-                    .draft
-                    .as_ref()
-                    .filter(|d| d.shape.is_none())
-                    .map(|d| &d.target)
-                    .or(self.hovered.as_ref())
-                {
-                    if let Some(target) = target::targets(window, cx)
-                        .iter()
-                        .find(|t| t.id == selected.id)
-                    {
-                        let b = target.bounds;
-                        layer = layer.child(
-                            div()
-                                .absolute()
-                                .left(px(b.x))
-                                .top(px(b.y))
-                                .w(px(b.width))
-                                .h(px(b.height))
-                                .border_2()
-                                .border_color(cx.theme().colors.chart[0]),
-                        );
-                        if self.draft.is_none() && !self.settings_open && !self.review_open {
-                            let theme = cx.theme();
-                            let width = (w - 16.0).clamp(1.0, 360.0);
-                            let at =
-                                note_panel_position(b, (width, self.inspector_height), (w, h), 8.0);
-                            let owner = cx.entity().downgrade();
-                            // This card deliberately has no occlusion or mouse
-                            // handlers: picking continues through its surface.
-                            layer = layer.child(
-                                div()
-                                    .absolute()
-                                    .left(px(at.0))
-                                    .top(px(at.1))
-                                    .w(px(width))
-                                    .debug_selector(|| "feedback-inspector-overlay".into())
-                                    .child(
-                                        Measure::new(
-                                            "feedback-inspector-measure",
-                                            move |bounds, _, cx| {
-                                                let height = f32::from(bounds.size.height);
-                                                let _ = owner.update(cx, |this, cx| {
-                                                    if this.inspector_height != height {
-                                                        this.inspector_height = height;
-                                                        cx.notify();
-                                                    }
-                                                });
-                                            },
-                                        )
-                                        .w_full()
-                                        .p_3()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_1()
-                                        .overflow_hidden()
-                                        .bg(theme.colors.overlay)
-                                        .text_color(theme.colors.fg)
-                                        .border_1()
-                                        .border_color(theme.colors.border)
-                                        .rounded(theme.radius(Radius::Md))
-                                        .shadow(theme.elevation(Elevation::Floating))
-                                        .child(Overline::new("Inspect").flex_none())
-                                        .child(
-                                            Label::new(
-                                                target
-                                                    .label
-                                                    .split_whitespace()
-                                                    .collect::<Vec<_>>()
-                                                    .join(" "),
-                                            )
-                                            .w_full()
-                                            .truncate()
-                                            .flex_none(),
-                                        )
-                                        .child(
-                                            Caption::new(format!(
-                                                "{:.0} × {:.0} px · x {:.0}, y {:.0}",
-                                                b.width, b.height, b.x, b.y
-                                            ))
-                                            .flex_none(),
-                                        )
-                                        .child(inspector_source(&target.source, cx)),
-                                    ),
-                            );
-                        }
-                    }
-                }
-            }
         }
         if self.active && self.draft.is_none() && self.tool.is_some() {
             if let Some(at) = self.pointer {
-                if let Some((_, icon, _)) = TOOLS.iter().find(|(tool, _, _)| *tool == self.tool) {
+                if let Some((_, icon, _, _)) = super::toolbar_window::TOOLS
+                    .iter()
+                    .find(|(tool, _, _, _)| *tool == self.tool)
+                {
                     layer = layer.child(
                         div()
                             .absolute()
                             .left(px((at.0 + 14.0).min(w - 24.0)))
                             .top(px((at.1 + 14.0).min(h - 24.0)))
-                            .text_color(cx.theme().colors.chart[self.color])
+                            .text_color(annotation_style::palette(cx)[self.color])
                             .child(Icon::new(*icon)),
                     );
                 }
             }
         }
+        self.sync_anchors(window, cx);
         let selected_id = self.draft.as_ref().and_then(|d| d.id.as_deref());
-        let mut shapes: Vec<_> = self
+        // Notes as they appear now: drawn ones follow the content they sit on.
+        let visible: Vec<crate::Annotation> = self
             .session
             .annotations
             .iter()
@@ -1268,6 +1073,10 @@ impl AnnotationOverlay {
                     AnnotationStatus::Pending | AnnotationStatus::Acknowledged
                 ) || Some(a.id.as_str()) == selected_id
             })
+            .filter_map(|a| self.displayed(a, window, cx))
+            .collect();
+        let mut shapes: Vec<_> = visible
+            .iter()
             .filter_map(|a| a.feedback.shape.clone())
             .collect();
         if let Some(shape) = self
@@ -1283,10 +1092,35 @@ impl AnnotationOverlay {
                 shapes.push(sketch);
             }
         }
-        let colors = cx.theme().colors.chart;
-        let media = cx.theme().media();
-        let stroke = f32::from(media.mark_stroke.to_pixels(window.rem_size()));
-        let head = f32::from(media.arrow_head.to_pixels(window.rem_size()));
+        // The Textbox tool frames its box while dragging, as Freeform does.
+        if self.tool == Some(AnnotationTool::Text) && self.draft.is_none() {
+            if let (Some(start), Some(end)) = (self.stroke.first(), self.stroke.last()) {
+                let frame = crate::drawing::text_box(*start, *end, (w, h), self.color);
+                if let AnnotationShape::Text {
+                    at,
+                    width: Some(width),
+                    height: Some(height),
+                    ..
+                } = frame
+                {
+                    layer = layer.child(
+                        div()
+                            .debug_selector(|| "feedback-textbox-frame".into())
+                            .absolute()
+                            .left(px(at.0 * w))
+                            .top(px(at.1 * h))
+                            .w(px(width * w))
+                            .h(px(height * h))
+                            .border_1()
+                            .border_dashed()
+                            .border_color(annotation_style::palette(cx)[self.color])
+                            .rounded(cx.theme().radius_tokens().sm),
+                    );
+                }
+            }
+        }
+        let colors = annotation_style::palette(cx);
+        let (stroke, head) = annotation_style::stroke_metrics(window, cx);
         layer = layer.child(
             canvas(
                 |_, _, _| {},
@@ -1299,13 +1133,9 @@ impl AnnotationOverlay {
             .absolute()
             .size_full(),
         );
-        for a in self.session.annotations.iter().filter(|a| {
-            matches!(
-                a.status,
-                AnnotationStatus::Pending | AnnotationStatus::Acknowledged
-            ) || Some(a.id.as_str()) == selected_id
-        }) {
+        for a in &visible {
             if a.feedback.shape.is_none()
+                && !a.feedback.element_path.starts_with("gpui:")
                 && !target::targets(window, cx)
                     .iter()
                     .any(|t| t.id == a.feedback.element_path)
@@ -1318,30 +1148,71 @@ impl AnnotationOverlay {
                 width: 0.0,
                 height: 0.0,
             };
-            if let Some(AnnotationShape::Text { at, text, color }) = &a.feedback.shape {
-                let _ = (at, text, color);
+            if matches!(a.feedback.shape, Some(AnnotationShape::Text { .. })) {
                 layer = layer.child(self.textbox(a, window, cx));
+            } else if a.feedback.shape.is_none() {
+                if !self.follow_anchors.contains_key(&a.id) {
+                    let target = if a.feedback.element_path.starts_with("gpui:") {
+                        super::followed::inspection_target(&a.feedback.element_path, window, cx)
+                    } else {
+                        Some(a.feedback.element_path.clone())
+                    };
+                    if let Some(target) = target {
+                        // Selection geometry and this origin come from the same
+                        // completed frame, before the host's next prepaint.
+                        let baseline = std::rc::Rc::new(std::cell::Cell::new(target::origin(
+                            window, cx, &target,
+                        )));
+                        self.follow_anchors
+                            .insert(a.id.clone(), super::followed::Anchor { target, baseline });
+                    }
+                }
+                if let Some(anchor) = self.follow_anchors.get(&a.id) {
+                    layer = layer.child(super::followed::FollowMark {
+                        target: anchor.target.clone(),
+                        baseline: anchor.baseline.clone(),
+                        center: (bounds.x, bounds.y),
+                        scale: self.pin_scale(&a.id, window, cx),
+                        marker: self
+                            .marker(&a.id, a.index, Rect::default(), window, cx)
+                            .into_any_element(),
+                    });
+                } else {
+                    layer = layer.child(self.marker(&a.id, a.index, bounds, window, cx));
+                }
             } else {
                 layer = layer.child(self.marker(&a.id, a.index, bounds, window, cx));
             }
         }
-        if self.draft.is_some() {
+        if let Some(outline) = self.selection_outline(window, cx) {
+            layer = layer.child(outline);
+        }
+        let text_draft = matches!(
+            self.draft.as_ref().and_then(|d| d.shape.as_ref()),
+            Some(AnnotationShape::Text { .. })
+        );
+        if let Some(editor) = self.draft_textbox(window, cx) {
+            layer = layer.child(editor);
+        }
+        // Textboxes edit on the canvas; only other drafts get the floating editor.
+        if self.draft_bounds(window, cx).is_some() && self.inspected_id.is_none() && !text_draft {
             layer = layer.child(self.panel(window, cx));
         }
         if let Some(popup) = self.mention_popup(window, cx) {
             layer = layer.child(popup);
         }
-        if !self.banner && !self.toolbar_hidden {
-            layer = layer.child(self.toolbar(window, cx));
-        }
-        if self.settings_open || self.review_open {
+        if self.settings_open {
             layer = layer.child(self.sheet(window, cx));
         }
-        layer = layer.child(self.annotation_context_layer(cx));
-        let scope = FocusScope::new(&self.focus)
-            .size_full()
-            .child(layer)
-            .when(active && !self.banner, |scope| scope.trap());
+        layer = layer.child(self.context_layer(window, cx));
+        let scope = div().size_full().child(layer);
+        let scope = if active && !self.banner {
+            scope
+                .focus_trap("annotation-focus", &self.focus)
+                .into_any_element()
+        } else {
+            scope.into_any_element()
+        };
         raise(
             "gpui-agentation-overlay",
             anchored().position(point(px(0.0), px(0.0))).child(
@@ -1366,8 +1237,12 @@ impl AnnotationOverlay {
                             if this.settings_open || this.review_open {
                                 return;
                             }
-                            if let Some(id) = this.shape_at(event.position, window) {
+                            if let Some(id) = this.shape_at(event.position, window, cx) {
                                 this.show_annotation_menu(&id, event.position, window, cx);
+                                cx.stop_propagation();
+                            } else if this.active {
+                                // Empty canvas: the clicked element's menu, else tools.
+                                this.open_canvas_menu(event.position, window, cx);
                                 cx.stop_propagation();
                             }
                         }),
@@ -1379,27 +1254,53 @@ impl AnnotationOverlay {
                             }
                         },
                     ))
-                    .when(!self.active, |root| {
-                        root.when(self.over_shape, |root| root.cursor_pointer())
-                            .on_mouse_move(cx.listener(
-                                |this, event: &gpui::MouseMoveEvent, window, cx| {
-                                    let over = this.shape_at(event.position, window).is_some();
-                                    if this.over_shape != over {
-                                        this.over_shape = over;
-                                        cx.notify();
-                                    }
-                                },
-                            ))
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
-                                    if let Some(id) = this.shape_at(event.position, window) {
-                                        this.edit(&id, window, cx);
-                                        cx.stop_propagation();
-                                    }
-                                }),
-                            )
-                    })
+                    .when(
+                        !self.active || (self.inspecting && self.inspected_id.is_some()),
+                        |root| {
+                            root.when(self.over_shape, |root| root.cursor_pointer())
+                                .on_mouse_move(cx.listener(
+                                    |this, event: &gpui::MouseMoveEvent, window, cx| {
+                                        let over =
+                                            this.shape_at(event.position, window, cx).is_some();
+                                        if this.over_shape != over {
+                                            this.over_shape = over;
+                                            cx.notify();
+                                        }
+                                    },
+                                ))
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(
+                                        |this, event: &gpui::MouseDownEvent, window, cx| {
+                                            if let Some(id) =
+                                                this.shape_at(event.position, window, cx)
+                                            {
+                                                this.activate_annotation(&id, window, cx);
+                                                cx.stop_propagation();
+                                                return;
+                                            }
+                                            if this.inspecting
+                                                && this.inspected_id.is_some()
+                                                && !super::inspector::is_picking(window, cx)
+                                                && crate::inspection::inspector_selection(
+                                                    window, cx,
+                                                )
+                                                .filter(|selection| {
+                                                    Some(&selection.id)
+                                                        == this.inspected_id.as_ref()
+                                                })
+                                                .is_some_and(|selection| {
+                                                    !selection.bounds.contains(&event.position)
+                                                })
+                                            {
+                                                super::inspector::resume_picking(window, cx);
+                                                cx.stop_propagation();
+                                            }
+                                        },
+                                    ),
+                                )
+                        },
+                    )
                     .on_mouse_up(
                         MouseButton::Left,
                         cx.listener(|this, event: &gpui::MouseUpEvent, window, cx| {
@@ -1419,6 +1320,15 @@ impl AnnotationOverlay {
                                 return;
                             }
                             if event.keystroke.key == "escape"
+                                && this.inspecting
+                                && !this.settings_open
+                                && !this.review_open
+                            {
+                                super::inspector::resume_picking(window, cx);
+                                cx.stop_propagation();
+                                return;
+                            }
+                            if event.keystroke.key == "escape"
                                 && (this.settings_open || this.review_open)
                             {
                                 this.dismiss_sheet(window, cx);
@@ -1429,15 +1339,18 @@ impl AnnotationOverlay {
                                 && (this.active || this.draft.is_some())
                             {
                                 this.stroke.clear();
-                                this.toolbar_drag = None;
-                                if this.pin_drag.take().is_some()
+                                let dragging = this.pin_drag.take().is_some()
                                     | this.textbox_drag.take().is_some()
-                                {
+                                    | this.textbox_resize.take().is_some();
+                                if dragging {
                                     if let Ok(session) = this.store.session(&this.session.id) {
                                         this.session = session;
                                     }
                                 }
-                                if this.draft.take().is_some() {
+                                if dragging {
+                                    window.focus(&this.focus, cx);
+                                    cx.notify();
+                                } else if this.draft.take().is_some() {
                                     this.return_focus(window, cx);
                                     cx.notify();
                                 } else {
@@ -1450,6 +1363,7 @@ impl AnnotationOverlay {
                     .child(scope),
             ),
         )
+        .into_any_element()
     }
 
     pub(super) fn marker(
@@ -1483,8 +1397,8 @@ impl AnnotationOverlay {
             .annotations
             .iter()
             .find(|n| n.id == id)
-            .map_or(cx.theme().colors.chart[self.color], |note| {
-                cx.theme().colors.chart[note.annotation_color()]
+            .map_or(annotation_style::palette(cx)[self.color], |note| {
+                annotation_style::palette(cx)[note.annotation_color()]
             });
         let drag_id = id.clone();
         let menu_id = id.clone();
@@ -1492,14 +1406,15 @@ impl AnnotationOverlay {
         let owner = cx.entity_id();
         let button = number_badge(index.to_string(), ControlSize::Lg, cx)
             .size(side)
-            .text_size(cx.theme().text_size(TextSize::Sm) * scale)
+            .text_size(cx.theme().typography_tokens().sm.size * scale)
             .bg(amber)
+            .text_color(annotation_style::foreground(amber))
             .debug_selector(move || format!("feedback-marker-number-{index}"))
             .id(format!("feedback-marker-{id}"))
             .role(Role::Button)
             .aria_label(format!("Edit comment {index}"))
             .track_focus(&focus)
-            .focus_ring(cx)
+            .focus(|style| style.border_color(cx.theme().ring))
             .hover(move |style| style.bg(amber.opacity(0.85)))
             .active(move |style| style.bg(amber.opacity(0.7)))
             .on_drag(FeedbackDrag { owner }, move |_, _, window, cx| {
@@ -1507,18 +1422,28 @@ impl AnnotationOverlay {
                     if !this.dismiss_note(window, cx) {
                         return;
                     }
+                    if this.displaced(&drag_id, window, cx) {
+                        this.notice =
+                            "Scroll the annotation fully into view to move or resize it.".into();
+                        cx.notify();
+                        return;
+                    }
                     if let Ok(note) = this.store.annotation(&drag_id) {
+                        if note.feedback.inspection.is_some() {
+                            return;
+                        }
                         if matches!(note.feedback.shape, Some(AnnotationShape::Text { .. })) {
                             this.begin_textbox_drag(&drag_id, window, cx);
                             this.advance_drag(window.mouse_position(), window, cx);
                             return;
                         }
-                        let (_, h) = viewport(window);
+                        let (_, h) = viewport(window, cx);
                         let p = normalized(
                             this.annotation_press
                                 .take()
                                 .unwrap_or(window.mouse_position()),
                             window,
+                            cx,
                         );
                         let offset = (
                             p.0 - note.feedback.x / 100.0,
@@ -1532,7 +1457,8 @@ impl AnnotationOverlay {
             })
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, event: &gpui::MouseDownEvent, window, _| {
+                cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
+                    this.commit_scroll(window, cx);
                     this.annotation_press = Some(event.position);
                     window.prevent_default();
                 }),
@@ -1556,7 +1482,12 @@ impl AnnotationOverlay {
                     }
                 }),
             );
-        let at = centered_panel(center, (side.into(), side.into()), viewport(window), 0.0);
+        let at = centered_panel(
+            center,
+            (side.into(), side.into()),
+            viewport(window, cx),
+            0.0,
+        );
         div()
             .absolute()
             .left(px(at.0))
@@ -1580,8 +1511,8 @@ pub(super) fn number_badge(
         .justify_center()
         .rounded_full()
         .bg(cx.theme().colors.warning)
-        .text_color(cx.theme().colors.bg)
-        .text_size(cx.theme().text_size(crate::ely::theme::TextSize::Sm))
+        .text_color(cx.theme().colors.background)
+        .text_size(cx.theme().typography_tokens().sm.size)
         .font_weight(gpui::FontWeight::SEMIBOLD)
         .child(label.into())
 }
@@ -1618,5 +1549,36 @@ pub(super) fn annotation_count(count: usize, over: impl IntoElement, cx: &App) -
 }
 
 #[cfg(test)]
-#[path = "surface.test.rs"]
-mod tests;
+mod preview_tests {
+    use super::*;
+    #[test]
+    fn missing_comment_uses_note_number_without_changing_the_annotation() {
+        let store = crate::Store::memory();
+        let session = store.ensure_session("Preview", "gpui://preview").unwrap();
+        let mut note = store
+            .add(
+                &session.id,
+                crate::AnnotationInput {
+                    inspection: Some(crate::InspectionSnapshot {
+                        properties: [("Opacity".into(), "1".into())].into(),
+                    }),
+                    comment: String::new(),
+                    element_path: "gpui:internal.path".into(),
+                    element: "Long internal path".into(),
+                    x: 50.,
+                    y: 100.,
+                    bounding_box: crate::Rect::default(),
+                    source_file: None,
+                    gpui_configuration: None,
+                    shape: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(note_preview(&note), "Note 1");
+        assert!(note.feedback.comment.is_empty());
+        note.feedback.comment = "  \n  ".into();
+        assert_eq!(note_preview(&note), "Note 1");
+        note.feedback.comment = "Keep this\ncomment".into();
+        assert_eq!(note_preview(&note), "Keep this comment");
+    }
+}

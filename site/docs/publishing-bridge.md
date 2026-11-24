@@ -1,0 +1,80 @@
+# Publish the combined gpui-agentation package
+
+> **Version: 0.7.0.**
+
+The package uses unmodified registry GPUI Kit dependencies. Inspector
+compatibility is implemented inside Agentation. Only `gpui-agentation` is
+published; no fork packages are needed. See [distribution details](kit-distribution.md).
+
+Before promotion, run `make release-prepare`. It infers the stable version from
+conventional commits and updates Cargo.toml, Cargo.lock, server.json, current
+documentation, setup skill, and site references together. Use
+`make release-prepare VERSION=x.y.z` to prepare an explicit stable version; the
+promotion gate still requires it to agree with conventional-commit history.
+Settings, CLI, and MCP versions derive from Cargo at build time. Review the diff,
+add release notes to CHANGELOG.md without rewriting history, and run
+`make verify release-version-check` on macOS before promotion. Run
+`cargo publish --dry-run --all-features --locked` on the exact release candidate
+to verify the extracted package locally.
+
+The Cargo archive excludes the README demonstration GIFs under `site/docs/assets/`;
+they remain available in the repository and site. The publishing workflow runs
+on Linux, packages without compilation, and checks crates.io's 10 MiB upload
+limit with `check-bridge-release.py --check-package-size`. Compilation and tests
+are local macOS responsibilities; hosted publication uses `--no-verify`.
+
+## Registry GPUI Kit verification
+
+Run `make snapshot-check` to verify the pinned registry identities and checksums,
+one GPUI backend, and separate native/MCP dependency graphs.
+Verify the extracted Cargo package with all features and a downstream native
+consumer. Independently verify the default portable install.
+
+## Release sequence
+
+1. Prepare the version and review changes against `dev`; promote `dev → next → main`.
+2. Include the synchronized version files in that review. The candidate Registry
+   version must be new: 0.1.0 identifies the old bridge and 0.2.0 the prior
+   combined package in the live Registry.
+3. Check identity with `python3 .github/scripts/check-bridge-release.py`.
+   Use `--require-publishable` for the additional publication guard.
+4. From clean promoted main, verify and publish the one package:
+
+   ```sh
+   cargo publish --dry-run --all-features --locked
+   cargo publish --all-features --locked
+   ```
+
+   The pinned Kit family is an existing crates.io dependency.
+5. Retain the configured trusted publisher with owner `emmanuel-defreitas`,
+   repository `gpui-agentation`, workflow `publish-bridge.yml`, and environment
+   `crates-io`. That environment is restricted to `main`; its private-repository
+   billing plan does not support additional required environment reviewers.
+6. Subsequent releases dispatch `Publish MCP Bridge` from `main` with matching
+   version and `publish=true`. It publishes this package with the MCP feature;
+   there is no static-token fallback. Release-tag events do not publish.
+7. The same workflow automatically publishes the matching MCP Registry version
+   after the Cargo publish job succeeds. It checks out the verified release
+   commit, validates `server.json`, downloads a version- and SHA-256-pinned
+   official publisher, and authenticates with GitHub OIDC. It reuses the
+   main-only `crates-io` environment; no Registry token secret is required.
+   Dry runs and failed Cargo publications skip the Registry job.
+8. The Registry job waits for the public, non-yanked Cargo version, publishes
+   the matching metadata, and verifies the public version endpoint is active
+   and exactly matches the reviewed `server.json`. It adds the listing link to
+   the workflow summary. If only Registry publication fails, rerun the failed
+   job rather than republishing the crate. Matching existing metadata is a safe
+   no-op; conflicting or inactive metadata fails without being overwritten.
+
+For an exceptional manual recovery, publish only after the crate exists:
+
+
+```sh
+mcp-publisher login github
+mcp-publisher publish server.json
+```
+
+The Registry identity stays `io.github.emmanuel-defreitas/gpui-agentation`, while
+its Cargo identifier remains `gpui-agentation`. Native clients retain the same
+loopback endpoint. Keep authentication state outside the repository and keep
+the visible `mcp-name` marker in the root README.
