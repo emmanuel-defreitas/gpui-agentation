@@ -17,7 +17,7 @@ Native development annotations for GPUI and Ely. Read README.md before editing.
   atomic cutover. Preparatory work must keep that graph buildable.
 - `migration/kit-probe` is an independent, unpublished workspace evaluating
   exactly GPUI Kit 0.11.0 on its standard GPUI 0.3.14 backend. This is the
-  only current exception to the Ely/0.3.8 rule; do not add the probe as a
+  preparation exception to the Ely/0.3.8 rule; do not add the probe as a
   production workspace member or dependency, and do not enable `gpui-fast`.
 - The cutover replaces Ely completely with Kit. Follow the contract in
   `migration/kit-probe/README.md`: preserve host init/theme/assets/Root and
@@ -27,6 +27,12 @@ Native development annotations for GPUI and Ely. Read README.md before editing.
   pre-1.0 minor release and migration instructions.
 - Run `make kit-probe-check` for probe changes. Its success does not establish
   that the production Agentation library has migrated or passed native QA.
+- On `migration/kit-cutover`, `migration/kit-inspector` compiles the actual
+  owned inspector services and Kit presentation in another isolated workspace.
+  Use `make kit-inspector-check` and its documented Cargo launcher, which applies
+  version-checked Kit overlay-picking patches to ignored dependency copies.
+  Keep the root PR draft: production UI integration and patch delivery remain
+  explicit gates in `migration/kit-cutover.md`.
 
 ## Verification
 

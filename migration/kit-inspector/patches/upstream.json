@@ -1,0 +1,30 @@
+{
+  "gpui-base": {
+    "version": "0.11.0",
+    "files": {
+      "src/lib.rs": "7f4c30c89ea4b1488e31dffa9466da2a151afba8697590eb268b9125e2e20997",
+      "src/root.rs": "a59d9d2fad29b6cbf445757e81fc3740d35605da014964f25974bef616361278",
+      "src/inspector_transparent.rs": null
+    },
+    "patched_files": {
+      "src/lib.rs": "2a538db2aff07454a4a12b7122293853f8215b2add8c61954a0e3efaceffc4cf",
+      "src/root.rs": "7c25ae3af065eeec6a78504aa391fb435ffac4c5a5d374d6a0472a5026779448",
+      "src/inspector_transparent.rs": "0d26d6c1b7a1add308615dca2404af5e8570656fb6520620c2691b7e9db9f8e5"
+    }
+  },
+  "gpui-component": {
+    "version": "0.11.0",
+    "files": {
+      "src/lib.rs": "84204bfca3c7a5781c451d3f8d4f98abc9d0853926ad68529d90ef29c7ce1499",
+      "src/root.rs": "e635ece5b0be7f252b8b670e16598a2143dbff08c7662546d69dd32bd204833b",
+      "src/notification.rs": "fa74945bbf7f802f2739a05a44602c02b8e4c50bd4935e0d2ef33bc83593427b",
+      "src/inspector_transparent.rs": null
+    },
+    "patched_files": {
+      "src/lib.rs": "bc4a635ebd37462b163cf9e4fc161dd97b7dc124f694f5bd3b70d85c061a352b",
+      "src/root.rs": "2a02ee9fab71d9c99e2c7943c272a002a361929d73d554ecef83a43d327248a4",
+      "src/notification.rs": "6cbe101505ac3c00e427cbcaf49624ed5e4c6aadc55b1d149066edea7bed9db3",
+      "src/inspector_transparent.rs": "0d26d6c1b7a1add308615dca2404af5e8570656fb6520620c2691b7e9db9f8e5"
+    }
+  }
+}

@@ -52,8 +52,7 @@ fn pick(handle: WindowHandle<Sample>, cx: &TestAppContext) -> VisualTestContext 
 #[gpui::test]
 fn companion_edits_reset_and_restore_keep_each_hosts_baseline(cx: &mut TestAppContext) {
     let ((a, _a_view), (b, _b_view), (panel_a, a_owner), (panel_b, b_owner)) = cx.update(|cx| {
-        crate::ely::init_for_tests(cx);
-        crate::ely::tooling::install_inspector(cx);
+        crate::init_inspection_tests(cx);
         let a = window(cx, 120., 0x336699);
         let b = window(cx, 200., 0xcc3333);
         let panel_a = window(cx, 60., 0);

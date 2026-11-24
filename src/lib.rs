@@ -47,3 +47,9 @@ pub use overlay::AnnotationOverlay;
 pub use overlay::commands::{AnnotationCommand, debug_menu};
 pub use store::{Error, Store, ToolbarPosition};
 pub use target::{begin_frame, target};
+
+#[cfg(test)]
+fn init_inspection_tests(cx: &mut gpui::App) {
+    ely::init_for_tests(cx);
+    ely::tooling::install_inspector(cx);
+}

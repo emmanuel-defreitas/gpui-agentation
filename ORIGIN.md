@@ -46,6 +46,20 @@ retains Ely's pure hex-color parsing/formatting helpers from
 the Ely and gpui-devtools MIT provenance above. The temporary inspector adapter
 keeps presentation and delegates operations to the owned service.
 
+## GPUI Kit inspector presentation (cutover branch)
+
+`src/inspection/kit/box_model.rs` retains the box-model drawing from the locally
+patched Ely inspector described above, restyled with GPUI Kit theme values.
+The panel and Kit widget wiring in `src/inspection/kit/` are Agentation-owned;
+the retained service and source-navigation MIT attribution remains applicable.
+
+The isolated `migration/kit-inspector` consumer uses GPUI Kit 0.11.0 and its
+GPUI 0.3.14 backend. Kit Base and Component are Apache-2.0; their upstream license
+files remain in the generated dependency copies. The checked-in compatibility
+patches adapt transparent overlay containers for inspector picking. Original
+edited-file hashes and patched hashes are recorded in `patches/upstream.json`.
+No upstream acceptance or release of these local patches is implied.
+
 ## Model Context Protocol mark
 
 `src/assets/mcp.svg` is the official MCP mark from

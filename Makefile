@@ -102,3 +102,13 @@ kit-probe-check: ## Verify the isolated Kit migration compatibility probe
 	$(CARGO) clippy --manifest-path $(KIT_PROBE_MANIFEST) --all-targets --locked -- -D warnings
 	$(CARGO) test --manifest-path $(KIT_PROBE_MANIFEST) --locked
 	PYTHONDONTWRITEBYTECODE=1 python3 migration/kit-probe/check-graph.py
+
+.PHONY: kit-inspector-check kit-inspector-example
+kit-inspector-check: ## Verify the isolated Kit inspector presentation and patched graph
+	$(CARGO) fmt --manifest-path migration/kit-inspector/Cargo.toml -- --check
+	python3 migration/kit-inspector/cargo.py clippy --all-targets --locked -- -D warnings
+	python3 migration/kit-inspector/cargo.py test --locked
+	python3 migration/kit-inspector/check-graph.py
+
+kit-inspector-example: ## Run the Kit-only inspector consumer with an external panel
+	python3 migration/kit-inspector/cargo.py run --locked
