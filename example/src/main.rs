@@ -1,4 +1,6 @@
 mod devtools;
+#[cfg(all(debug_assertions, feature = "native-smoke"))]
+mod smoke;
 
 use devtools::Devtools;
 use gpui::{prelude::*, *};
@@ -383,34 +385,41 @@ impl Render for Consumer {
 }
 
 fn main() {
-    Devtools::application(gpui_platform::application()).run(|cx| {
+    Devtools::application(gpui::application()).run(|cx| {
         Devtools::init(cx);
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
         cx.on_action(|_: &Quit, cx| cx.quit());
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                    None,
-                    size(px(900.), px(620.)),
-                    cx,
-                ))),
-                window_min_size: Some(size(px(640.), px(480.))),
-                titlebar: Some(TitlebarOptions {
-                    title: Some("Consumer setup example".into()),
+        let handle = cx
+            .open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                        None,
+                        size(px(900.), px(620.)),
+                        cx,
+                    ))),
+                    window_min_size: Some(size(px(640.), px(480.))),
+                    titlebar: Some(TitlebarOptions {
+                        title: Some("Consumer setup example".into()),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                ..Default::default()
-            },
-            |window, cx| {
-                cx.new(|cx| Consumer {
-                    devtools: Devtools::mount(window, cx),
-                    page: Page::Overview,
-                    count: 0,
-                    _appearance: cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
-                })
-            },
-        )
-        .expect("open consumer window");
+                },
+                |window, cx| {
+                    let content = cx.new(|cx| Consumer {
+                        devtools: Devtools::mount(window, cx),
+                        page: Page::Overview,
+                        count: 0,
+                        _appearance: cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
+                    });
+                    cx.new(|cx| gpui::base::Root::new(content, window, cx))
+                },
+            )
+            .expect("open consumer window");
         cx.activate(true);
+        #[cfg(all(debug_assertions, feature = "native-smoke"))]
+        if std::env::args().any(|arg| arg == "--smoke") {
+            smoke::run(handle, cx);
+        }
+        let _ = handle;
     });
 }

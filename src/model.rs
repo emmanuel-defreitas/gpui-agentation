@@ -124,7 +124,7 @@ pub struct Annotation {
     pub status: AnnotationStatus,
     /// This implementation emits feedback notes.
     pub kind: String,
-    /// Optional Ely annotation color, zero through three; older notes use their shape color.
+    /// Optional previous presentation annotation color, zero through three; older notes use their shape color.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<usize>,
     /// Element context and human comment.

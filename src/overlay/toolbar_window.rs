@@ -1,11 +1,6 @@
 //! One vertical companion window per consumer, outside its annotation/picker tree.
 use super::*;
-use crate::ely::{
-    forms::{ColorSwatch, Switch},
-    media::Tool,
-    primitives::{Divider, FocusScope, IconName},
-    theme::Elevation,
-};
+use crate::drawing::AnnotationTool;
 use gpui::{
     AnyWindowHandle, Bounds, Pixels, WeakEntity, WindowBounds, WindowOptions, point, px, size,
 };
@@ -102,24 +97,35 @@ pub(super) fn fills_display(window: &Window) -> bool {
 }
 
 const GAP: f32 = 14.0;
-pub(super) const TOOLS: [(Option<Tool>, IconName, &str, &str); 6] = [
+pub(super) const TOOLS: [(Option<AnnotationTool>, IconName, &str, &str); 6] = [
     (None, IconName::Crosshair, "Inspect", "inspect"),
-    (Some(Tool::Box), IconName::Square, "Box", "box"),
-    (Some(Tool::Arrow), IconName::ArrowUpRight, "Arrow", "arrow"),
-    (Some(Tool::Pen), IconName::PenLine, "Pen", "pen"),
+    (Some(AnnotationTool::Box), IconName::Square, "Box", "box"),
     (
-        Some(Tool::Pin),
+        Some(AnnotationTool::Arrow),
+        IconName::ArrowUpRight,
+        "Arrow",
+        "arrow",
+    ),
+    (Some(AnnotationTool::Pen), IconName::PenLine, "Pen", "pen"),
+    (
+        Some(AnnotationTool::Pin),
         IconName::MessageSquare,
         "Comment",
         "comment",
     ),
-    (Some(Tool::Select), IconName::Type, "Textbox", "text"),
+    (
+        Some(AnnotationTool::Text),
+        IconName::Type,
+        "Textbox",
+        "text",
+    ),
 ];
 
 #[derive(Clone, PartialEq)]
 struct ToolbarState {
+    rem: Pixels,
     active: bool,
-    tool: Option<Tool>,
+    tool: Option<AnnotationTool>,
     color: usize,
     count: usize,
     mcp: bool,
@@ -156,17 +162,11 @@ pub(super) fn dock_bounds(host: Bounds<Pixels>, width: Pixels) -> Bounds<Pixels>
 
 impl AnnotationOverlay {
     fn toolbar_spec(&self, window: &Window, cx: &App) -> ToolbarSpec {
-        let width = cx
-            .theme()
-            .switch_track()
-            .width
-            .to_pixels(window.rem_size())
-            .max(
-                cx.theme()
-                    .control_height(ControlSize::Sm)
-                    .to_pixels(window.rem_size()),
-            )
-            + gpui::rems(1.0).to_pixels(window.rem_size())
+        let width = gpui::rems(2.25).to_pixels(window.rem_size()).max(
+            cx.theme()
+                .control_height(ControlSize::Sm)
+                .to_pixels(window.rem_size()),
+        ) + gpui::rems(1.0).to_pixels(window.rem_size())
             + px(2.0);
         let fullscreen = fills_display(window);
         let panel = if self.review_open {
@@ -187,6 +187,7 @@ impl AnnotationOverlay {
                     || self.companion_toolbar_active
                     || super::settings_popup::is_open_for(window.window_handle().window_id(), cx)),
             state: ToolbarState {
+                rem: window.rem_size(),
                 active: self.active,
                 tool: self.tool,
                 color: self.color,
@@ -203,6 +204,7 @@ impl AnnotationOverlay {
     }
 
     pub(super) fn sync_toolbar_window(&mut self, window: &Window, cx: &mut Context<Self>) {
+        inspector::reconcile_placement(window, !self.toolbar_hidden, cx);
         let desired = self.toolbar_spec(window, cx);
         if self.toolbar_sync_pending
             || self.companion_toolbar_spec.as_ref() == Some(&desired)
@@ -326,7 +328,7 @@ fn open_companion(
             display_id: host.display(cx).map(|display| display.id()),
             ..Default::default()
         };
-        cx.open_window(options, |window, cx| {
+        open_tool_window(cx, options, |window, cx| {
             window.set_rem_size(rem_size);
             window.set_window_title("Agentation tools");
             #[cfg(target_os = "macos")]
@@ -338,16 +340,18 @@ fn open_companion(
                     });
                 let focus = cx.focus_handle();
                 window.focus(&focus, cx);
-                crate::ely::tooling::set_inspector_target(
+                crate::inspection::register_target(
                     window.window_handle().window_id(),
-                    Some(host_handle),
+                    host_handle,
+                    cx.entity_id(),
                     cx,
                 );
                 let comments = comments::mount(owner.clone(), host_handle, cx);
                 let external_release = {
                     let id = window.window_handle().window_id();
+                    let owner_id = cx.entity_id();
                     cx.on_release(move |_, cx| {
-                        crate::ely::tooling::set_inspector_target(id, None, cx)
+                        crate::inspection::unregister_target(id, owner_id, cx)
                     })
                 };
                 let content_resize =
@@ -471,6 +475,7 @@ impl ToolbarWindow {
 
 impl Render for ToolbarWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        _window.set_rem_size(self.state.rem);
         self.confirm_content_reveal(_window, cx);
         let inspecting = self.state.inspecting;
         let mode_owner = cx.entity().downgrade();
@@ -492,8 +497,9 @@ impl Render for ToolbarWindow {
                             .debug_selector(|| "feedback-annotation-toggle".into())
                             .mb_2()
                             .child(
-                                Switch::new("feedback-mode-switch", self.state.active)
-                                    .name("Annotation mode")
+                                Switch::new("feedback-mode-switch")
+                                    .checked(self.state.active)
+                                    .accessibility_label("Annotation mode")
                                     .on_change(move |_, _, cx| {
                                         let _ = mode_owner
                                             .update(cx, |this, cx| this.action("toggle", cx));
@@ -553,21 +559,23 @@ impl Render for ToolbarWindow {
                         div()
                             .opacity(if self.state.active { 1. } else { 0.4 })
                             .child(
-                                ColorSwatch::new(
-                                    ("feedback-color", color),
-                                    cx.theme().colors.chart[color],
-                                )
-                                .selected(color == self.state.color)
-                                .when(
-                                    self.state.active,
-                                    |swatch| {
-                                        swatch.on_click(move |_, cx| {
+                                Button::new(("feedback-color", color))
+                                    .small()
+                                    .accessibility_label(format!("Annotation color {}", color + 1))
+                                    .child(
+                                        div()
+                                            .size_4()
+                                            .rounded_full()
+                                            .bg(annotation_style::palette(cx)[color]),
+                                    )
+                                    .selected(color == self.state.color)
+                                    .when(self.state.active, |swatch| {
+                                        swatch.on_click(move |_, _, cx| {
                                             let _ = owner.update(cx, |this, cx| {
                                                 this.action(format!("color-{color}"), cx)
                                             });
                                         })
-                                    },
-                                ),
+                                    }),
                             )
                     })),
             );
@@ -585,80 +593,82 @@ impl Render for ToolbarWindow {
             cx,
         );
         let theme = cx.theme();
-        let rail =
-            div()
-                .id("feedback-native-toolbar")
-                .debug_selector(|| "feedback-native-toolbar".into())
-                .role(gpui::Role::Toolbar)
-                .aria_label("Annotation tools")
-                .size_full()
-                .w(self.state.rail_width - px(2.))
-                .flex_none()
-                .flex()
-                .flex_col()
-                .items_center()
-                .gap_2()
-                .py_2()
-                .px_1()
-                .text_color(theme.colors.fg)
-                .child(tools)
-                .child(
-                    div()
-                        .debug_selector(|| "feedback-toolbar-mcp".into())
-                        .flex_none()
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .gap_1()
-                        .py_1()
-                        .cursor_pointer()
-                        .id("feedback-toolbar-mcp")
-                        .role(gpui::Role::Button)
-                        .aria_label(if self.state.mcp {
-                            "MCP Running"
-                        } else {
-                            "MCP Off"
-                        })
-                        .on_click(cx.listener(|this, _, _, cx| this.action("mcp", cx)))
-                        .child(div().size(theme.status_dot()).rounded_full().bg(
-                            if self.state.mcp {
+        let rail = div()
+            .id("feedback-native-toolbar")
+            .debug_selector(|| "feedback-native-toolbar".into())
+            .role(gpui::Role::Toolbar)
+            .aria_label("Annotation tools")
+            .size_full()
+            .w(self.state.rail_width - px(2.))
+            .flex_none()
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap_2()
+            .py_2()
+            .px_1()
+            .text_color(theme.colors.foreground)
+            .child(tools)
+            .child(
+                div()
+                    .debug_selector(|| "feedback-toolbar-mcp".into())
+                    .flex_none()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap_1()
+                    .py_1()
+                    .cursor_pointer()
+                    .id("feedback-toolbar-mcp")
+                    .role(gpui::Role::Button)
+                    .aria_label(if self.state.mcp {
+                        "MCP Running"
+                    } else {
+                        "MCP Off"
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| this.action("mcp", cx)))
+                    .child(
+                        div()
+                            .size(theme.control_height(ControlSize::Sm) * 0.25)
+                            .rounded_full()
+                            .bg(if self.state.mcp {
                                 theme.colors.success
                             } else {
-                                theme.colors.fg_muted
-                            },
-                        ))
-                        .child(
-                            gpui::svg()
-                                .path("agentation/mcp.svg")
-                                .size(gpui::rems(1.0))
-                                .text_color(theme.colors.fg),
-                        ),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .px_1()
-                        .py_1()
-                        .debug_selector(|| "feedback-toolbar-settings-divider".into())
-                        .child(Divider::horizontal()),
-                )
-                .child(
-                    div()
-                        .debug_selector(|| "feedback-floating-comments".into())
-                        .child(comments),
-                )
-                .child(
-                    div()
-                        .debug_selector(|| "feedback-settings-trigger-target".into())
-                        .child(self.button(
-                            "feedback-settings-trigger",
-                            "Settings",
-                            IconName::Settings,
-                            "settings",
-                            false,
-                            cx,
-                        )),
-                );
+                                theme.colors.muted_foreground
+                            }),
+                    )
+                    .child(
+                        gpui::svg()
+                            .path("agentation/mcp.svg")
+                            .size(gpui::rems(1.0))
+                            .text_color(theme.colors.foreground),
+                    ),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .px_1()
+                    .py_1()
+                    .debug_selector(|| "feedback-toolbar-settings-divider".into())
+                    .child(Divider::horizontal()),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "feedback-floating-comments".into())
+                    .child(comments),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "feedback-settings-trigger-target".into())
+                    .child(self.button(
+                        "feedback-settings-trigger",
+                        "Settings",
+                        IconName::Settings,
+                        "settings",
+                        false,
+                        cx,
+                    )),
+            );
         let body = div().flex().size_full().child(rail);
         let contents = body
             .debug_selector(|| "feedback-companion-contents".into())
@@ -692,7 +702,7 @@ impl Render for ToolbarWindow {
                                 .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
                                     cx.stop_propagation()
                                 })
-                                .on_scroll_wheel(|_, _, cx| cx.stop_propagation()),
+                                .on_scroll(|_, _, cx| cx.stop_propagation()),
                         )
                     })
             }));
@@ -704,8 +714,8 @@ impl Render for ToolbarWindow {
             .rounded_xl()
             .border_1()
             .border_color(theme.colors.border)
-            .bg(theme.colors.surface)
-            .shadow(theme.elevation(Elevation::Raised))
+            .bg(theme.colors.secondary)
+            .shadow(theme.shadow_tokens().sm)
             .child(contents)
             .when(self.width.opacity < 1., |surface| {
                 surface.child(
@@ -714,7 +724,7 @@ impl Render for ToolbarWindow {
                         .inset_0()
                         .occlude()
                         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .on_scroll_wheel(|_, _, cx| cx.stop_propagation()),
+                        .on_scroll(|_, _, cx| cx.stop_propagation()),
                 )
             });
         div()
@@ -742,6 +752,11 @@ impl Render for ToolbarWindow {
                     this.action(action, cx);
                 }
             }))
-            .child(FocusScope::new(&self.focus).root().size_full().child(body))
+            .child(
+                div()
+                    .size_full()
+                    .child(body)
+                    .focus_trap("toolbar-focus", &self.focus),
+            )
     }
 }

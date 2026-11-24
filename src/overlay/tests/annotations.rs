@@ -1,7 +1,7 @@
 //! Annotation editing, pins, drawing tools, shortcuts and @-mentions.
 use super::super::mentions::{Motion, query};
 use super::*;
-use crate::{AnnotationShape, ToolbarPosition, ely::media::Tool};
+use crate::{AnnotationShape, ToolbarPosition, drawing::AnnotationTool};
 use gpui::{Modifiers, TestAppContext, VisualTestContext, point, px, size};
 
 fn click_toolbar(
@@ -28,7 +28,7 @@ fn click_toolbar(
 }
 
 fn setup(cx: &mut TestAppContext) -> (Entity<AnnotationOverlay>, &mut VisualTestContext) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let store = Store::memory();
     let session = store
         .ensure_session("Editor test", "gpui://editor")
@@ -174,7 +174,8 @@ fn outside_click_should_discard_empty_new_note_and_retain_invalid_existing_edit(
     cx.update(|window, cx| {
         overlay.update(cx, |this, cx| {
             this.start_editing(window, cx);
-            this.input.update(cx, |input, cx| input.set_text("", cx));
+            this.input
+                .update(cx, |input, cx| input.set_comment("", window, cx));
         })
     });
     draw(cx);
@@ -227,7 +228,12 @@ fn comments_and_settings_should_save_and_open_in_one_click_and_block_invalid_cha
 ) {
     let (overlay, cx) = setup(cx);
     let id = saved(&overlay, cx);
-    cx.update(|_, cx| crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true));
+    cx.update(|_, cx| {
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        })
+    });
     for (selector, settings) in [
         ("banner-notes", false),
         ("feedback-settings-trigger-target", true),
@@ -237,7 +243,7 @@ fn comments_and_settings_should_save_and_open_in_one_click_and_block_invalid_cha
                 this.edit(&id, window, cx);
                 this.start_editing(window, cx);
                 this.input
-                    .update(cx, |input, cx| input.set_text(selector, cx));
+                    .update(cx, |input, cx| input.set_comment(selector, window, cx));
             })
         });
         draw(cx);
@@ -255,7 +261,8 @@ fn comments_and_settings_should_save_and_open_in_one_click_and_block_invalid_cha
                 this.dismiss_sheet(window, cx);
                 this.edit(&id, window, cx);
                 this.start_editing(window, cx);
-                this.input.update(cx, |input, cx| input.set_text("", cx));
+                this.input
+                    .update(cx, |input, cx| input.set_comment("", window, cx));
             })
         });
         draw(cx);
@@ -273,10 +280,10 @@ fn comments_and_settings_should_save_and_open_in_one_click_and_block_invalid_cha
                 selector
             );
         });
-        cx.update(|_, cx| {
+        cx.update(|window, cx| {
             overlay.update(cx, |this, cx| {
                 this.input
-                    .update(cx, |input, cx| input.set_text(selector, cx));
+                    .update(cx, |input, cx| input.set_comment(selector, window, cx));
             })
         });
     }
@@ -315,8 +322,9 @@ fn another_canvas_pin_should_save_current_note_and_open_clicked_note_in_one_clic
             this.session = this.store.session(&this.session.id).unwrap();
             this.edit(&ids[0], window, cx);
             this.start_editing(window, cx);
-            this.input
-                .update(cx, |input, cx| input.set_text("Saved before switching", cx));
+            this.input.update(cx, |input, cx| {
+                input.set_comment("Saved before switching", window, cx)
+            });
             cx.notify();
             ids
         })
@@ -337,7 +345,8 @@ fn another_canvas_pin_should_save_current_note_and_open_clicked_note_in_one_clic
             );
             assert!(!this.draft.as_ref().unwrap().editing);
             this.start_editing(window, cx);
-            this.input.update(cx, |input, cx| input.set_text("", cx));
+            this.input
+                .update(cx, |input, cx| input.set_comment("", window, cx));
         })
     });
     draw(cx);
@@ -367,12 +376,16 @@ fn floating_comments_should_save_and_open_in_one_click(cx: &mut TestAppContext) 
     let (overlay, cx) = setup(cx);
     let id = saved(&overlay, cx);
     cx.update(|window, cx| {
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
         overlay.update(cx, |this, cx| {
             this.set_toolbar_banner(false, window, cx);
             this.start_editing(window, cx);
-            this.input
-                .update(cx, |input, cx| input.set_text("Floating saved", cx));
+            this.input.update(cx, |input, cx| {
+                input.set_comment("Floating saved", window, cx)
+            });
         });
     });
     draw(cx);
@@ -419,7 +432,7 @@ fn saved_multiline_note_should_render_without_mutating_or_dropping_line_breaks(
     draw(cx);
     cx.update(|_, cx| {
         assert!(!overlay.read(cx).draft.as_ref().unwrap().editing);
-        assert_eq!(overlay.read(cx).input.read(cx).text(), text);
+        assert_eq!(overlay.read(cx).input.read(cx).value(), text);
     });
     click_toolbar(&overlay, "banner-notes", cx);
     draw(cx);
@@ -527,7 +540,7 @@ fn text_draft(overlay: &Entity<AnnotationOverlay>, cx: &mut VisualTestContext) {
             if !this.active {
                 this.toggle(window, cx);
             }
-            this.choose_tool(Some(Tool::Select), window, cx);
+            this.choose_tool(Some(AnnotationTool::Text), window, cx);
             this.color = 2;
             this.stroke = vec![(0.2, 0.4)];
             this.finish_stroke(point(px(200.), px(240.)), window, cx);
@@ -552,6 +565,7 @@ fn textbox_saves_inline_and_reopens_for_editing_without_a_comment(cx: &mut TestA
         assert!(this.draft.is_none(), "saving closes the inline editor");
         let note = &this.session.annotations[0];
         assert!(matches!(&note.feedback.shape, Some(AnnotationShape::Text { text, color: 2, .. }) if text == "Plain textbox"));
+        assert_eq!(note.feedback.element, "Select");
         note.id.clone()
     });
     assert!(cx.debug_bounds("feedback-editor-panel").is_none());
@@ -578,6 +592,7 @@ fn textbox_saves_inline_and_reopens_for_editing_without_a_comment(cx: &mut TestA
     cx.update(|_, cx| {
         let note = overlay.read(cx).store.annotation(&id).unwrap();
         assert_eq!(note.feedback.comment, "Plain textbox edited");
+        assert_eq!(note.feedback.element, "Select");
         assert!(matches!(note.feedback.shape, Some(AnnotationShape::Text { text, .. }) if text == "Plain textbox edited"));
     });
     cx.simulate_keystrokes("ctrl-z");
@@ -673,10 +688,8 @@ fn textbox_pin_selection_pointer_drag_and_context_actions_preserve_identity(
     cx.simulate_mouse_down(at, gpui::MouseButton::Right, Modifiers::none());
     cx.simulate_mouse_up(at, gpui::MouseButton::Right, Modifiers::none());
     draw(cx);
-    assert!(cx.debug_bounds("menu-row-Color").is_some());
-    let delete = cx
-        .debug_bounds("menu-row-Delete")
-        .expect("annotation context menu");
+    assert!(menu_bounds(cx, "Color").is_some());
+    let delete = menu_bounds(cx, "Delete").expect("annotation context menu");
     cx.simulate_click(delete.center(), Modifiers::none());
     draw(cx);
     cx.update(|_, cx| assert!(overlay.read(cx).store.annotation(&before.id).is_err()));
@@ -700,7 +713,7 @@ fn textbox_tool_frames_a_box_by_dragging_and_grips_resize_it(cx: &mut TestAppCon
             if !this.active {
                 this.toggle(window, cx);
             }
-            this.choose_tool(Some(Tool::Select), window, cx);
+            this.choose_tool(Some(AnnotationTool::Text), window, cx);
         })
     });
     draw(cx);
@@ -809,7 +822,7 @@ fn textbox_tool_frames_a_box_by_dragging_and_grips_resize_it(cx: &mut TestAppCon
         };
         assert!(
             (height.unwrap() - 0.3).abs() < 1e-3,
-            "corner grip grows height"
+            "corner grip grows height: {height:?}"
         );
     });
     cx.simulate_keystrokes("ctrl-z");
@@ -892,9 +905,10 @@ fn textbox_draft_has_grips_and_clicking_away_saves_text_or_removes_an_empty_box(
     // Emptying a saved box and clicking away removes it; undo brings it back.
     cx.update(|window, cx| overlay.update(cx, |this, cx| this.edit(&saved.id, window, cx)));
     draw(cx);
-    cx.update(|_, cx| {
+    cx.update(|window, cx| {
         overlay.update(cx, |this, cx| {
-            this.input.update(cx, |input, cx| input.set_text("", cx))
+            this.input
+                .update(cx, |input, cx| input.set_comment("", window, cx))
         })
     });
     cx.simulate_click(point(px(900.), px(700.)), Modifiers::none());
@@ -921,7 +935,7 @@ fn right_click_on_empty_canvas_opens_the_tools_menu_in_annotation_mode(cx: &mut 
     cx.simulate_mouse_down(at, gpui::MouseButton::Right, Modifiers::none());
     cx.simulate_mouse_up(at, gpui::MouseButton::Right, Modifiers::none());
     draw(cx);
-    assert!(cx.debug_bounds("menu-row-Box").is_none());
+    assert!(menu_bounds(cx, "Box").is_none());
     // On: the same right click offers the tools under New.
     cx.update(|window, cx| overlay.update(cx, |this, cx| this.toggle(window, cx)));
     draw(cx);
@@ -929,14 +943,14 @@ fn right_click_on_empty_canvas_opens_the_tools_menu_in_annotation_mode(cx: &mut 
     cx.simulate_mouse_down(at, gpui::MouseButton::Right, Modifiers::none());
     cx.simulate_mouse_up(at, gpui::MouseButton::Right, Modifiers::none());
     draw(cx);
-    let new = cx.debug_bounds("menu-row-New").expect("tools menu");
+    let new = menu_bounds(cx, "New").expect("tools menu");
     cx.simulate_click(new.center(), Modifiers::none());
     draw(cx);
-    assert!(cx.debug_bounds("menu-row-Box").is_some());
-    let arrow = cx.debug_bounds("menu-row-Arrow").expect("tools menu");
+    assert!(menu_bounds(cx, "Box").is_some());
+    let arrow = menu_bounds(cx, "Arrow").expect("tools menu");
     cx.simulate_click(arrow.center(), Modifiers::none());
     draw(cx);
-    cx.update(|_, cx| assert_eq!(overlay.read(cx).tool, Some(Tool::Arrow)));
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).tool, Some(AnnotationTool::Arrow)));
 }
 
 #[gpui::test]
@@ -974,7 +988,7 @@ fn existing_annotation_context_menu_requires_annotation_mode(cx: &mut TestAppCon
     cx.simulate_mouse_down(marker.center(), gpui::MouseButton::Right, Modifiers::none());
     cx.simulate_mouse_up(marker.center(), gpui::MouseButton::Right, Modifiers::none());
     draw(cx);
-    assert!(cx.debug_bounds("menu-row-Delete").is_none());
+    assert!(menu_bounds(cx, "Delete").is_none());
 
     cx.update(|window, cx| overlay.update(cx, |this, cx| this.toggle(window, cx)));
     draw(cx);
@@ -982,7 +996,7 @@ fn existing_annotation_context_menu_requires_annotation_mode(cx: &mut TestAppCon
     cx.simulate_mouse_down(marker.center(), gpui::MouseButton::Right, Modifiers::none());
     cx.simulate_mouse_up(marker.center(), gpui::MouseButton::Right, Modifiers::none());
     draw(cx);
-    assert!(cx.debug_bounds("menu-row-Delete").is_some());
+    assert!(menu_bounds(cx, "Delete").is_some());
 }
 
 #[gpui::test]
@@ -1014,11 +1028,11 @@ fn tool_shortcuts_are_scoped_to_annotation_mode_and_preserve_typing(cx: &mut Tes
     cx.update(|window, cx| overlay.update(cx, |this, cx| this.toggle(window, cx)));
     draw(cx);
     for (key, tool) in [
-        ("b", Tool::Box),
-        ("a", Tool::Arrow),
-        ("p", Tool::Pen),
-        ("c", Tool::Pin),
-        ("t", Tool::Select),
+        ("b", AnnotationTool::Box),
+        ("a", AnnotationTool::Arrow),
+        ("p", AnnotationTool::Pen),
+        ("c", AnnotationTool::Pin),
+        ("t", AnnotationTool::Text),
     ] {
         cx.simulate_keystrokes(key);
         draw(cx);
@@ -1027,8 +1041,8 @@ fn tool_shortcuts_are_scoped_to_annotation_mode_and_preserve_typing(cx: &mut Tes
     text_draft(&overlay, cx);
     cx.simulate_keystrokes("b");
     cx.update(|_, cx| {
-        assert_eq!(overlay.read(cx).tool, Some(Tool::Select));
-        assert_eq!(overlay.read(cx).input.read(cx).text(), "b");
+        assert_eq!(overlay.read(cx).tool, Some(AnnotationTool::Text));
+        assert_eq!(overlay.read(cx).input.read(cx).value(), "b");
     });
 }
 
@@ -1112,7 +1126,7 @@ impl Render for ShortcutHost {
 #[gpui::test]
 fn annotation_shortcut_overrides_the_host_binding_only_while_enabled(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        crate::ely::init_for_tests(cx);
+        crate::integration::init_for_tests(cx);
         cx.bind_keys([gpui::KeyBinding::new("b", HostBox, None)]);
     });
     let (host, cx) = cx.add_window_view(|window, cx| {
@@ -1139,7 +1153,7 @@ fn annotation_shortcut_overrides_the_host_binding_only_while_enabled(cx: &mut Te
     draw(cx);
     cx.update(|_, cx| {
         assert_eq!(host.read(cx).presses, 1);
-        assert_eq!(overlay.read(cx).tool, Some(Tool::Box));
+        assert_eq!(overlay.read(cx).tool, Some(AnnotationTool::Box));
     });
     cx.simulate_keystrokes("escape");
     draw(cx);
@@ -1164,8 +1178,11 @@ fn mention_dropdown_previews_hovered_and_typed_notes_and_inserts_reference(
     cx: &mut gpui::TestAppContext,
 ) {
     cx.update(|cx| {
-        crate::ely::init_for_tests(cx);
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        crate::integration::init_for_tests(cx);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
     });
     let (overlay, cx) = cx.add_window_view(|window, cx| {
         let store = Store::memory();
@@ -1198,7 +1215,7 @@ fn mention_dropdown_previews_hovered_and_typed_notes_and_inserts_reference(
     draw(cx);
     cx.update(|window, cx| {
         overlay.update(cx, |this, cx| {
-            this.choose_tool(Some(crate::ely::media::Tool::Pin), window, cx);
+            this.choose_tool(Some(crate::drawing::AnnotationTool::Pin), window, cx);
             this.stroke = vec![(0.5, 0.4)];
             this.finish_stroke(gpui::point(px(400.), px(250.)), window, cx);
         })
@@ -1241,13 +1258,13 @@ fn mention_dropdown_previews_hovered_and_typed_notes_and_inserts_reference(
     draw(cx);
     cx.update(|_, cx| {
         let this = overlay.read(cx);
-        assert_eq!(this.input.read(cx).text(), "@#2 ");
+        assert_eq!(this.input.read(cx).value(), "@#2 ");
         assert!(this.mentions.preview.is_none());
     });
     assert!(cx.debug_bounds("annotation-mentions").is_none());
-    cx.update(|_, cx| {
+    cx.update(|window, cx| {
         let input = overlay.read(cx).input.clone();
-        input.update(cx, |input, cx| input.set_text("@#1", cx));
+        input.update(cx, |input, cx| input.set_comment("@#1", window, cx));
     });
     draw(cx);
     cx.simulate_keystrokes("down down");
@@ -1259,9 +1276,9 @@ fn mention_dropdown_previews_hovered_and_typed_notes_and_inserts_reference(
             Some(this.session.annotations[1].id.as_str())
         );
     });
-    cx.update(|_, cx| {
+    cx.update(|window, cx| {
         let input = overlay.read(cx).input.clone();
-        input.update(cx, |input, cx| input.set_text("@#12", cx));
+        input.update(cx, |input, cx| input.set_comment("@#12", window, cx));
     });
     draw(cx);
     cx.update(|_, cx| {
@@ -1274,7 +1291,7 @@ fn mention_dropdown_previews_hovered_and_typed_notes_and_inserts_reference(
     });
     cx.simulate_keystrokes("enter");
     draw(cx);
-    cx.update(|_, cx| assert_eq!(overlay.read(cx).input.read(cx).text(), "@#12 "));
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).input.read(cx).value(), "@#12 "));
 }
 
 #[test]
@@ -1333,7 +1350,7 @@ impl gpui::Render for ScrollHost {
         crate::begin_frame(window, cx);
         div()
             .size_full()
-            .on_scroll_wheel(cx.listener(|this, event: &gpui::ScrollWheelEvent, _, cx| {
+            .on_scroll(cx.listener(|this, event: &gpui::ScrollEvent, _, cx| {
                 if let gpui::ScrollDelta::Pixels(delta) = event.delta {
                     this.scroll += f32::from(delta.y);
                     cx.notify();
@@ -1352,7 +1369,7 @@ impl gpui::Render for ScrollHost {
 
 #[gpui::test]
 fn annotation_mode_only_freezes_consumer_scroll_after_drawing_starts(cx: &mut TestAppContext) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let store = Store::memory();
     let session = store
         .ensure_session("Scroll interaction", "gpui://scroll-interaction")
@@ -1384,17 +1401,18 @@ fn annotation_mode_only_freezes_consumer_scroll_after_drawing_starts(cx: &mut Te
         host.update(cx, |host, cx| {
             host.overlay.update(cx, |overlay, cx| {
                 overlay.toggle(window, cx);
-                overlay.choose_tool(Some(Tool::Box), window, cx);
+                overlay.choose_tool(Some(AnnotationTool::Box), window, cx);
             });
         });
     });
     draw(cx);
     let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
-    cx.simulate_event(gpui::ScrollWheelEvent {
+    cx.simulate_event(gpui::ScrollEvent {
         position: point(px(100.), px(100.)),
         delta: gpui::ScrollDelta::Pixels(point(px(0.), px(30.))),
         modifiers: Modifiers::none(),
         touch_phase: gpui::TouchPhase::Moved,
+        source: gpui::ScrollSource::default(),
     });
     draw(cx);
     let after_scroll = cx.debug_bounds("feedback-marker-number-1").unwrap();
@@ -1406,11 +1424,12 @@ fn annotation_mode_only_freezes_consumer_scroll_after_drawing_starts(cx: &mut Te
         gpui::MouseButton::Left,
         Modifiers::none(),
     );
-    cx.simulate_event(gpui::ScrollWheelEvent {
+    cx.simulate_event(gpui::ScrollEvent {
         position: point(px(100.), px(100.)),
         delta: gpui::ScrollDelta::Pixels(point(px(0.), px(30.))),
         modifiers: Modifiers::none(),
         touch_phase: gpui::TouchPhase::Moved,
+        source: gpui::ScrollSource::default(),
     });
     draw(cx);
     assert_eq!(
@@ -1420,11 +1439,12 @@ fn annotation_mode_only_freezes_consumer_scroll_after_drawing_starts(cx: &mut Te
     );
 
     cx.simulate_keystrokes("escape");
-    cx.simulate_event(gpui::ScrollWheelEvent {
+    cx.simulate_event(gpui::ScrollEvent {
         position: point(px(100.), px(100.)),
         delta: gpui::ScrollDelta::Pixels(point(px(0.), px(30.))),
         modifiers: Modifiers::none(),
         touch_phase: gpui::TouchPhase::Moved,
+        source: gpui::ScrollSource::default(),
     });
     draw(cx);
     assert_eq!(cx.update(|_, cx| host.read(cx).scroll), 60.);
@@ -1438,11 +1458,12 @@ fn annotation_mode_only_freezes_consumer_scroll_after_drawing_starts(cx: &mut Te
     draw(cx);
     cx.simulate_click(point(px(100.), px(100.)), Modifiers::none());
     draw(cx);
-    cx.simulate_event(gpui::ScrollWheelEvent {
+    cx.simulate_event(gpui::ScrollEvent {
         position: point(px(100.), px(100.)),
         delta: gpui::ScrollDelta::Pixels(point(px(0.), px(30.))),
         modifiers: Modifiers::none(),
         touch_phase: gpui::TouchPhase::Moved,
+        source: gpui::ScrollSource::default(),
     });
     draw(cx);
     assert_eq!(
@@ -1454,7 +1475,7 @@ fn annotation_mode_only_freezes_consumer_scroll_after_drawing_starts(cx: &mut Te
 
 #[gpui::test]
 fn pins_on_a_registered_target_scroll_with_it_while_annotating_is_off(cx: &mut TestAppContext) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let store = Store::memory();
     let session = store
         .ensure_session("Scroll test", "gpui://scroll")
@@ -1501,7 +1522,7 @@ fn pins_on_a_registered_target_scroll_with_it_while_annotating_is_off(cx: &mut T
 fn drawn_annotations_scroll_with_the_content_under_them_and_commit_before_editing(
     cx: &mut TestAppContext,
 ) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let store = Store::memory();
     let session = store
         .ensure_session("Drawn scroll", "gpui://drawn-scroll")
@@ -1585,7 +1606,7 @@ fn scrolled_overlay(
     String,
     &mut VisualTestContext,
 ) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let store = Store::memory();
     let session = store
         .ensure_session("Scroll commit", "gpui://scroll-commit")
@@ -1818,7 +1839,7 @@ fn undo_across_a_geometry_edit_keeps_pending_scroll_displacement(cx: &mut TestAp
 
 #[gpui::test]
 fn undoing_a_move_between_targets_follows_the_target_it_returns_to(cx: &mut TestAppContext) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let store = Store::memory();
     let session = store.ensure_session("Retarget", "gpui://retarget").unwrap();
     // Card "one" spans y 24..524 and card "two" y 544..1044 in the page.
@@ -2032,7 +2053,7 @@ impl gpui::Render for PageHost {
 
 #[gpui::test]
 fn a_pin_between_cards_scrolls_with_a_real_scroll_container(cx: &mut TestAppContext) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let store = Store::memory();
     let session = store
         .ensure_session("Page scroll", "gpui://page-scroll")
@@ -2074,11 +2095,12 @@ fn a_pin_between_cards_scrolls_with_a_real_scroll_container(cx: &mut TestAppCont
     });
     draw(cx);
     let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
-    cx.simulate_event(gpui::ScrollWheelEvent {
+    cx.simulate_event(gpui::ScrollEvent {
         position: point(px(100.), px(100.)),
         delta: gpui::ScrollDelta::Pixels(point(px(0.), px(-30.))),
         modifiers: Modifiers::none(),
         touch_phase: gpui::TouchPhase::Moved,
+        source: gpui::ScrollSource::default(),
     });
     draw(cx);
     draw(cx);
@@ -2113,7 +2135,7 @@ fn textbox_editing_keeps_pointer_selection_and_saves_multiline_text(cx: &mut Tes
             this.textbox_drag.is_none(),
             "selecting text must not move its box"
         );
-        assert!(!this.input.read(cx).selection().is_empty());
+        assert!(!this.input.read(cx).selected_range().is_empty());
         assert!(this.input.focus_handle(cx).is_focused(window));
     });
     cx.simulate_keystrokes("cmd-a");
@@ -2244,4 +2266,42 @@ fn textbox_position_keeps_its_entire_frame_inside_the_window() {
         constrained_origin((0.5, 0.5), (280., 100.), (100., 50.)),
         (0., 0.)
     );
+}
+
+fn menu_bounds(cx: &mut VisualTestContext, label: &str) -> Option<gpui::Bounds<gpui::Pixels>> {
+    cx.update(|window, _| {
+        gpui::base::test_support::snapshots(window)
+            .into_iter()
+            .find(|node| node.visible() && node.label() == Some(label))
+            .map(|node| node.bounds())
+    })
+}
+
+#[gpui::test]
+fn comment_input_limits_unicode_draft_updates_to_eight_thousand_characters(
+    cx: &mut TestAppContext,
+) {
+    let (overlay, cx) = setup(cx);
+    cx.update(|window, cx| {
+        let input = overlay.read(cx).input.clone();
+        input.update(cx, |input, cx| {
+            input.set_comment("é".repeat(7999), window, cx)
+        });
+        window.focus(&input.focus_handle(cx), cx);
+    });
+    draw(cx);
+    // Loading a draft and editing both enforce the public comment limit.
+    cx.update(|window, cx| {
+        let input = overlay.read(cx).input.clone();
+        input.update(cx, |input, cx| {
+            input.set_value("é".repeat(8001), window, cx)
+        });
+    });
+    draw(cx);
+    cx.update(|_, cx| {
+        assert_eq!(
+            overlay.read(cx).input.read(cx).value().chars().count(),
+            8000
+        )
+    });
 }

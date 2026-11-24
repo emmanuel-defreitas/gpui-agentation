@@ -1,8 +1,46 @@
 use super::*;
 
 #[test]
+fn legacy_shape_json_keeps_palette_indexes_and_optional_text_frames() {
+    // Fixed wire fixtures: do not generate these from the current Rust types.
+    let fixture = r#"[
+        {"type":"box","from":[0.75,0.5],"to":[0.25,0.25],"color":0},
+        {"type":"arrow","from":[0.25,0.25],"to":[0.75,0.5],"color":1},
+        {"type":"pen","points":[[0.25,0.25],[0.5,0.75]],"color":2},
+        {"type":"pin","at":[0.5,0.5],"color":3},
+        {"type":"text","at":[0.25,0.25],"text":"日本語 @#12","color":0},
+        {"type":"text","at":[0.25,0.25],"text":"Framed","color":3,"width":0.5,"height":0.25}
+    ]"#;
+    let shapes: Vec<AnnotationShape> = serde_json::from_str(fixture).unwrap();
+    assert!(shapes.iter().all(AnnotationShape::valid));
+    assert_eq!(
+        shapes
+            .iter()
+            .map(AnnotationShape::color)
+            .collect::<Vec<_>>(),
+        [0, 1, 2, 3, 0, 3]
+    );
+    assert!(
+        matches!(&shapes[4], AnnotationShape::Text { width: None, height: None, text, .. } if text == "日本語 @#12")
+    );
+    assert!(matches!(
+        &shapes[5],
+        AnnotationShape::Text {
+            width: Some(0.5),
+            height: Some(0.25),
+            ..
+        }
+    ));
+    assert_eq!(
+        serde_json::to_value(&shapes).unwrap(),
+        serde_json::from_str::<serde_json::Value>(fixture).unwrap()
+    );
+}
+
+#[test]
 fn reverse_box_should_use_its_actual_center_in_logical_pixels() {
-    let shape = AnnotationShape::from_stroke(Tool::Box, &[(0.8, 0.7), (0.2, 0.3)], 0).unwrap();
+    let shape =
+        AnnotationShape::from_stroke(AnnotationTool::Box, &[(0.8, 0.7), (0.2, 0.3)], 0).unwrap();
     let bounds = shape.bounds(1000.0, 800.0);
     assert!((bounds.x + bounds.width / 2.0 - 500.0).abs() < 0.001);
     assert!((bounds.y + bounds.height / 2.0 - 400.0).abs() < 0.001);
@@ -30,7 +68,12 @@ fn editor_should_stay_visible_at_window_edges() {
 
 #[test]
 fn shapes_should_round_trip_and_reject_invalid_geometry() {
-    for tool in [Tool::Box, Tool::Arrow, Tool::Pen, Tool::Pin] {
+    for tool in [
+        AnnotationTool::Box,
+        AnnotationTool::Arrow,
+        AnnotationTool::Pen,
+        AnnotationTool::Pin,
+    ] {
         let shape = AnnotationShape::from_stroke(tool, &[(0.1, 0.2), (0.6, 0.8)], 2).unwrap();
         assert!(shape.valid());
         let json = serde_json::to_string(&shape).unwrap();
@@ -89,19 +132,29 @@ fn selection_should_follow_the_shape_edge_instead_of_its_bounding_rectangle() {
 
 #[test]
 fn only_pins_should_allow_a_click_without_a_drag() {
-    for tool in [Tool::Box, Tool::Arrow, Tool::Pen, Tool::Select] {
+    for tool in [
+        AnnotationTool::Box,
+        AnnotationTool::Arrow,
+        AnnotationTool::Pen,
+        AnnotationTool::Text,
+    ] {
         assert!(AnnotationShape::from_stroke(tool, &[(0.5, 0.5)], 0).is_none());
     }
-    assert!(AnnotationShape::from_stroke(Tool::Pin, &[(0.5, 0.5)], 0).is_some());
+    assert!(AnnotationShape::from_stroke(AnnotationTool::Pin, &[(0.5, 0.5)], 0).is_some());
 }
 
 #[test]
 fn a_fast_drag_should_include_the_release_position_before_drag_move_activates() {
-    for tool in [Tool::Box, Tool::Arrow, Tool::Pen, Tool::Pin] {
+    for tool in [
+        AnnotationTool::Box,
+        AnnotationTool::Arrow,
+        AnnotationTool::Pen,
+        AnnotationTool::Pin,
+    ] {
         let shape = finish_shape(tool, vec![(0.1, 0.2)], (0.8, 0.7), 0).unwrap();
         assert!(shape.points().contains(&(0.8, 0.7)));
     }
-    assert!(finish_shape(Tool::Box, vec![], (0.8, 0.7), 0).is_none());
+    assert!(finish_shape(AnnotationTool::Box, vec![], (0.8, 0.7), 0).is_none());
 }
 
 #[test]

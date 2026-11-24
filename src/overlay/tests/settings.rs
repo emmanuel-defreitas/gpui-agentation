@@ -5,26 +5,31 @@ use super::*;
 
 #[gpui::test]
 fn disclosure_exposes_expanded_state_on_the_actual_button(cx: &mut gpui::TestAppContext) {
-    use gpui::Element;
-
-    cx.update(crate::ely::init_for_tests);
-    let (_, cx) = cx.add_window_view(|_, _| gpui::EmptyView);
-    cx.update(|window, cx| {
-        for expanded in [false, true, false] {
-            let mut element = DisclosureButton {
-                button: Button::new("test-config-toggle", "MCP config"),
-                expanded,
+    struct Disclosure(bool);
+    impl Render for Disclosure {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            DisclosureButton {
+                button: Button::new("test-config-toggle").label("MCP config"),
+                expanded: self.0,
             }
-            .render(window, cx)
-            .into_any_element();
-            let root = element.downcast_mut::<gpui::Stateful<gpui::Div>>().unwrap();
-            assert_eq!(root.a11y_role(), Some(gpui::Role::Button));
-            let mut node = gpui::accesskit::Node::new(gpui::Role::Button);
-            root.write_a11y_info(&mut node);
-            assert_eq!(node.label(), Some("MCP config"));
-            assert_eq!(node.is_expanded(), Some(expanded));
         }
-    });
+    }
+    cx.update(crate::integration::init_for_tests);
+    let (view, visual) = cx.add_window_view(|_, _| Disclosure(false));
+    for expanded in [false, true, false] {
+        view.update(visual, |view, cx| {
+            view.0 = expanded;
+            cx.notify();
+        });
+        draw(visual);
+        visual.update(|window, _| {
+            let root =
+                gpui::base::test_support::find(window, &[], &"test-config-toggle".into()).unwrap();
+            assert_eq!(root.role(), Some(gpui::Role::Button));
+            assert_eq!(root.label(), Some("MCP config"));
+            assert_eq!(root.expanded(), Some(expanded));
+        });
+    }
 }
 
 #[gpui::test]
@@ -32,8 +37,11 @@ fn settings_scroll_should_reach_sheet_edges_with_padding_inside_content(
     cx: &mut gpui::TestAppContext,
 ) {
     cx.update(|cx| {
-        crate::ely::init_for_tests(cx);
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        crate::integration::init_for_tests(cx);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
     });
     let store = Store::memory();
     let session = store
@@ -42,7 +50,10 @@ fn settings_scroll_should_reach_sheet_edges_with_padding_inside_content(
     let (overlay, cx) =
         cx.add_window_view(|window, cx| AnnotationOverlay::new(store, session, 0, window, cx));
     cx.update(|window, cx| {
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
         overlay.update(cx, |this, cx| this.open_sheet(true, window, cx));
     });
     for height in [560., 900.] {
@@ -58,11 +69,12 @@ fn settings_scroll_should_reach_sheet_edges_with_padding_inside_content(
         assert_eq!(scroll, body, "scroll viewport must reach all body edges");
         // Return to the start after resizing; spacing belongs to the
         // content, not a stationary mask around the scroll viewport.
-        cx.simulate_event(gpui::ScrollWheelEvent {
+        cx.simulate_event(gpui::ScrollEvent {
             position: scroll.origin + gpui::point(gpui::px(2.), gpui::px(2.)),
             delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(2000.))),
             modifiers: gpui::Modifiers::none(),
             touch_phase: gpui::TouchPhase::Moved,
+            source: gpui::ScrollSource::default(),
         });
         cx.run_until_parked();
         cx.update(|window, cx| window.draw(cx).clear(cx));
@@ -73,11 +85,12 @@ fn settings_scroll_should_reach_sheet_edges_with_padding_inside_content(
         assert_eq!(scroll.right() - position.right(), margin);
         assert_eq!(position.top() - scroll.top(), margin);
         // Scroll in the gutter, outside the intentionally locked JSON input.
-        cx.simulate_event(gpui::ScrollWheelEvent {
+        cx.simulate_event(gpui::ScrollEvent {
             position: scroll.origin + gpui::point(gpui::px(2.), gpui::px(2.)),
             delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(-2000.))),
             modifiers: gpui::Modifiers::none(),
             touch_phase: gpui::TouchPhase::Moved,
+            source: gpui::ScrollSource::default(),
         });
         cx.run_until_parked();
         cx.update(|window, cx| window.draw(cx).clear(cx));
@@ -93,8 +106,11 @@ fn copying_config_should_use_live_endpoint_and_restart_two_second_feedback(
     cx: &mut gpui::TestAppContext,
 ) {
     cx.update(|cx| {
-        crate::ely::init_for_tests(cx);
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        crate::integration::init_for_tests(cx);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
     });
     let store = Store::memory();
     let session = store
@@ -103,7 +119,10 @@ fn copying_config_should_use_live_endpoint_and_restart_two_second_feedback(
     let (overlay, cx) =
         cx.add_window_view(|window, cx| AnnotationOverlay::new(store, session, 0, window, cx));
     cx.update(|window, cx| {
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
         overlay.update(cx, |this, cx| this.open_sheet(true, window, cx));
     });
     cx.run_until_parked();
@@ -147,11 +166,24 @@ fn copying_config_should_use_live_endpoint_and_restart_two_second_feedback(
         field.size.height > gpui::px(100.),
         "formatted JSON grows to multiple lines"
     );
-    cx.simulate_event(gpui::ScrollWheelEvent {
+    let before = cx.update(|_, cx| {
+        overlay
+            .read(cx)
+            .mcp_config_input
+            .read(cx)
+            .value()
+            .to_string()
+    });
+    cx.simulate_click(field.center(), gpui::Modifiers::none());
+    cx.simulate_input("must not edit JSON");
+    draw(cx);
+    cx.update(|_, cx| assert_eq!(overlay.read(cx).mcp_config_input.read(cx).value(), before));
+    cx.simulate_event(gpui::ScrollEvent {
         position: field.center(),
         delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(-80.), gpui::px(-160.))),
         modifiers: gpui::Modifiers::none(),
         touch_phase: gpui::TouchPhase::Moved,
+        source: gpui::ScrollSource::default(),
     });
     cx.run_until_parked();
     cx.update(|window, cx| window.draw(cx).clear(cx));
@@ -166,12 +198,11 @@ fn copying_config_should_use_live_endpoint_and_restart_two_second_feedback(
     cx.run_until_parked();
     cx.update(|_, cx| {
         let this = overlay.read(cx);
-        assert!(this.mcp_config_input.read(cx).is_disabled());
         assert!(this.mcp_config_copied);
         let copied = cx.read_from_clipboard().unwrap().text().unwrap();
         let config: serde_json::Value = serde_json::from_str(&copied).unwrap();
         assert_eq!(copied, serde_json::to_string_pretty(&config).unwrap());
-        assert_eq!(copied, this.mcp_config_input.read(cx).text());
+        assert_eq!(copied, this.mcp_config_input.read(cx).value());
         assert_eq!(
             config["mcpServers"]["gpui_agentation"]["url"],
             format!("http://{}/mcp", this._server.as_ref().unwrap().address())
@@ -193,8 +224,11 @@ fn copying_config_should_use_live_endpoint_and_restart_two_second_feedback(
 #[gpui::test]
 fn starting_mcp_should_retain_an_off_request_until_start_finishes(cx: &mut gpui::TestAppContext) {
     cx.update(|cx| {
-        crate::ely::init_for_tests(cx);
-        crate::ely::theme::Theme::update(cx, |theme| theme.reduced_motion = true);
+        crate::integration::init_for_tests(cx);
+        gpui::component::Theme::update(cx, |theme| {
+            theme.motion.duration_fast = std::time::Duration::ZERO;
+            theme.motion.duration_normal = std::time::Duration::ZERO;
+        });
     });
     let store = Store::memory();
     let session = store

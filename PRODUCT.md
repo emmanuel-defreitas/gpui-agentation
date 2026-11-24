@@ -20,11 +20,11 @@ Show an illustrated preview, installation, consumer setup, customization, and cr
 
 ## Positioning
 
-An independent native Rust/GPUI implementation with bundled pinned Ely components and an optional portable MCP bridge.
+An independent native Rust/GPUI implementation with bundled pinned GPUI Kit components and an optional portable MCP bridge.
 
 ## Capabilities and Constraints
 
-Document published 0.3.0 behavior. The illustrated GIF and SVGs explain the workflow; they do not run GPUI. The complete example-app section and downloads are intentionally removed. Native integration requires GPUI 0.3.8 and debug guards. MCP-only installation does not compile Ely. Preserve unrelated local app work and existing branch protections.
+Document published 0.3.0 behavior. The illustrated GIF and SVGs explain the workflow; they do not run GPUI. The complete example-app section and downloads are intentionally removed. Native integration requires GPUI 0.3.8 and debug guards. MCP-only installation does not compile GPUI Kit. Preserve unrelated local app work and existing branch protections.
 
 ## Brand Commitments
 

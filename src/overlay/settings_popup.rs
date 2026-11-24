@@ -1,6 +1,5 @@
 //! One menu-bar entry per process, targeting the last active consumer window.
 use super::*;
-use crate::ely::primitives::FocusScope;
 use gpui::{
     AnyWindowHandle, Bounds, DisplayId, Global, Pixels, WeakEntity, WindowBounds, WindowId,
     WindowOptions, point, px, size,
@@ -54,7 +53,7 @@ struct SettingsTray {
     hosts: Vec<Host>,
     last_active: Option<WindowId>,
     selected: Option<WindowId>,
-    popup: Option<gpui::WindowHandle<SettingsPopup>>,
+    popup: Option<ToolWindow<SettingsPopup>>,
     previous_focus: Option<FocusHandle>,
     restore_consumer: bool,
     generation: u64,
@@ -323,7 +322,7 @@ impl SettingsTray {
         let click_guard = self.native.as_ref().map(native::StatusItem::click_guard);
         #[cfg(not(target_os = "macos"))]
         let click_guard = None;
-        match cx.open_window(options, |window, cx| {
+        match open_tool_window(cx, options, |window, cx| {
             window.set_window_title("Agentation Settings");
             window.set_rem_size(rem_size);
             cx.new(|cx| {
@@ -422,13 +421,14 @@ impl SettingsTray {
 }
 
 struct SettingsPopup {
+    rem: Pixels,
     #[cfg(target_os = "macos")]
     surface: Option<glass::Surface>,
     owner: WeakEntity<AnnotationOverlay>,
     manager: WeakEntity<SettingsTray>,
     generation: u64,
     focus: FocusHandle,
-    config: Entity<TextInput>,
+    config: Entity<EditorState>,
     copied: bool,
     expanded: bool,
     _feedback: Option<Task<()>>,
@@ -448,20 +448,19 @@ impl SettingsPopup {
         cx: &mut Context<Self>,
     ) -> Self {
         let config = cx.new(|cx| {
-            let mut input = TextInput::new(window, cx)
-                .label("MCP config")
-                .multi_line(1, usize::MAX)
-                .highlighter(crate::ely::forms::json_highlights);
-            let text = owner.read(cx).mcp_config_input.read(cx).text().to_string();
-            input.set_text(text, cx);
+            let mut input = EditorState::new(window, cx)
+                .language("json")
+                .line_number(false);
+            let text = owner.read(cx).mcp_config_input.read(cx).value().to_string();
+            input.set_value(text, window, cx);
             input.set_disabled(true, cx);
             input
         });
-        let changed = cx.observe(&owner, |this, owner, cx| {
-            let text = owner.read(cx).mcp_config_input.read(cx).text().to_string();
+        let changed = cx.observe_in(&owner, window, |this, owner, window, cx| {
+            let text = owner.read(cx).mcp_config_input.read(cx).value().to_string();
             this.config.update(cx, |input, cx| {
-                if input.text() != text {
-                    input.set_text(text, cx);
+                if input.value() != text {
+                    input.set_value(text, window, cx);
                 }
             });
             cx.notify();
@@ -483,6 +482,7 @@ impl SettingsPopup {
         Self {
             #[cfg(target_os = "macos")]
             surface: None,
+            rem: window.rem_size(),
             owner: owner.downgrade(),
             manager,
             generation,
@@ -518,7 +518,7 @@ impl SettingsPopup {
             return;
         }
         cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-            self.config.read(cx).text().to_string(),
+            self.config.read(cx).value().to_string(),
         ));
         self.copied = true;
         self._feedback = Some(cx.spawn(async move |owner, cx| {
@@ -534,6 +534,7 @@ impl SettingsPopup {
 
 impl Render for SettingsPopup {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        _window.set_rem_size(self.rem);
         let Some(owner) = self.owner.upgrade() else {
             return div().into_any_element();
         };
@@ -558,17 +559,17 @@ impl Render for SettingsPopup {
             .size_full()
             .flex()
             .flex_col()
-            .text_color(theme.colors.fg)
+            .text_color(theme.colors.foreground)
             .border_1()
-            .border_color(theme.colors.fg.opacity(0.18))
+            .border_color(theme.colors.foreground.opacity(0.18))
             .when(native_surface && reduce_transparency, |panel| {
-                panel.bg(theme.colors.surface.opacity(1.))
+                panel.bg(theme.colors.secondary.opacity(1.))
             })
             .when(!native_surface, |panel| {
                 panel.border_1().border_color(theme.colors.border)
             })
             .when(increase_contrast, |panel| {
-                panel.border_1().border_color(theme.colors.fg)
+                panel.border_1().border_color(theme.colors.foreground)
             })
             .child(content);
         div()
@@ -622,9 +623,8 @@ impl Render for SettingsPopup {
                 }),
             )
             .child(
-                FocusScope::new(&self.focus)
-                    .root()
-                    .trap()
+                div()
+                    .focus_trap("settings-popup-focus", &self.focus)
                     .size_full()
                     .child(panel),
             )

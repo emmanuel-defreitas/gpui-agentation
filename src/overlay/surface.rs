@@ -1,18 +1,12 @@
 use super::*;
-use crate::ely::{
-    buttons::{Button, IconButton},
-    lists::{ListItem, SelectableList},
-    media::Tool,
-    primitives::{FocusRing, FocusScope, Icon, IconName, Measure, raise},
-    theme::{ActiveTheme, ControlSize, Elevation, Radius, TextSize},
-};
+use crate::drawing::AnnotationTool;
 use crate::{
     AnnotationShape, Rect,
     drawing::{centered_panel, note_panel_position},
 };
 use gpui::{
-    ClipboardItem, CursorStyle, DragMoveEvent, EmptyView, EntityId, MouseButton, RenderOnce, Role,
-    anchored, canvas, point, px,
+    ClipboardItem, CursorStyle, DragMoveEvent, EmptyView, EntityId, MouseButton, Role, anchored,
+    canvas, point, px,
 };
 
 #[derive(Clone)]
@@ -20,18 +14,18 @@ pub(super) struct FeedbackDrag {
     pub owner: EntityId,
 }
 
-pub(super) fn tool_shortcut(tool: Option<Tool>) -> &'static str {
+pub(super) fn tool_shortcut(tool: Option<AnnotationTool>) -> &'static str {
     match tool {
         None => "I",
-        Some(Tool::Box) => "B",
-        Some(Tool::Arrow) => "A",
-        Some(Tool::Pen) => "P",
-        Some(Tool::Pin) => "C",
-        Some(Tool::Select) => "T",
+        Some(AnnotationTool::Box) => "B",
+        Some(AnnotationTool::Arrow) => "A",
+        Some(AnnotationTool::Pen) => "P",
+        Some(AnnotationTool::Pin) => "C",
+        Some(AnnotationTool::Text) => "T",
     }
 }
 
-pub(super) fn tool_cursor(tool: Option<Tool>) -> CursorStyle {
+pub(super) fn tool_cursor(tool: Option<AnnotationTool>) -> CursorStyle {
     match tool {
         None => CursorStyle::Arrow,
         Some(_) => CursorStyle::Crosshair,
@@ -50,38 +44,35 @@ pub(super) fn annotation_icon(shape: Option<&AnnotationShape>) -> IconName {
 }
 
 pub(super) fn comment_input(
-    input: &gpui::Entity<TextInput>,
+    input: &gpui::Entity<TextareaState>,
     background: gpui::Hsla,
     textbox: bool,
     window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
-    let mut field = Input::new(input).render(window, cx).into_any_element();
     let colors = &cx.theme().colors;
-    let focused = input.read(cx).focus().is_focused(window);
-    if let Some(root) = field.downcast_mut::<gpui::Div>() {
-        root.style().refine(
-            &gpui::StyleRefinement::default()
-                .bg(background)
-                .text_color(colors.bg)
-                .border_0()
-                .rounded_none()
-                .p_0(),
-        );
-    }
+    let focused = input.focus_handle(cx).is_focused(window);
+    let field = Textarea::new(input)
+        .appearance(false)
+        .bordered(false)
+        .aria_label("Feedback")
+        .bg(background)
+        .text_color(colors.background)
+        .p_0()
+        .rounded_none();
     div()
         .relative()
         .w_full()
         .child(field)
-        .when(input.read(cx).text().is_empty() && !focused, |root| {
+        .when(input.read(cx).value().is_empty() && !focused, |root| {
             root.child(
                 div()
                     .debug_selector(|| "feedback-editor-placeholder".into())
                     .absolute()
                     .top_0()
                     .left_0()
-                    .text_size(cx.theme().text_size(TextSize::Sm))
-                    .text_color(colors.bg.opacity(0.65))
+                    .text_size(cx.theme().typography_tokens().sm.size)
+                    .text_color(colors.background.opacity(0.65))
                     .child(if textbox {
                         "Type text…"
                     } else {
@@ -95,24 +86,21 @@ pub(super) fn comment_input(
 /// The text field shown inside a textbox on the canvas: transparent, drawn in
 /// the annotation color, with its own placeholder. Used for inline editing.
 pub(super) fn textbox_input(
-    input: &gpui::Entity<TextInput>,
+    input: &gpui::Entity<TextareaState>,
     color: gpui::Hsla,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
-    let mut field = Input::new(input).render(window, cx).into_any_element();
-    if let Some(root) = field.downcast_mut::<gpui::Div>() {
-        root.style().refine(
-            &gpui::StyleRefinement::default()
-                .bg(gpui::transparent_black())
-                .text_color(color)
-                .border_0()
-                .rounded_none()
-                .p_0()
-                .text_size(px(16.0))
-                .line_height(px(22.0)),
-        );
-    }
+    let field = Textarea::new(input)
+        .appearance(false)
+        .bordered(false)
+        .aria_label("Textbox")
+        .bg(gpui::transparent_black())
+        .text_color(color)
+        .p_0()
+        .rounded_none()
+        .text_size(px(16.))
+        .line_height(px(22.));
     div()
         .debug_selector(|| "feedback-textbox-input".into())
         .relative()
@@ -120,7 +108,7 @@ pub(super) fn textbox_input(
         .text_size(px(16.0))
         .line_height(px(22.0))
         .child(field)
-        .when(input.read(cx).text().is_empty(), |root| {
+        .when(input.read(cx).value().is_empty(), |root| {
             root.child(
                 div()
                     .absolute()
@@ -185,7 +173,7 @@ pub(super) fn consumer_action(
     cx: &mut App,
     action: impl FnOnce(&mut AnnotationOverlay, &mut Window, &mut Context<AnnotationOverlay>) + 'static,
 ) {
-    let host = crate::ely::tooling::inspector_target(window, cx);
+    let host = crate::inspection::inspector_target(window, cx);
     if host == window.window_handle() {
         owner.update(cx, |this, cx| action(this, window, cx));
     } else {
@@ -206,9 +194,14 @@ pub(super) fn notes_body(
     cx: &App,
 ) -> gpui::Div {
     let notes = this.store.app_annotations(&this.session.app_name);
-    let mut rows = SelectableList::new("feedback-notes-list")
-        .label("All app annotations")
-        .selected(this.selected_note.iter().cloned())
+    let mut rows = div()
+        .id("feedback-notes-list")
+        .role(gpui::Role::ListBox)
+        .aria_label("All app annotations")
+        .flex()
+        .flex_col()
+        .overflow_y_scroll()
+        .track_focus(&this.notes_focus)
         .max_h(if sheet {
             (window.viewport_size().height - gpui::rems(14.).to_pixels(window.rem_size()))
                 .max(px(80.))
@@ -227,9 +220,10 @@ pub(super) fn notes_body(
                 let edit_owner = owner.clone();
                 let edit_close = close.clone();
                 let edit_id = id.clone();
-                let edit = IconButton::new(format!("feedback-edit-{id}"), IconName::Pencil)
-                    .size(ControlSize::Sm)
-                    .variant(ButtonVariant::Ghost)
+                let edit = Button::new(format!("feedback-edit-{id}"))
+                    .icon(IconName::Pencil)
+                    .small()
+                    .ghost()
                     .tooltip(format!("Edit note {}", note.index))
                     .on_click(move |_, window, cx| {
                         cx.stop_propagation();
@@ -241,9 +235,10 @@ pub(super) fn notes_body(
                     });
                 let delete_owner = owner.clone();
                 let delete_id = id.clone();
-                let delete = IconButton::new(format!("feedback-delete-{id}"), IconName::Trash2)
-                    .size(ControlSize::Sm)
-                    .variant(ButtonVariant::Ghost)
+                let delete = Button::new(format!("feedback-delete-{id}"))
+                    .icon(IconName::Trash)
+                    .small()
+                    .ghost()
                     .tooltip(format!("Delete note {}", note.index))
                     .on_click(move |_, window, cx| {
                         cx.stop_propagation();
@@ -257,7 +252,7 @@ pub(super) fn notes_body(
                             },
                         );
                     });
-                // Ely ListItem uses a single-line ellipsis renderer. Keep the
+                // previous presentation ListItem uses a single-line ellipsis renderer. Keep the
                 // complete comment in storage/editor, flatten only its preview.
                 let preview = note
                     .feedback
@@ -270,77 +265,125 @@ pub(super) fn notes_body(
                 } else {
                     preview
                 };
-                rows = rows.row(
-                    id.clone(),
-                    ListItem::new(
-                        format!("feedback-note-{id}"),
-                        if sheet {
-                            preview.clone()
-                        } else {
-                            format!("{}. {}", note.index, preview)
-                        },
-                    )
-                    .description(note.url.clone())
-                    .leading(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .when(sheet, |leading| {
-                                leading.child(number_badge(
-                                    note.index.to_string(),
-                                    ControlSize::Sm,
-                                    cx,
-                                ))
-                            })
-                            .child(Icon::new(annotation_icon(note.feedback.shape.as_ref()))),
-                    )
-                    .trailing(
-                        div()
-                            .flex()
-                            .gap_1()
-                            .child(row_action(edit))
-                            .child(row_action(delete)),
-                    ),
-                );
+                let selected = this.selected_note.as_deref() == Some(id.as_str());
+                let row_owner = owner.clone();
+                let row_close = close.clone();
+                let focus = this.notes_focus.clone();
+                let row_id = id.clone();
+                rows =
+                    rows.child(
+                        gpui::component::list::ListItem::new(format!("feedback-note-{id}"))
+                            .selected(selected)
+                            .accessibility_label(preview.clone())
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .w_full()
+                                    .when(sheet, |body| {
+                                        body.child(number_badge(
+                                            note.index.to_string(),
+                                            ControlSize::Sm,
+                                            cx,
+                                        ))
+                                    })
+                                    .child(Icon::new(annotation_icon(note.feedback.shape.as_ref())))
+                                    .child(
+                                        div().flex_1().min_w_0().child(preview).child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(note.url.clone()),
+                                        ),
+                                    )
+                                    .child(row_action(edit))
+                                    .child(row_action(delete)),
+                            )
+                            .on_click(move |event, window, cx| {
+                                window.focus(&focus, cx);
+                                row_owner.update(cx, |this, cx| {
+                                    this.selected_note = Some(row_id.clone());
+                                    cx.notify();
+                                });
+                                if event.click_count() > 1 {
+                                    row_close(window, cx);
+                                    let id = row_id.clone();
+                                    consumer_action(
+                                        row_owner.clone(),
+                                        window,
+                                        cx,
+                                        move |this, window, cx| {
+                                            if this.store.annotation(&id).is_ok_and(|note| {
+                                                note.feedback.inspection.is_some()
+                                            }) {
+                                                this.open_inspection(&id, window, cx);
+                                            } else {
+                                                this.edit(&id, window, cx);
+                                            }
+                                        },
+                                    );
+                                }
+                            }),
+                    );
             }
         }
         Err(error) => message = Some(error.to_string()),
     }
-    let select_owner = owner.clone();
-    let activate_owner = owner.clone();
-    let activate_close = close.clone();
-    rows = rows
-        .on_change(move |keys, _, cx| {
-            select_owner.update(cx, |this, cx| {
-                this.selected_note = keys.first().map(|key| key.to_string());
-                cx.notify();
-            });
-        })
-        .on_activate(move |id, window, cx| {
-            activate_close(window, cx);
-            let id = id.to_string();
-            consumer_action(
-                activate_owner.clone(),
-                window,
-                cx,
-                move |this, window, cx| {
-                    if this
-                        .store
-                        .annotation(&id)
-                        .is_ok_and(|note| note.feedback.inspection.is_some())
-                    {
-                        this.open_inspection(&id, window, cx);
-                    } else {
-                        this.edit(&id, window, cx);
-                    }
-                },
-            );
+    let keyboard_owner = owner.clone();
+    let keyboard_close = close.clone();
+    rows = rows.on_key_down(move |event, window, cx| {
+        let key = event.keystroke.key.as_str();
+        if !matches!(key, "up" | "down" | "enter" | "space") {
+            return;
+        }
+        let selected = keyboard_owner.update(cx, |this, cx| {
+            let notes = this
+                .store
+                .app_annotations(&this.session.app_name)
+                .unwrap_or_default();
+            if notes.is_empty() {
+                return None;
+            }
+            let current = notes
+                .iter()
+                .position(|n| Some(&n.id) == this.selected_note.as_ref());
+            let index = match key {
+                "up" => current.unwrap_or(0).saturating_sub(1),
+                "down" => current.map(|i| (i + 1).min(notes.len() - 1)).unwrap_or(0),
+                _ => current.unwrap_or(0),
+            };
+            this.selected_note = Some(notes[index].id.clone());
+            cx.notify();
+            Some((
+                notes[index].id.clone(),
+                notes[index].feedback.inspection.is_some(),
+            ))
         });
+        if matches!(key, "enter" | "space") {
+            if let Some((id, inspection)) = selected {
+                keyboard_close(window, cx);
+                consumer_action(
+                    keyboard_owner.clone(),
+                    window,
+                    cx,
+                    move |this, window, cx| {
+                        if inspection {
+                            this.open_inspection(&id, window, cx);
+                        } else {
+                            this.edit(&id, window, cx);
+                        }
+                    },
+                );
+            }
+        }
+        cx.stop_propagation();
+    });
     let add_owner = owner.clone();
     let add_close = close.clone();
     let owner = owner.clone();
-    let add = Button::new("feedback-add", "Add")
+    let add = Button::new("feedback-add")
+        .label("Add")
         .icon(IconName::Plus)
         .on_click(move |_, window, cx| {
             add_close(window, cx);
@@ -348,7 +391,8 @@ pub(super) fn notes_body(
                 this.choose_tool(None, window, cx);
             });
         });
-    let copy = Button::new("feedback-copy-markdown", "Copy")
+    let copy = Button::new("feedback-copy-markdown")
+        .label("Copy")
         .icon(IconName::Copy)
         .on_click(move |_, _, cx| {
             owner.update(cx, |this, cx| {
@@ -371,7 +415,7 @@ pub(super) fn notes_body(
             panel.child(
                 div()
                     .py_2()
-                    .text_color(cx.theme().colors.fg_muted)
+                    .text_color(cx.theme().colors.muted_foreground)
                     .child(message),
             )
         })
@@ -408,7 +452,7 @@ pub(super) fn notes_body(
                                 div()
                                     .w_full()
                                     .debug_selector(|| "feedback-comments-add".into())
-                                    .child(add.full_width()),
+                                    .child(add.w_full()),
                             ),
                     ),
             )
@@ -528,7 +572,7 @@ impl AnnotationOverlay {
         let Some(tool) = self.tool else {
             return;
         };
-        let shape = if tool == Tool::Select && !points.is_empty() {
+        let shape = if tool == AnnotationTool::Text && !points.is_empty() {
             // A drag frames the box; a click places one sized to its text.
             Some(crate::drawing::text_box(
                 points[0],
@@ -553,7 +597,7 @@ impl AnnotationOverlay {
             url: self.session.url.clone(),
             target: Target {
                 id: format!("drawing:{}", uuid::Uuid::new_v4()),
-                label: format!("{tool:?}"),
+                label: tool.persisted_label().into(),
                 source: String::new(),
                 bounds,
             },
@@ -563,7 +607,8 @@ impl AnnotationOverlay {
             y: bounds.y + bounds.height / 2.0,
         });
         self.notice.clear();
-        self.input.update(cx, |input, cx| input.set_text("", cx));
+        self.input
+            .update(cx, |input, cx| input.set_comment("", window, cx));
         window.focus(&self.input.focus_handle(cx), cx);
         cx.notify();
     }
@@ -746,7 +791,7 @@ impl AnnotationOverlay {
             .top(px(at.1))
             .occlude()
             .child(
-                Measure::new("feedback-editor-measure", move |bounds, _, cx| {
+                BoundsObserver::new("feedback-editor-measure", move |bounds, _, cx| {
                     let size = (f32::from(bounds.size.width), f32::from(bounds.size.height));
                     let _ = this.update(cx, |this, cx| {
                         if this.editor_size != size {
@@ -758,12 +803,13 @@ impl AnnotationOverlay {
                 .w(px(width))
                 .max_h(px((h - 16.0).max(1.0)))
                 .p_3()
-                .bg(theme.colors.chart[self.draft.as_ref().map_or(self.color, |d| d.color)])
-                .text_color(theme.colors.bg)
+                .bg(annotation_style::palette(cx)
+                    [self.draft.as_ref().map_or(self.color, |d| d.color)])
+                .text_color(theme.colors.background)
                 .border_1()
-                .border_color(theme.colors.bg.opacity(0.25))
-                .rounded(theme.radius(Radius::Lg))
-                .shadow(theme.elevation(Elevation::Raised))
+                .border_color(theme.colors.background.opacity(0.25))
+                .rounded(theme.radius_tokens().lg)
+                .shadow(theme.shadow_tokens().sm)
                 .child(
                     div()
                         .id("feedback-editor-scroll")
@@ -793,7 +839,7 @@ impl AnnotationOverlay {
         if bounds.width <= 0.0 || bounds.height <= 0.0 {
             return None;
         }
-        let color = cx.theme().colors.chart[draft.color];
+        let color = annotation_style::palette(cx)[draft.color];
         Some(
             div()
                 .debug_selector(|| "feedback-selection-outline".into())
@@ -804,7 +850,7 @@ impl AnnotationOverlay {
                 .h(px(bounds.height))
                 .border_2()
                 .border_color(color)
-                .rounded(cx.theme().radius(Radius::Sm))
+                .rounded(cx.theme().radius_tokens().sm)
                 .into_any_element(),
         )
     }
@@ -844,7 +890,7 @@ impl AnnotationOverlay {
                 } else {
                     tool_cursor(self.tool)
                 })
-                .on_scroll_wheel(cx.listener(|this, _, _, cx| {
+                .on_scroll(cx.listener(|this, _, _, cx| {
                     if this.annotation_interaction_started() {
                         cx.stop_propagation();
                     }
@@ -950,7 +996,7 @@ impl AnnotationOverlay {
                             .absolute()
                             .left(px((at.0 + 14.0).min(w - 24.0)))
                             .top(px((at.1 + 14.0).min(h - 24.0)))
-                            .text_color(cx.theme().colors.chart[self.color])
+                            .text_color(annotation_style::palette(cx)[self.color])
                             .child(Icon::new(*icon)),
                     );
                 }
@@ -989,7 +1035,7 @@ impl AnnotationOverlay {
             }
         }
         // The Textbox tool frames its box while dragging, as Freeform does.
-        if self.tool == Some(Tool::Select) && self.draft.is_none() {
+        if self.tool == Some(AnnotationTool::Text) && self.draft.is_none() {
             if let (Some(start), Some(end)) = (self.stroke.first(), self.stroke.last()) {
                 let frame = crate::drawing::text_box(*start, *end, (w, h), self.color);
                 if let AnnotationShape::Text {
@@ -1009,16 +1055,14 @@ impl AnnotationOverlay {
                             .h(px(height * h))
                             .border_1()
                             .border_dashed()
-                            .border_color(cx.theme().colors.chart[self.color])
-                            .rounded(cx.theme().radius(Radius::Sm)),
+                            .border_color(annotation_style::palette(cx)[self.color])
+                            .rounded(cx.theme().radius_tokens().sm),
                     );
                 }
             }
         }
-        let colors = cx.theme().colors.chart;
-        let media = cx.theme().media();
-        let stroke = f32::from(media.mark_stroke.to_pixels(window.rem_size()));
-        let head = f32::from(media.arrow_head.to_pixels(window.rem_size()));
+        let colors = annotation_style::palette(cx);
+        let (stroke, head) = annotation_style::stroke_metrics(window, cx);
         layer = layer.child(
             canvas(
                 |_, _, _| {},
@@ -1086,11 +1130,15 @@ impl AnnotationOverlay {
         if self.settings_open {
             layer = layer.child(self.sheet(window, cx));
         }
-        layer = layer.child(self.context_layer(cx));
-        let scope = FocusScope::new(&self.focus)
-            .size_full()
-            .child(layer)
-            .when(active && !self.banner, |scope| scope.trap());
+        layer = layer.child(self.context_layer(window, cx));
+        let scope = div().size_full().child(layer);
+        let scope = if active && !self.banner {
+            scope
+                .focus_trap("annotation-focus", &self.focus)
+                .into_any_element()
+        } else {
+            scope.into_any_element()
+        };
         raise(
             "gpui-agentation-overlay",
             anchored().position(point(px(0.0), px(0.0))).child(
@@ -1160,7 +1208,7 @@ impl AnnotationOverlay {
                                             if this.inspecting
                                                 && this.inspected_id.is_some()
                                                 && !super::inspector::is_picking(window, cx)
-                                                && crate::ely::tooling::inspector_selection(
+                                                && crate::inspection::inspector_selection(
                                                     window, cx,
                                                 )
                                                 .filter(|selection| {
@@ -1275,8 +1323,8 @@ impl AnnotationOverlay {
             .annotations
             .iter()
             .find(|n| n.id == id)
-            .map_or(cx.theme().colors.chart[self.color], |note| {
-                cx.theme().colors.chart[note.annotation_color()]
+            .map_or(annotation_style::palette(cx)[self.color], |note| {
+                annotation_style::palette(cx)[note.annotation_color()]
             });
         let drag_id = id.clone();
         let menu_id = id.clone();
@@ -1284,14 +1332,14 @@ impl AnnotationOverlay {
         let owner = cx.entity_id();
         let button = number_badge(index.to_string(), ControlSize::Lg, cx)
             .size(side)
-            .text_size(cx.theme().text_size(TextSize::Sm) * scale)
+            .text_size(cx.theme().typography_tokens().sm.size * scale)
             .bg(amber)
             .debug_selector(move || format!("feedback-marker-number-{index}"))
             .id(format!("feedback-marker-{id}"))
             .role(Role::Button)
             .aria_label(format!("Edit comment {index}"))
             .track_focus(&focus)
-            .focus_ring(cx)
+            .focus(|style| style.border_color(cx.theme().ring))
             .hover(move |style| style.bg(amber.opacity(0.85)))
             .active(move |style| style.bg(amber.opacity(0.7)))
             .on_drag(FeedbackDrag { owner }, move |_, _, window, cx| {
@@ -1388,8 +1436,8 @@ pub(super) fn number_badge(
         .justify_center()
         .rounded_full()
         .bg(cx.theme().colors.warning)
-        .text_color(cx.theme().colors.bg)
-        .text_size(cx.theme().text_size(crate::ely::theme::TextSize::Sm))
+        .text_color(cx.theme().colors.background)
+        .text_size(cx.theme().typography_tokens().sm.size)
         .font_weight(gpui::FontWeight::SEMIBOLD)
         .child(label.into())
 }

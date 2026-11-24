@@ -16,11 +16,9 @@
 /crates/gpui-agentation-mcp/target/
 
 # Pinned dependency packaging outputs
-/vendor/ely/target/
-/vendor/ely/Cargo.lock
+/vendor/*/target/
+/vendor/*/Cargo.lock
 /target-mcp/
 
 /.worktrees/
 __pycache__/
-vendor/ely/*
-!vendor/ely/LOCAL_PATCHES.json

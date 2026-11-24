@@ -1,5 +1,5 @@
 use super::*;
-use crate::ely::theme::{ActiveTheme, Mode};
+use gpui::component::{ActiveTheme, ThemeMode as Mode};
 use gpui::{
     AppContext, Context, IntoElement, Modifiers, Render, Styled, TestAppContext, VisualTestContext,
     Window, div, px,
@@ -17,7 +17,7 @@ impl AssetSource for HostAssets {
 }
 
 #[test]
-fn asset_composition_preserves_host_assets_and_supplies_tooling_icons_and_fonts() {
+fn asset_composition_preserves_host_assets_and_supplies_tooling_icons() {
     let assets = Assets::before(HostAssets);
     assert_eq!(
         assets.load("host/logo.svg").unwrap().unwrap().as_ref(),
@@ -29,9 +29,7 @@ fn asset_composition_preserves_host_assets_and_supplies_tooling_icons_and_fonts(
         .iter()
         .find(|name| name.ends_with("/settings.svg"))
         .unwrap();
-    let font = names.iter().find(|name| name.ends_with(".ttf")).unwrap();
     assert!(!assets.load(icon).unwrap().unwrap().is_empty());
-    assert!(!assets.load(font).unwrap().unwrap().is_empty());
 }
 
 #[gpui::test]
@@ -46,13 +44,13 @@ fn initialization_reports_missing_agentation_assets(cx: &mut TestAppContext) {
 #[gpui::test]
 fn initialization_preserves_existing_host_theme_and_is_idempotent(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        crate::ely::init_for_tests(cx);
-        Theme::set_mode_now(Mode::Dark, cx);
-        let background = cx.theme().colors.bg;
+        crate::integration::init_for_tests(cx);
+        Theme::change(Mode::Dark, None, cx);
+        let background = cx.theme().background;
         init(cx).unwrap();
         init(cx).unwrap();
         assert!(cx.theme().is_dark());
-        assert_eq!(cx.theme().colors.bg, background);
+        assert_eq!(cx.theme().background, background);
     });
 }
 
@@ -81,7 +79,7 @@ fn redraw(cx: &mut VisualTestContext) {
 #[gpui::test]
 fn inspector_visually_edits_and_publishes_selected_gpui_configuration(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        crate::ely::init_for_tests(cx);
+        crate::integration::init_for_tests(cx);
         init(cx).unwrap();
     });
     let (_, cx) = cx.add_window_view(|_, _| InspectorSample);
@@ -93,12 +91,12 @@ fn inspector_visually_edits_and_publishes_selected_gpui_configuration(cx: &mut T
     redraw(cx);
 
     let width = cx
-        .debug_bounds("inspector-slider-ely-inspector-width")
+        .debug_bounds("inspector-slider-Width")
         .expect("width slider");
     cx.simulate_click(width.center(), Modifiers::none());
     redraw(cx);
     cx.update(|window, cx| {
-        let configuration = crate::ely::tooling::active_inspector_configuration(window, cx)
+        let configuration = crate::inspection::active_inspector_configuration(window, cx)
             .expect("active inspector configuration");
         assert_eq!(configuration.changes[0].property, "Width");
         let after: f32 = configuration.changes[0]
@@ -107,14 +105,12 @@ fn inspector_visually_edits_and_publishes_selected_gpui_configuration(cx: &mut T
             .parse()
             .unwrap();
         assert_ne!(after, 120.0);
-        let selection = crate::ely::tooling::inspector_selection(window, cx).unwrap();
+        let selection = crate::inspection::inspector_selection(window, cx).unwrap();
         assert!((after - f32::from(selection.bounds.size.width)).abs() < 0.1);
         assert!(configuration.rust.contains(".w(px("));
     });
     // Returning the top side to 8 still changes the original 16px sides.
-    let padding = cx
-        .debug_bounds("inspector-slider-ely-inspector-padding")
-        .unwrap();
+    let padding = cx.debug_bounds("inspector-slider-Padding").unwrap();
     cx.simulate_click(padding.center(), Modifiers::none());
     redraw(cx);
     cx.simulate_keystrokes("home");
@@ -124,8 +120,7 @@ fn inspector_visually_edits_and_publishes_selected_gpui_configuration(cx: &mut T
         redraw(cx);
     }
     cx.update(|window, cx| {
-        let configuration =
-            crate::ely::tooling::active_inspector_configuration(window, cx).unwrap();
+        let configuration = crate::inspection::active_inspector_configuration(window, cx).unwrap();
         let padding = configuration
             .changes
             .iter()
@@ -140,7 +135,7 @@ fn inspector_visually_edits_and_publishes_selected_gpui_configuration(cx: &mut T
 #[gpui::test]
 fn inspector_edits_surface_and_text_colors_and_reset_reverts_them(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        crate::ely::init_for_tests(cx);
+        crate::integration::init_for_tests(cx);
         init(cx).unwrap();
     });
     let (_, cx) = cx.add_window_view(|_, _| InspectorSample);
@@ -151,31 +146,31 @@ fn inspector_edits_surface_and_text_colors_and_reset_reverts_them(cx: &mut TestA
     cx.simulate_click(sample.center(), Modifiers::none());
     redraw(cx);
     cx.update(|window, cx| {
-        let selection = crate::ely::tooling::inspector_selection(window, cx).unwrap();
+        let selection = crate::inspection::inspector_selection(window, cx).unwrap();
         assert_eq!(selection.properties["Background"], "none");
         assert_eq!(selection.properties["Text color"], "none");
     });
-    // The picker stays closed until its swatch is clicked.
-    assert!(
-        cx.debug_bounds("inspector-picker-ely-inspector-background")
-            .is_none()
-    );
     let swatch = cx
-        .debug_bounds("inspector-swatch-ely-inspector-background")
+        .debug_bounds("inspector-color-Surface")
         .expect("surface swatch");
     cx.simulate_click(swatch.center(), Modifiers::none());
     redraw(cx);
-    let picker = cx
-        .debug_bounds("inspector-picker-ely-inspector-background")
-        .expect("surface picker opens");
-    // Press inside the saturation/value plane at the picker's top.
+    // Kit's palette swatches are plain interactive elements; the first swatch
+    // begins one gap below the Palette tab and has a 20px square hit target.
+    let palette = cx.update(|window, _| {
+        gpui::base::test_support::snapshots(window)
+            .into_iter()
+            .find(|item| item.label() == Some("Palette"))
+            .expect("Kit palette opens")
+            .bounds()
+    });
     cx.simulate_click(
-        gpui::point(picker.center().x, picker.top() + px(24.)),
+        gpui::point(palette.left() + px(10.), palette.bottom() + px(22.)),
         Modifiers::none(),
     );
     redraw(cx);
     cx.update(|window, cx| {
-        let configuration = crate::ely::tooling::active_inspector_configuration(window, cx)
+        let configuration = crate::inspection::active_inspector_configuration(window, cx)
             .expect("a color edit publishes a configuration");
         let background = configuration
             .changes
@@ -185,15 +180,15 @@ fn inspector_edits_surface_and_text_colors_and_reset_reverts_them(cx: &mut TestA
         assert_eq!(background.before, "none");
         assert!(background.after.starts_with('#'));
         assert!(configuration.rust.contains(".bg(rgb") || configuration.rust.contains(".bg(rgba"));
-        let selection = crate::ely::tooling::inspector_selection(window, cx).unwrap();
+        let selection = crate::inspection::inspector_selection(window, cx).unwrap();
         assert_eq!(selection.properties["Background"], background.after);
     });
     let reset = cx.debug_bounds("inspector-reset").unwrap();
     cx.simulate_click(reset.center(), Modifiers::none());
     redraw(cx);
     cx.update(|window, cx| {
-        assert!(crate::ely::tooling::active_inspector_configuration(window, cx).is_none());
-        let selection = crate::ely::tooling::inspector_selection(window, cx).unwrap();
+        assert!(crate::inspection::active_inspector_configuration(window, cx).is_none());
+        let selection = crate::inspection::inspector_selection(window, cx).unwrap();
         assert_eq!(selection.properties["Background"], "none");
     });
 }
@@ -201,11 +196,11 @@ fn inspector_edits_surface_and_text_colors_and_reset_reverts_them(cx: &mut TestA
 #[test]
 fn rust_color_constructors_follow_gpui_hex_conventions() {
     assert_eq!(
-        crate::ely::tooling::rust_color(gpui::rgb(0x336699).into()),
+        crate::inspection::style::rust_color(gpui::rgb(0x336699).into()),
         "rgb(0x336699)"
     );
     assert_eq!(
-        crate::ely::tooling::rust_color(gpui::rgba(0x33669980).into()),
+        crate::inspection::style::rust_color(gpui::rgba(0x33669980).into()),
         "rgba(0x33669980)"
     );
 }
@@ -225,7 +220,7 @@ fn mounting_requires_initialization_and_preserves_existing_host_focus(cx: &mut T
             )
             .is_err()
         );
-        crate::ely::init_for_tests(cx);
+        crate::integration::init_for_tests(cx);
         init(cx).unwrap();
         let host = cx.focus_handle();
         window.focus(&host, cx);
@@ -245,20 +240,19 @@ fn mounting_requires_initialization_and_preserves_existing_host_focus(cx: &mut T
 }
 
 #[test]
-fn inspector_source_paths_should_be_relative_and_map_generated_ely_to_editable_files() {
-    use crate::ely::tooling::inspector::source::SourceLocation;
+fn inspector_source_paths_resolve_owned_and_kit_sources() {
+    use crate::inspection::source::SourceLocation;
     let cwd = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let normal = SourceLocation::new("src/overlay.rs", 42, 7, cwd);
     assert_eq!(normal.relative, std::path::Path::new("src/overlay.rs"));
     assert_eq!(normal.clipboard_path(), "src/overlay.rs:42:7");
-    let generated = std::path::Path::new(env!("OUT_DIR")).join("ely/buttons/button.rs");
-    let source = SourceLocation::new(generated.to_str().unwrap(), 42, 7, cwd);
+    let source = SourceLocation::new("vendor/gpui-component/src/button/button.rs", 42, 7, cwd);
     assert_eq!(
         source.relative,
-        std::path::Path::new("vendor/ely/src/buttons/button.rs")
+        std::path::Path::new("vendor/gpui-component/src/button/button.rs")
     );
-    assert_eq!(source.path, cwd.join("vendor/ely/src/buttons/button.rs"));
     assert_eq!(source.line, 42);
+    assert_eq!(source.column, 7);
     let sibling = SourceLocation::new(
         "/workspace/shared/component.rs",
         10,
@@ -273,7 +267,7 @@ fn inspector_source_paths_should_be_relative_and_map_generated_ely_to_editable_f
 
 #[test]
 fn inspector_editor_commands_should_preserve_quoted_arguments_and_location() {
-    use crate::ely::tooling::inspector::source::{SourceLocation, editor_command};
+    use crate::inspection::source::{SourceLocation, editor_command};
     let source = SourceLocation::new(
         "src/file with spaces.rs",
         42,
@@ -310,7 +304,7 @@ fn inspector_editor_commands_should_preserve_quoted_arguments_and_location() {
 
 #[gpui::test]
 fn unsupported_editor_should_copy_source_with_inline_feedback(cx: &mut TestAppContext) {
-    use crate::ely::tooling::inspector::source::{SourceLocation, activate_source};
+    use crate::inspection::source::{SourceLocation, activate_source};
     cx.update(|cx| {
         let source = SourceLocation::new(
             "src/overlay.rs",
@@ -332,23 +326,28 @@ struct SourceBreadcrumbSample(std::rc::Rc<std::cell::Cell<usize>>);
 
 impl Render for SourceBreadcrumbSample {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        use crate::ely::navigation::{Breadcrumb, Crumb};
+        use gpui::component::breadcrumb::{Breadcrumb, BreadcrumbItem};
         let clicks = self.0.clone();
-        Breadcrumb::new(
-            "source-test",
-            [Crumb::new("src", "src"), Crumb::new("file", "sample.rs:42")],
-        )
-        .on_current(move |_, _, _| clicks.set(clicks.get() + 1))
+        div()
+            .debug_selector(|| "source-test".into())
+            .flex()
+            .w(px(120.))
+            .child(
+                Breadcrumb::new().child(
+                    BreadcrumbItem::new("sample.rs:42")
+                        .on_click(move |_, _, _| clicks.set(clicks.get() + 1)),
+                ),
+            )
     }
 }
 
 #[gpui::test]
 fn source_breadcrumb_last_segment_should_be_clickable(cx: &mut TestAppContext) {
-    cx.update(crate::ely::init_for_tests);
+    cx.update(crate::integration::init_for_tests);
     let clicks = std::rc::Rc::new(std::cell::Cell::new(0));
     let (_, cx) = cx.add_window_view(|_, _| SourceBreadcrumbSample(clicks.clone()));
     redraw(cx);
-    let file = cx.debug_bounds("inspector-source-open").unwrap();
+    let file = cx.debug_bounds("source-test").unwrap();
     cx.simulate_click(file.center(), Modifiers::none());
     redraw(cx);
     assert_eq!(clicks.get(), 1);
@@ -356,7 +355,7 @@ fn source_breadcrumb_last_segment_should_be_clickable(cx: &mut TestAppContext) {
 
 #[test]
 fn own_source_should_resolve_from_compile_root_when_runtime_cwd_differs() {
-    use crate::ely::tooling::inspector::source::SourceLocation;
+    use crate::inspection::source::SourceLocation;
     let other = tempfile::tempdir().unwrap();
     std::fs::create_dir(other.path().join("src")).unwrap();
     std::fs::write(other.path().join("src/overlay.rs"), "unrelated file").unwrap();
@@ -371,7 +370,7 @@ fn own_source_should_resolve_from_compile_root_when_runtime_cwd_differs() {
 
 #[gpui::test]
 fn failed_editor_launch_should_copy_source_and_finish_inline_feedback(cx: &mut TestAppContext) {
-    use crate::ely::tooling::inspector::source::{SourceLocation, activate_source};
+    use crate::inspection::source::{SourceLocation, activate_source};
     let notice = cx.update(|cx| {
         let notice = cx.new(|_| String::new());
         let source = SourceLocation::new(
@@ -417,7 +416,7 @@ fn mounted_tools_adopt_the_window_appearance_when_agentation_owns_the_theme(
     cx.update(init_for_tests);
     assert!(cx.update(|cx| cx.has_global::<FollowSystemAppearance>()));
     // A stale dark theme is replaced by the (light) appearance of the window.
-    cx.update(|cx| Theme::set_mode_now(Mode::Dark, cx));
+    cx.update(|cx| Theme::change(Mode::Dark, None, cx));
     let cx = mount_in_light_window(cx);
     cx.update(|_, cx| assert!(!cx.theme().is_dark()));
 }
@@ -425,11 +424,47 @@ fn mounted_tools_adopt_the_window_appearance_when_agentation_owns_the_theme(
 #[gpui::test]
 fn mounted_tools_leave_a_host_owned_theme_alone(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        crate::ely::init_for_tests(cx);
-        Theme::set_mode_now(Mode::Dark, cx);
+        gpui::init(cx);
+        Theme::change(Mode::Dark, None, cx);
         init_for_tests(cx);
         assert!(!cx.has_global::<FollowSystemAppearance>());
     });
     let cx = mount_in_light_window(cx);
     cx.update(|_, cx| assert!(cx.theme().is_dark()));
+}
+
+#[test]
+fn kit_host_assets_fall_back_to_agentation_assets() {
+    let assets = Assets::before(gpui::assets::Assets);
+    assert!(assets.load("agentation/mcp.svg").unwrap().is_some());
+    assert!(assets.load("icons/settings.svg").unwrap().is_some());
+    assert!(assets.load("missing.svg").unwrap().is_none());
+}
+
+#[test]
+fn host_assets_take_precedence_on_collisions() {
+    struct Host;
+    impl AssetSource for Host {
+        fn list(&self, _: &str) -> gpui::Result<Vec<SharedString>> {
+            Ok(vec!["icons/settings.svg".into()])
+        }
+        fn load(&self, _: &str) -> gpui::Result<Option<Cow<'static, [u8]>>> {
+            Ok(Some(Cow::Borrowed(b"host-settings")))
+        }
+    }
+    assert_eq!(
+        Assets::before(Host)
+            .load("icons/settings.svg")
+            .unwrap()
+            .unwrap()
+            .as_ref(),
+        b"host-settings"
+    );
+    assert!(
+        Assets::before(Host)
+            .load("agentation/mcp.svg")
+            .unwrap()
+            .unwrap()
+            .starts_with(b"<svg")
+    );
 }

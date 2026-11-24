@@ -1,10 +1,4 @@
 use super::*;
-use crate::ely::{
-    lists::ListItem,
-    motion,
-    primitives::{Measure, raise},
-    theme::{Elevation, Radius},
-};
 use gpui::{AnyElement, Bounds, KeystrokeEvent, MouseButton, Pixels, Point, anchored, px};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -146,7 +140,7 @@ impl AnnotationOverlay {
             .draft
             .as_ref()
             .filter(|d| d.editing)
-            .and_then(|_| query(input.text(), input.cursor()));
+            .and_then(|_| query(&input.value(), input.cursor()));
         if self.mentions.query != next {
             if next.as_ref().map(|q| q.start) != self.mentions.query.as_ref().map(|q| q.start) {
                 self.mentions.dismissed = None;
@@ -208,8 +202,8 @@ impl AnnotationOverlay {
         self.mentions.hovered = None;
         self.preview_pin(None, cx);
         self.input.update(cx, |input, cx| {
-            input.select(query.start..query.end, cx);
-            input.insert(&format!("@#{} ", note.index), cx);
+            input.set_selected_range(query.start..query.end, cx);
+            input.replace(format!("@#{} ", note.index), window, cx);
         });
         window.focus(&self.input.focus_handle(cx), cx);
         cx.notify();
@@ -277,7 +271,11 @@ impl AnnotationOverlay {
         {
             return None;
         }
-        let anchor = self.input.read(cx).caret_bounds()?;
+        let anchor = self
+            .input
+            .read(cx)
+            .cursor_layout()
+            .map(|(bounds, _)| bounds)?;
         let notes = self.mention_candidates();
         if notes.is_empty() {
             return None;
@@ -290,12 +288,12 @@ impl AnnotationOverlay {
             .aria_label("Mention a comment")
             .w(gpui::rems(16.0))
             .p_1()
-            .bg(cx.theme().colors.overlay)
-            .text_color(cx.theme().colors.fg)
+            .bg(cx.theme().colors.popover)
+            .text_color(cx.theme().colors.foreground)
             .border_1()
             .border_color(cx.theme().colors.border)
-            .rounded(cx.theme().radius(Radius::Md))
-            .shadow(cx.theme().elevation(Elevation::Floating))
+            .rounded(cx.theme().radius_tokens().md)
+            .shadow(cx.theme().shadow_tokens().md)
             .on_mouse_down(MouseButton::Left, |_, window, cx| {
                 window.prevent_default();
                 cx.stop_propagation();
@@ -317,8 +315,16 @@ impl AnnotationOverlay {
                         this.sync_mentions(cx);
                     }))
                     .child(
-                        ListItem::new(format!("mention-{id}"), format!("Note #{}", note.index))
-                            .description(note.feedback.comment.chars().take(80).collect::<String>())
+                        gpui::component::list::ListItem::new(format!("mention-{id}"))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .child(format!("Note #{}", note.index))
+                                    .child(
+                                        note.feedback.comment.chars().take(80).collect::<String>(),
+                                    ),
+                            )
                             .selected(self.mentions.selected == Some(index))
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.insert_mention(index, window, cx)
@@ -339,7 +345,7 @@ impl AnnotationOverlay {
             raise(
                 "annotation-mention-layer",
                 anchored().position(at).child(
-                    Measure::new("annotation-mention-bounds", move |bounds, _, cx| {
+                    BoundsObserver::new("annotation-mention-bounds", move |bounds, _, cx| {
                         let _ = owner.update(cx, |this, _| this.mentions.bounds = Some(bounds));
                     })
                     .child(list),

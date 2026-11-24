@@ -3,7 +3,6 @@
 //! on its dashed bounding box to resize it.
 use super::surface::{FeedbackDrag, textbox_input, viewport};
 use super::*;
-use crate::ely::{primitives::Measure, theme::Radius};
 use crate::{Annotation, AnnotationShape, Rect};
 use gpui::{AnyElement, Bounds, CursorStyle, EmptyView, MouseButton, Pixels, Point, point, px};
 
@@ -402,7 +401,7 @@ impl AnnotationOverlay {
         if draft.id.is_some() {
             return None; // Saved textboxes render through `textbox` instead.
         }
-        let color = cx.theme().colors.chart[draft.color];
+        let color = annotation_style::palette(cx)[draft.color];
         let frame = self.textbox_frame(at, *width, *height, color, true, None, window, cx);
         let mut grips = Vec::new();
         if let Some(bounds) = self.draft_textbox_bounds {
@@ -441,7 +440,7 @@ impl AnnotationOverlay {
             .as_ref()
             .is_some_and(|d| d.editing && d.id.as_deref() == Some(note.id.as_str()));
         let selected = editing || self.selected_note.as_deref() == Some(note.id.as_str());
-        let color = cx.theme().colors.chart[note.annotation_color()];
+        let color = annotation_style::palette(cx)[note.annotation_color()];
         let (w, h) = viewport(window, cx);
         let side = cx
             .theme()
@@ -544,7 +543,7 @@ impl AnnotationOverlay {
             } else {
                 gpui::transparent_black()
             })
-            .rounded(cx.theme().radius(Radius::Sm))
+            .rounded(cx.theme().radius_tokens().sm)
             .text_size(px(16.0))
             .line_height(px(22.0))
             .text_color(color)
@@ -654,7 +653,7 @@ impl AnnotationOverlay {
                 .top(px(at.1 * h))
                 .max_w(px(max_w))
                 .child(
-                    Measure::new(measure_key, move |bounds, _, cx| {
+                    BoundsObserver::new(measure_key, move |bounds, _, cx| {
                         let _ = owner.update(cx, |this, cx| match &measure_id {
                             Some(measure_id) => {
                                 if this.textbox_bounds.get(measure_id) != Some(&bounds) {
@@ -681,16 +680,17 @@ impl AnnotationOverlay {
                             .items_center()
                             .justify_end()
                             .gap_1()
-                            .rounded(cx.theme().radius(Radius::Sm))
-                            .bg(cx.theme().colors.surface)
+                            .rounded(cx.theme().radius_tokens().sm)
+                            .bg(cx.theme().colors.secondary)
                             .occlude()
                             .child(
                                 div()
                                     .debug_selector(|| "feedback-textbox-cancel".into())
                                     .child(
-                                        Button::new("textbox-cancel", "Cancel")
-                                            .size(ControlSize::Sm)
-                                            .variant(ButtonVariant::Ghost)
+                                        Button::new("textbox-cancel")
+                                            .label("Cancel")
+                                            .small()
+                                            .ghost()
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 this.draft = None;
                                                 this.draft_textbox_bounds = None;
@@ -704,9 +704,10 @@ impl AnnotationOverlay {
                                 div()
                                     .debug_selector(|| "feedback-textbox-save".into())
                                     .child(
-                                        Button::new("textbox-save", "Save")
-                                            .size(ControlSize::Sm)
-                                            .variant(ButtonVariant::Primary)
+                                        Button::new("textbox-save")
+                                            .label("Save")
+                                            .small()
+                                            .primary()
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 this.save(window, cx);
                                             })),

@@ -1,7 +1,8 @@
 //! AppKit owns the material; the existing GPUI view still owns all controls.
 //! Native hierarchy changes run outside App's update borrow, on the main thread.
 use super::SettingsPopup;
-use crate::ely::theme::{ActiveTheme, Radius};
+use crate::ui::ToolWindow;
+use crate::ui::*;
 use block::{ConcreteBlock, RcBlock};
 use cocoa::{
     appkit::{
@@ -11,7 +12,7 @@ use cocoa::{
     base::{BOOL, NO, YES, id, nil},
     foundation::{NSAutoreleasePool, NSRect, NSString},
 };
-use gpui::{App, Window, WindowHandle};
+use gpui::{App, Window};
 use objc::{class, msg_send, sel, sel_impl};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
@@ -162,7 +163,7 @@ impl Pending {
     }
 }
 
-pub(super) fn install(popup: WindowHandle<SettingsPopup>, cx: &mut App) {
+pub(super) fn install(popup: ToolWindow<SettingsPopup>, cx: &mut App) {
     let Ok(Some(pending)) = popup.update(cx, |_, window, cx| {
         let handle = HasWindowHandle::window_handle(window).ok()?;
         let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
@@ -179,9 +180,7 @@ pub(super) fn install(popup: WindowHandle<SettingsPopup>, cx: &mut App) {
                 view: Owned(msg_send![view, retain]),
                 parent: Owned(msg_send![parent, retain]),
                 window: Owned(msg_send![native, retain]),
-                radius: f64::from(f32::from(
-                    cx.theme().radius(Radius::Xl).to_pixels(window.rem_size()),
-                )),
+                radius: f64::from(f32::from(cx.theme().radius_tokens().xl)),
                 dark: cx.theme().is_dark(),
             })
         }

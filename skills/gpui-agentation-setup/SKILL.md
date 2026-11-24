@@ -21,20 +21,17 @@ Do not assume a development branch's API matches a different installed revision.
 Verify that the selected revision exports `Agentation`, `Assets`, and `init`
 before using this integration pattern.
 
-The current compatibility baseline is `gpui-pre =0.3.8`. Agentation internally uses Ely revision
-`da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721` from
-`https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components`.
-Verify the selected source's manifest before editing. Different GPUI packages
-or sources have incompatible types; adding a second GPUI dependency is not a
-compatibility fix. If the host is incompatible, report the concrete mismatch
-and complete only independent setup work; do not migrate its renderer or
-upgrade its UI dependencies as an incidental installation step.
+The current compatibility baseline is bundled GPUI Kit 0.11.0 with
+`gpui-pre =0.3.14`. Use the same checkout's `vendor/gpui-kit` dependency in the
+host and Agentation. Do not mix registry Kit, a second source, or GPUI backends.
+Kit globals are shared with the host. Preserve the host's theme and focus setup.
+This unreleased migration supports Git/path installation. Crates.io publication
+requires a Kit release containing the bundled picking fix; see the distribution
+guide. Keep the lockfile. If the host is incompatible, report the mismatch;
+do not migrate its renderer as an incidental installation step.
 
-Add `gpui-agentation` as a normal dependency with `default-features = false` and
-`features = ["native"]`, using version 0.6.0 or an authorized local checkout.
-Keep the lockfile. Source and assets for pinned Ely are bundled; never add a
-separate Ely dependency for Agentation. Its internal Ely globals are independent
-of a host Ely crate. Preserve the host’s existing theme and focus setup.
+Add `gpui-agentation` with `default-features = false` and `features = ["native"]`
+from the selected checkout/revision. These instructions target the 0.6.0 Agentation API.
 
 ## Keep integration in one app-local module
 
@@ -46,8 +43,9 @@ adapter, not an exported `gpui_agentation::Devtools` type. Use the public
   launch. If the host has assets, use `Assets::before(HostAssets)` in debug
   and preserve `HostAssets` in release. Do not overwrite unrelated assets.
 - `Devtools::init(cx)`: call `gpui_agentation::init(cx)` inside the launch
-  callback before mounting. This owns fonts, theme, and key bindings; no direct
-  Ely initialization is needed. Report initialization errors rather than
+  callback before mounting for standalone hosts. Existing Kit hosts instead
+  call `init_with_options` with `HostMode::KitInitialized` and an explicit
+  renderer policy; Preserve leaves inspection under host control. Report initialization errors rather than
   silently continuing with incomplete tooling. Also add
   `gpui_agentation::debug_menu()` to the host's `cx.set_menus(...)` list so the
   controls appear in the native **Debug** menu. Keep the host's existing menus.
@@ -60,8 +58,8 @@ adapter, not an exported `gpui_agentation::Devtools` type. Use the public
   separate companion window docked to the host's right edge, so the frame
   reserves no layout space.
   Mark the helper `#[track_caller]` so registration records the host call site.
-  Preserve `flex_1`, `min_h_0`, and content sizing. Do not manually add Ely's
-  `FocusScope` or duplicate `begin_frame` around this root.
+  Preserve `flex_1`, `min_h_0`, and content sizing. Keep exactly one Kit Root
+  around the host view. Do not duplicate `begin_frame`.
 - `set_route(url, window, cx)`: delegate to the overlay during committed
   navigation, with a stable route matching the initial mount.
 
@@ -77,8 +75,8 @@ Compile the consumer's real release binary, not a debug-only example stub.
 Wrap the screen content, outside its padding and scrolling. Put padding inside
 the application's scroll region. Preserve the
 host's own control focus and keyboard bindings. `Agentation::root` supplies the
-tooling's outer focus boundary; do not nest another Ely root around it. Existing
-lower-level `AnnotationOverlay` integrations may retain their own Ely root and
+annotation focus boundary inside the host's Kit Root. Existing
+lower-level `AnnotationOverlay` integrations may retain their own Kit Root and
 startup, but don't mix both root paths. In a multi-window app, establish
 store/listener ownership before adding overlays to every window; the minimal
 example is for one window.
@@ -131,7 +129,7 @@ Run the host's format, lint, and test checks and a release check of its actual
 binary. Where feasible, exercise normal controls, Inspect-to-comment, navigation
 between routes, restart persistence, and MCP retrieval of the saved comment.
 For headless GPUI integration tests, enable Agentation's `test-support` feature
-and call `gpui_agentation::init_for_tests`; do not add an Ely test dependency.
+and call `gpui_agentation::init_for_tests`; do not add a second Kit source.
 Report exactly which native interactions were exercised and distinguish build
 checks from visual review. Summarize the adapter changes, selected registration
 coverage, storage location, endpoint, and any unverified checks.

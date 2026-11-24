@@ -1,8 +1,11 @@
 # Publish the combined gpui-agentation package
 
-The 0.6.0 candidate contains the debug-only native library, bundled pinned Ely
-source/assets and a default-enabled stdio binary. There is one Cargo package to
-publish. Previously published releases remain usable and are not removed/yanked.
+The 0.6.0 candidate uses a patched local GPUI Kit family. It supports
+Git/path consumers, and package publishing is explicitly disabled until a
+published Kit family carries the inspector-picking fix. Cargo strips path edges
+when packaging; enabling publication prematurely would lose that fix.
+See [distribution details](kit-distribution.md). The release sequence below
+applies after that dependency prerequisite is resolved and publishing re-enabled.
 
 Before promotion, run `make release-prepare`. It infers the stable version from
 conventional commits and updates Cargo.toml, Cargo.lock, server.json, current
@@ -21,18 +24,15 @@ on Linux, packages without compilation, and checks crates.io's 10 MiB upload
 limit with `check-bridge-release.py --check-package-size`. Compilation and tests
 are local macOS responsibilities; hosted publication uses `--no-verify`.
 
-## Bundled Ely verification
+## Bundled GPUI Kit verification
 
-Run `python3 .github/scripts/check-ely-snapshot.py --upstream /path/to/pinned/ely`.
-This checks the immutable upstream revision, upstream source/asset/license hashes, recorded local source patches, GPUI
-0.3.8 pins and optional native dependency mapping. There is no Ely path or
-registry dependency. Native builds generate namespace/asset adaptations from
-the verified bundled files; MCP-only builds skip that work.
+Run `make snapshot-check`. This verifies the complete Kit bundle inventory,
+modified file hashes, GPUI 0.3.14 pin, direct path edges, and native/MCP graphs.
+The bundle is the actual dependency source; no build script generates a UI namespace.
 
-Verify Cargo's extracted package with all features, and independently verify
-the default portable install. Check the archive contains the full vendor source,
-assets, upstream manifest, provenance and license notices. See
-[distribution details](ely-distribution.md).
+Before re-enabling publishing, verify the extracted Cargo package with all
+features and a downstream native consumer. The published Kit source must retain
+the picking fix. Independently verify the default portable install.
 
 ## Release sequence
 
@@ -49,7 +49,7 @@ assets, upstream manifest, provenance and license notices. See
    cargo publish --all-features --locked
    ```
 
-   There is no support-crate publication prerequisite.
+   The fixed Kit family must already be available in the registry.
 5. Retain the configured trusted publisher with owner `emmanuel-defreitas`,
    repository `gpui-agentation`, workflow `publish-bridge.yml`, and environment
    `crates-io`. That environment is restricted to `main`; its private-repository

@@ -3,12 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::ely::{
-    buttons::{Button, ButtonVariant},
-    forms::{Input, TextInput},
-    primitives::Icon,
-    theme::{ActiveTheme, ControlSize, IconSize},
-};
+use crate::ui::*;
 use gpui::{
     App, Context, Entity, FocusHandle, Focusable, Render, Subscription, Task, Window, div,
     prelude::*,
@@ -65,18 +60,18 @@ pub struct AnnotationOverlay {
     restore_configuration: Option<crate::GpuiConfiguration>,
     hovered: Option<Target>,
     draft: Option<Draft>,
-    input: Entity<TextInput>,
+    input: Entity<TextareaState>,
     focus: FocusHandle,
     previous_focus: Option<FocusHandle>,
     notice: String,
     revision: u64,
-    tool: Option<crate::ely::media::Tool>,
+    tool: Option<crate::drawing::AnnotationTool>,
     color: usize,
     stroke: Vec<(f32, f32)>,
     toolbar_at: Option<(f32, f32)>,
     banner: bool,
     toolbar_hidden: bool,
-    companion_toolbar: Option<gpui::WindowHandle<toolbar_window::ToolbarWindow>>,
+    companion_toolbar: Option<ToolWindow<toolbar_window::ToolbarWindow>>,
     companion_toolbar_spec: Option<toolbar_window::ToolbarSpec>,
     toolbar_sync_pending: bool,
     companion_toolbar_active: bool,
@@ -97,14 +92,18 @@ pub struct AnnotationOverlay {
     context_request: Option<(u64, gpui::Point<gpui::Pixels>)>,
     context: Option<menu::ContextKind>,
     context_number: u64,
+    context_menu: Option<(u64, Entity<gpui::component::menu::PopupMenu>)>,
+    _context_dismiss: Option<Subscription>,
     settings_open: bool,
     review_open: bool,
     sheet_focus: FocusHandle,
+    notes_focus: FocusHandle,
     sheet_previous_focus: Option<FocusHandle>,
     settings_status: String,
     mcp_starting: bool,
     mcp_requested: bool,
-    mcp_config_input: Entity<TextInput>,
+    mcp_config_input: Entity<EditorState>,
+    host: gpui::AnyWindowHandle,
     mcp_config_copied: bool,
     mcp_config_expanded: bool,
     _copy_feedback: Option<Task<()>>,
@@ -167,25 +166,23 @@ impl AnnotationOverlay {
             ),
         };
         let mcp_config_input = cx.new(|cx| {
-            let mut input = TextInput::new(window, cx)
-                .label("MCP config")
-                .multi_line(1, usize::MAX)
-                .highlighter(crate::ely::forms::json_highlights);
-            input.set_text(
+            let mut input = EditorState::new(window, cx)
+                .language("json")
+                .line_number(false);
+            input.set_value(
                 server
                     .as_ref()
                     .map(|server| settings::mcp_config(&format!("http://{}/mcp", server.address())))
                     .unwrap_or_default(),
+                window,
                 cx,
             );
             input.set_disabled(true, cx);
             input
         });
         let input = cx.new(|cx| {
-            TextInput::new(window, cx)
-                .multi_line(1, 12)
-                .max_len(8000)
-                .label("Feedback")
+            TextareaState::new(window, cx)
+                .auto_grow(1, 12)
                 .placeholder("")
         });
         let owner = cx.entity().downgrade();
@@ -220,6 +217,7 @@ impl AnnotationOverlay {
         let overlay_id = cx.entity_id();
         let toolbar_cleanup = cx.on_release(move |this, cx| {
             settings_popup::unregister(window_id, overlay_id, cx);
+            inspector::unregister(window_id, overlay_id, cx);
             if let Some(handle) = this.companion_toolbar.take() {
                 let _ = handle.update(cx, |_, window, _| window.remove_window());
             }
@@ -234,6 +232,7 @@ impl AnnotationOverlay {
         let closed_owner = cx.entity().downgrade();
         let host_cleanup = cx.on_window_closed(move |cx, closed| {
             if closed == window_id {
+                inspector::unregister(window_id, overlay_id, cx);
                 let _ = closed_owner.update(cx, |this, cx| {
                     if let Some(handle) = this.companion_toolbar.take() {
                         let _ = handle.update(cx, |_, window, _| window.remove_window());
@@ -247,7 +246,11 @@ impl AnnotationOverlay {
             toolbar_cleanup,
             host_cleanup,
             toolbar_visibility,
-            cx.observe(&input, |this, _, cx| {
+            cx.observe_in(&input, window, |this, input, window, cx| {
+                let value = input.read(cx).value();
+                if value.chars().count() > 8000 {
+                    input.update(cx, |input, cx| input.set_comment(value, window, cx));
+                }
                 this.sync_mentions(cx);
                 cx.notify();
             }),
@@ -314,7 +317,7 @@ impl AnnotationOverlay {
             previous_focus: None,
             notice,
             revision: 0,
-            tool: Some(crate::ely::media::Tool::Box),
+            tool: Some(crate::drawing::AnnotationTool::Box),
             color: 0,
             stroke: vec![],
             toolbar_at: preference.at,
@@ -343,14 +346,18 @@ impl AnnotationOverlay {
             context_request: None,
             context: None,
             context_number: 0,
+            context_menu: None,
+            _context_dismiss: None,
             settings_open: false,
             review_open: false,
             sheet_focus: cx.focus_handle(),
+            notes_focus: cx.focus_handle(),
             sheet_previous_focus: None,
             settings_status: String::new(),
             mcp_starting: false,
             mcp_requested: true,
             mcp_config_input,
+            host: window.window_handle(),
             mcp_config_copied: false,
             mcp_config_expanded: false,
             _copy_feedback: None,
@@ -394,7 +401,8 @@ impl AnnotationOverlay {
                 self.return_focus(window, cx);
                 self.stroke.clear();
                 self.hovered = None;
-                self.input.update(cx, |input, cx| input.set_text("", cx));
+                self.input
+                    .update(cx, |input, cx| input.set_comment("", window, cx));
             }
             Err(error) => self.notice = error.to_string(),
         }
@@ -426,7 +434,7 @@ impl AnnotationOverlay {
 
     fn choose_tool(
         &mut self,
-        tool: Option<crate::ely::media::Tool>,
+        tool: Option<crate::drawing::AnnotationTool>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -434,6 +442,11 @@ impl AnnotationOverlay {
             return;
         }
         if tool.is_none() {
+            if !crate::inspection::owns_renderer(cx) {
+                self.notice = "Inspection is managed by the host application.".into();
+                cx.notify();
+                return;
+            }
             if self.inspecting {
                 self.stop_inspection(window, cx);
                 return;
@@ -513,7 +526,8 @@ impl AnnotationOverlay {
             y,
         });
         self.notice.clear();
-        self.input.update(cx, |input, cx| input.set_text("", cx));
+        self.input
+            .update(cx, |input, cx| input.set_comment("", window, cx));
         window.focus(&self.input.focus_handle(cx), cx);
         cx.notify();
     }
@@ -552,8 +566,9 @@ impl AnnotationOverlay {
                     x: a.feedback.x,
                     y: a.feedback.y,
                 });
-                self.input
-                    .update(cx, |input, cx| input.set_text(a.feedback.comment, cx));
+                self.input.update(cx, |input, cx| {
+                    input.set_comment(a.feedback.comment, window, cx)
+                });
                 self.notice.clear();
                 if self.draft.as_ref().is_some_and(|d| d.editing) {
                     window.focus(&self.input.focus_handle(cx), cx);
@@ -578,7 +593,8 @@ impl AnnotationOverlay {
         let Some(draft) = &self.draft else {
             return true;
         };
-        let comment = self.input.read(cx).text().trim();
+        let value = self.input.read(cx).value();
+        let comment = value.trim();
         // An emptied textbox has nothing to show: leaving it removes it, as in
         // Freeform, rather than failing to save blank text.
         if draft.editing
@@ -615,7 +631,7 @@ impl AnnotationOverlay {
         let Some(draft) = &self.draft else {
             return false;
         };
-        let comment = self.input.read(cx).text().trim().to_string();
+        let comment = self.input.read(cx).value().trim().to_string();
         let before = match &draft.id {
             Some(id) => match self.store.annotation(id) {
                 Ok(note) => Some(note),
@@ -674,7 +690,7 @@ impl AnnotationOverlay {
                     draft.shape = note.feedback.shape.clone();
                 }
                 self.input.update(cx, |input, cx| {
-                    input.set_text(note.feedback.comment.clone(), cx)
+                    input.set_comment(note.feedback.comment.clone(), window, cx)
                 });
                 if note.session_id == self.session.id {
                     if let Some(existing) = self
@@ -737,20 +753,20 @@ impl AnnotationOverlay {
             .unwrap_or_else(|| self.store.next_index(&self.session.id).unwrap_or(1));
         let editing = draft.editing;
         let textbox = matches!(draft.shape, Some(crate::AnnotationShape::Text { .. }));
-        let background = cx.theme().colors.chart[draft.color];
+        let background = annotation_style::palette(cx)[draft.color];
         let confirm = surface_button::SurfaceButton::new(
             "feedback-save",
             if editing { "Save" } else { "Edit" },
             if editing {
-                crate::ely::primitives::IconName::Save
+                IconName::Save
             } else {
-                crate::ely::primitives::IconName::Pencil
+                IconName::Pencil
             },
             false,
         )
         .icon_only()
-        .colors(background, cx.theme().colors.bg)
-        .disabled(editing && self.input.read(cx).text().trim().is_empty())
+        .colors(background, cx.theme().colors.background)
+        .disabled(editing && self.input.read(cx).value().trim().is_empty())
         .on_click(cx.listener(|this, _, window, cx| {
             if this.draft.as_ref().is_some_and(|draft| draft.editing) {
                 this.save(window, cx);
@@ -758,25 +774,21 @@ impl AnnotationOverlay {
                 this.start_editing(window, cx);
             }
         }));
-        let delete = surface_button::SurfaceButton::new(
-            "feedback-delete",
-            "Delete",
-            crate::ely::primitives::IconName::Trash2,
-            false,
-        )
-        .icon_only()
-        .colors(background, cx.theme().colors.bg)
-        .on_click(cx.listener(|this, _, window, cx| {
-            if let Some(id) = this.draft.as_ref().and_then(|draft| draft.id.clone()) {
-                if !this.delete(&id, window, cx) {
-                    return;
-                }
-            }
-            this.draft = None;
-            this.return_focus(window, cx);
-            this.notice.clear();
-            cx.notify();
-        }));
+        let delete =
+            surface_button::SurfaceButton::new("feedback-delete", "Delete", IconName::Trash, false)
+                .icon_only()
+                .colors(background, cx.theme().colors.background)
+                .on_click(cx.listener(|this, _, window, cx| {
+                    if let Some(id) = this.draft.as_ref().and_then(|draft| draft.id.clone()) {
+                        if !this.delete(&id, window, cx) {
+                            return;
+                        }
+                    }
+                    this.draft = None;
+                    this.return_focus(window, cx);
+                    this.notice.clear();
+                    cx.notify();
+                }));
         div()
             .flex()
             .flex_col()
@@ -788,13 +800,13 @@ impl AnnotationOverlay {
                     .gap_2()
                     .child(
                         Icon::new(surface::annotation_icon(draft.shape.as_ref()))
-                            .size(IconSize::Sm)
-                            .color(cx.theme().colors.bg),
+                            .size(gpui::px(14.))
+                            .text_color(cx.theme().colors.background),
                     )
                     .child(
                         div()
                             .flex_1()
-                            .text_size(cx.theme().text_size(crate::ely::theme::TextSize::Sm))
+                            .text_size(cx.theme().typography_tokens().sm.size)
                             .child(if textbox {
                                 "Textbox".to_string()
                             } else {
@@ -831,12 +843,12 @@ impl AnnotationOverlay {
                             div()
                                 .w_full()
                                 .whitespace_normal()
-                                .text_color(cx.theme().colors.bg.opacity(0.5))
-                                .text_size(cx.theme().text_size(crate::ely::theme::TextSize::Base))
+                                .text_color(cx.theme().colors.background.opacity(0.5))
+                                .text_size(cx.theme().typography_tokens().md.size)
                                 .line_height(gpui::relative(1.4))
                                 .flex()
                                 .flex_col()
-                                .children(self.input.read(cx).text().split('\n').map(|line| {
+                                .children(self.input.read(cx).value().split('\n').map(|line| {
                                     div()
                                         .w_full()
                                         .whitespace_normal()
@@ -855,6 +867,7 @@ impl AnnotationOverlay {
 #[cfg(test)]
 use crate::AnnotationPatch;
 
+mod annotation_style;
 mod banner;
 pub mod commands;
 mod followed;

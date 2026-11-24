@@ -1,6 +1,6 @@
 use super::*;
 use crate::ToolbarPosition;
-use crate::ely::media::Tool;
+use crate::drawing::AnnotationTool;
 
 /// A Debug menu command dispatched to the active window's annotation entity.
 #[derive(Clone, PartialEq, gpui::Action, serde::Deserialize)]
@@ -164,13 +164,11 @@ impl AnnotationOverlay {
             },
             "resume-inspection" => inspector::resume_picking(window, cx),
             "inspect" => self.choose_tool(None, window, cx),
-            "box" => self.choose_tool(Some(Tool::Box), window, cx),
-            "arrow" => self.choose_tool(Some(Tool::Arrow), window, cx),
-            "pen" => self.choose_tool(Some(Tool::Pen), window, cx),
-            "comment" => self.choose_tool(Some(Tool::Pin), window, cx),
-            // Ely's Select tool is unused by the drawing layer. It denotes our
-            // plain textbox tool without modifying the pinned vendor snapshot.
-            "text" => self.choose_tool(Some(Tool::Select), window, cx),
+            "box" => self.choose_tool(Some(AnnotationTool::Box), window, cx),
+            "arrow" => self.choose_tool(Some(AnnotationTool::Arrow), window, cx),
+            "pen" => self.choose_tool(Some(AnnotationTool::Pen), window, cx),
+            "comment" => self.choose_tool(Some(AnnotationTool::Pin), window, cx),
+            "text" => self.choose_tool(Some(AnnotationTool::Text), window, cx),
             "save" => {
                 self.save(window, cx);
             }
@@ -272,6 +270,33 @@ impl AnnotationOverlay {
             }
             cx.stop_propagation();
             return;
+        }
+        if event.keystroke.key == "escape" {
+            if self.settings_open || self.review_open {
+                self.dismiss_sheet(window, cx);
+                cx.stop_propagation();
+                return;
+            }
+            if self.active || self.draft.is_some() {
+                self.stroke.clear();
+                let dragging = self.pin_drag.take().is_some()
+                    | self.textbox_drag.take().is_some()
+                    | self.textbox_resize.take().is_some();
+                if dragging {
+                    if let Ok(session) = self.store.session(&self.session.id) {
+                        self.session = session;
+                    }
+                    window.focus(&self.focus, cx);
+                    cx.notify();
+                } else if self.draft.take().is_some() {
+                    self.return_focus(window, cx);
+                    cx.notify();
+                } else {
+                    self.close(window, cx);
+                }
+                cx.stop_propagation();
+                return;
+            }
         }
         if !self.active || self.settings_open || self.review_open {
             return;
