@@ -220,6 +220,7 @@ impl AnnotationOverlay {
         let overlay_id = cx.entity_id();
         let toolbar_cleanup = cx.on_release(move |this, cx| {
             settings_popup::unregister(window_id, overlay_id, cx);
+            inspector::unregister(window_id, overlay_id, cx);
             if let Some(handle) = this.companion_toolbar.take() {
                 let _ = handle.update(cx, |_, window, _| window.remove_window());
             }
@@ -234,6 +235,7 @@ impl AnnotationOverlay {
         let closed_owner = cx.entity().downgrade();
         let host_cleanup = cx.on_window_closed(move |cx, closed| {
             if closed == window_id {
+                inspector::unregister(window_id, overlay_id, cx);
                 let _ = closed_owner.update(cx, |this, cx| {
                     if let Some(handle) = this.companion_toolbar.take() {
                         let _ = handle.update(cx, |_, window, _| window.remove_window());

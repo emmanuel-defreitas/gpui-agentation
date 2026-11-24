@@ -298,6 +298,11 @@ fn companion_is_permanent_vertical_and_changes_mode_in_the_host(cx: &mut TestApp
 #[gpui::test]
 fn companion_follows_resize_visibility_fullscreen_and_host_close(cx: &mut TestAppContext) {
     let (overlay, cx) = setup(cx);
+    let host_id = cx.update(|window, cx| {
+        let id = window.window_handle().window_id();
+        assert!(super::super::inspector::registered(id, cx));
+        id
+    });
     cx.simulate_resize(size(px(760.), px(530.)));
     draw(cx);
     cx.update(|window, cx| {
@@ -367,6 +372,7 @@ fn companion_follows_resize_visibility_fullscreen_and_host_close(cx: &mut TestAp
     cx.run_until_parked();
     cx.cx.update(|cx| {
         assert!(overlay.read(cx).companion_toolbar.is_none());
+        assert!(!super::super::inspector::registered(host_id, cx));
         assert!(cx.windows().is_empty());
     });
 }

@@ -8,6 +8,7 @@ compile_error!("gpui-agentation's native library supports macOS only");
 
 mod drawing;
 mod http;
+mod inspection;
 mod integration;
 mod mcp;
 mod model;
