@@ -3,6 +3,9 @@
 
 CARGO ?= cargo
 
+KIT_PROBE_MANIFEST := migration/kit-probe/Cargo.toml
+
+
 .PHONY: help fetch example example-app bridge bridge-check bridge-install-check build check fmt fmt-check lint test test-doc doc release-check version-check version-test release-prepare release-version-check platform-check snapshot-check site-check verify ci
 
 help: ## Show available commands
@@ -92,3 +95,10 @@ verify: ## Run the complete local macOS verification suite before merging or pro
 	$(MAKE) bridge-install-check
 
 ci: verify ## Alias for local verification; GitHub Actions only promotes and releases
+
+.PHONY: kit-probe-check
+kit-probe-check: ## Verify the isolated Kit migration compatibility probe
+	$(CARGO) fmt --manifest-path $(KIT_PROBE_MANIFEST) -- --check
+	$(CARGO) clippy --manifest-path $(KIT_PROBE_MANIFEST) --all-targets --locked -- -D warnings
+	$(CARGO) test --manifest-path $(KIT_PROBE_MANIFEST) --locked
+	PYTHONDONTWRITEBYTECODE=1 python3 migration/kit-probe/check-graph.py

@@ -11,6 +11,23 @@ Native development annotations for GPUI and Ely. Read README.md before editing.
 - Keep API traffic on loopback and preserve origin/host checks and body limits.
 - Never commit credentials, local annotation stores, or generated build artifacts.
 
+## Ely to Kit migration (#112)
+
+- The production library stays on the pinned Ely/GPUI 0.3.8 graph until the
+  atomic cutover. Preparatory work must keep that graph buildable.
+- `migration/kit-probe` is an independent, unpublished workspace evaluating
+  exactly GPUI Kit 0.11.0 on its standard GPUI 0.3.14 backend. This is the
+  only current exception to the Ely/0.3.8 rule; do not add the probe as a
+  production workspace member or dependency, and do not enable `gpui-fast`.
+- The cutover replaces Ely completely with Kit. Follow the contract in
+  `migration/kit-probe/README.md`: preserve host init/theme/assets/Root and
+  inspector ownership; keep annotation and inspector services Agentation-owned.
+- Keep the default MCP-only graph free of native UI dependencies. Removal of
+  the public `ely` module and the coordinated host GPUI upgrade require a
+  pre-1.0 minor release and migration instructions.
+- Run `make kit-probe-check` for probe changes. Its success does not establish
+  that the production Agentation library has migrated or passed native QA.
+
 ## Verification
 
 ```sh
