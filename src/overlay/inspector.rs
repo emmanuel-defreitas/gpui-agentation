@@ -12,7 +12,8 @@ use crate::ely::{
     buttons::{Button, ButtonVariant},
     tooling,
 };
-use gpui::{Global, Inspector, InspectorElementId, Pixels, WeakEntity, WindowId, rems};
+use crate::inspection;
+use gpui::{EntityId, Global, Inspector, InspectorElementId, Pixels, WeakEntity, WindowId, rems};
 use std::collections::HashMap;
 
 #[derive(Default)]
@@ -40,10 +41,14 @@ pub(crate) fn install(cx: &mut App) {
     if cx.has_global::<Sidebars>() {
         return;
     }
-    tooling::install_inspector(cx);
+    crate::ely::tooling::inspector::register_inspector_element(cx);
+    let owns_renderer = inspection::claim_renderer(inspection::RendererOwner::Agentation, cx);
     cx.set_global(Sidebars::default());
+    if !owns_renderer {
+        return;
+    }
     cx.set_inspector_renderer(Box::new(|inspector, window, cx| {
-        let target = tooling::inspector_target(window, cx);
+        let target = inspection::inspector_target(window, cx);
         let native_owner = cx.entity().downgrade();
         let in_host = target == window.window_handle();
         let active = inspector.active_element_id().cloned();
@@ -81,7 +86,7 @@ pub(crate) fn install(cx: &mut App) {
                     .ok()
             });
             let outline = (!inspector.is_picking())
-                .then(|| tooling::inspector_selection(window, cx))
+                .then(|| inspection::inspector_selection(window, cx))
                 .flatten()
                 .filter(|selection| Some(&selection.id) == inspector.active_element_id())
                 .zip(color)
@@ -156,17 +161,49 @@ pub(super) fn is_external(window: &Window, cx: &App) -> bool {
 
 pub(super) fn register(owner: WeakEntity<AnnotationOverlay>, window: &Window, cx: &mut App) {
     install(cx);
-    cx.global_mut::<Sidebars>().0.insert(
-        window.window_handle().window_id(),
-        Sidebar {
+    cx.global_mut::<Sidebars>()
+        .0
+        .entry(window.window_handle().window_id())
+        .and_modify(|sidebar| sidebar.overlay = owner.clone())
+        .or_insert_with(|| Sidebar {
             overlay: owner,
             inspector: None,
             presented: false,
             opened: false,
             margin: None,
             announced: None,
-        },
-    );
+        });
+}
+
+/// Remove only this overlay's registration; a replaced overlay may release later.
+pub(super) fn unregister(id: WindowId, owner: EntityId, cx: &mut App) {
+    if !cx.has_global::<Sidebars>() {
+        return;
+    }
+    let sidebars = &mut cx.global_mut::<Sidebars>().0;
+    if !sidebars
+        .get(&id)
+        .is_some_and(|sidebar| sidebar.overlay.entity_id() == owner)
+    {
+        return;
+    }
+    let sidebar = sidebars.remove(&id).unwrap();
+    inspection::forget_window(id, cx);
+    if let Some(margin) = sidebar.margin {
+        margin.release(cx);
+    }
+    if sidebar.opened {
+        // Overlay release can occur during a host update. Close on the next turn,
+        // unless a replacement overlay has taken ownership in the meantime.
+        cx.defer(move |cx| {
+            if cx.global::<Sidebars>().0.contains_key(&id) {
+                return;
+            }
+            if let Some(host) = cx.windows().into_iter().find(|host| host.window_id() == id) {
+                let _ = host.update(cx, |_, window, cx| window.toggle_inspector(cx));
+            }
+        });
+    }
 }
 
 pub(super) fn is_open(window: &Window, cx: &App) -> bool {
@@ -191,6 +228,12 @@ fn native_inspector(window: &Window, cx: &App) -> Option<Entity<Inspector>> {
         .inspector
         .as_ref()?
         .upgrade()
+}
+
+#[cfg(test)]
+pub(super) fn registered(id: WindowId, cx: &App) -> bool {
+    cx.try_global::<Sidebars>()
+        .is_some_and(|state| state.0.contains_key(&id))
 }
 
 pub(super) fn is_picking(window: &Window, cx: &App) -> bool {
@@ -238,7 +281,7 @@ pub(super) fn start(window: &mut Window, companion: bool, cx: &mut App) {
     if sidebar_mut(window, cx).is_some_and(|sidebar| sidebar.opened) {
         return;
     }
-    tooling::clear_inspector_selection(window, cx);
+    inspection::clear_inspector_selection(window, cx);
     window.toggle_inspector(cx);
     let margin = (companion && !toolbar_window::fills_display(window))
         .then(|| toolbar_window::HostMargin::reserve(window, sidebar_width(window), cx));
@@ -261,26 +304,11 @@ pub(super) fn close(window: &mut Window, cx: &mut App) {
     if let Some(margin) = margin {
         margin.release(cx);
     }
-    tooling::clear_inspector_selection(window, cx);
+    inspection::clear_inspector_selection(window, cx);
 }
 
 fn configuration(window: &Window, cx: &App) -> Option<crate::GpuiConfiguration> {
-    tooling::active_inspector_configuration(window, cx).map(|configuration| {
-        crate::GpuiConfiguration {
-            source: configuration.source,
-            element_path: configuration.element_path,
-            changes: configuration
-                .changes
-                .into_iter()
-                .map(|change| crate::GpuiStyleChange {
-                    property: change.property,
-                    before: change.before,
-                    after: change.after,
-                })
-                .collect(),
-            rust: configuration.rust,
-        }
-    })
+    inspection::active_inspector_configuration(window, cx)
 }
 
 /// Whether a saved style override should be re-applied to the picked element.
@@ -347,7 +375,7 @@ impl AnnotationOverlay {
         if inspector.is_picking() || !self.inspecting {
             return false;
         }
-        let Some(selection) = tooling::inspector_selection(window, cx)
+        let Some(selection) = inspection::inspector_selection(window, cx)
             .filter(|selection| Some(&selection.id) == inspector.active_element_id())
         else {
             return false;
@@ -372,21 +400,12 @@ impl AnnotationOverlay {
                         if !this.inspecting || this.inspected_id.as_ref() != Some(&id) {
                             return;
                         }
-                        let configuration = tooling::InspectorStyleConfiguration {
-                            source: configuration.source,
-                            element_path: configuration.element_path,
-                            rust: configuration.rust,
-                            changes: configuration
-                                .changes
-                                .into_iter()
-                                .map(|change| tooling::InspectorStyleChange {
-                                    property: change.property,
-                                    before: change.before,
-                                    after: change.after,
-                                })
-                                .collect(),
-                        };
-                        tooling::restore_inspector_configuration(&id, configuration, window, cx);
+                        inspection::style::restore_inspector_configuration(
+                            &id,
+                            configuration,
+                            window,
+                            cx,
+                        );
                     });
                 });
             });

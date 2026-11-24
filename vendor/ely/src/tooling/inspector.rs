@@ -1,18 +1,16 @@
 pub(crate) mod source;
 
-use std::{collections::HashMap, fmt};
-
 use gpui::{
-    AbsoluteLength, AnyElement, App, AppContext, BorderStyle, Bounds, Context, Corners,
-    DefiniteLength, DivInspectorState, Edges, Entity, FontWeight, Global, Hsla, Inspector,
-    InspectorElementId, InteractiveElement, IntoElement, Length, ParentElement, Pixels,
-    StatefulInteractiveElement, StyleRefinement, Styled, TextAlign, TextRun, Window, WindowId,
+    AnyElement, App, AppContext, BorderStyle, Bounds, Context, Corners,
+    DivInspectorState, Edges, Entity, FontWeight, Hsla, Inspector,
+    InspectorElementId, InteractiveElement, IntoElement, ParentElement, Pixels,
+    StatefulInteractiveElement, Styled, TextAlign, TextRun, Window,
     canvas, div, fill, point, prelude::FluentBuilder, quad, size, transparent_black,
 };
 
 use crate::{
     buttons::{Button, ButtonVariant},
-    forms::{ColorPicker, ColorSwatch, Slider, hex, parse_hex},
+    forms::{ColorPicker, ColorSwatch, Slider},
     primitives::{FocusScope, raise},
     theme::{ActiveTheme, ControlSize, Radius, TextSize},
     typography::{Ellipsis, LEADING, literal, tabular},
@@ -24,269 +22,14 @@ const BORDER: usize = 2;
 const PADDING: usize = 5;
 const CONTENT: usize = 0;
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct InspectorStyleChange {
-    pub property: String,
-    pub before: String,
-    pub after: String,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct InspectorStyleConfiguration {
-    pub source: String,
-    pub element_path: String,
-    pub changes: Vec<InspectorStyleChange>,
-    pub rust: String,
-}
-
-/// Snapshot of the element displayed in this window's inspector sidebar.
-#[derive(Clone)]
-pub struct InspectorSelection {
-    pub id: InspectorElementId,
-    pub bounds: Bounds<Pixels>,
-    pub properties: std::collections::BTreeMap<String, String>,
-}
-
-#[derive(Default)]
-struct InspectorConfiguration {
-    selections: HashMap<WindowId, InspectorSelection>,
-    configurations: HashMap<WindowId, InspectorStyleConfiguration>,
-}
-impl Global for InspectorConfiguration {}
-
-#[derive(Default)]
-struct InspectorTargets {
-    windows: HashMap<WindowId, gpui::AnyWindowHandle>,
-}
-impl Global for InspectorTargets {}
-
-/// Route a detached inspector's controls to the consumer's native picker.
-pub fn set_inspector_target(view: WindowId, target: Option<gpui::AnyWindowHandle>, cx: &mut App) {
-    let targets = cx.default_global::<InspectorTargets>();
-    if let Some(target) = target {
-        targets.windows.insert(view, target);
-    } else {
-        targets.windows.remove(&view);
-    }
-}
-
-pub fn inspector_target(window: &Window, _cx: &App) -> gpui::AnyWindowHandle {
-    if let Some(target) = _cx
-        .try_global::<InspectorTargets>()
-        .and_then(|targets| targets.windows.get(&window.window_handle().window_id()))
-    {
-        return *target;
-    }
-    window.window_handle()
-}
-
-pub fn active_inspector_configuration(
-    window: &Window,
-    cx: &App,
-) -> Option<InspectorStyleConfiguration> {
-    cx.try_global::<InspectorConfiguration>()?
-        .configurations
-        .get(&window.window_handle().window_id())
-        .cloned()
-}
-
-pub fn inspector_selection(window: &Window, cx: &App) -> Option<InspectorSelection> {
-    cx.try_global::<InspectorConfiguration>()?
-        .selections
-        .get(&window.window_handle().window_id())
-        .cloned()
-}
-
-pub fn clear_inspector_selection(window: &Window, cx: &mut App) {
-    if cx.has_global::<InspectorConfiguration>() {
-        let state = cx.global_mut::<InspectorConfiguration>();
-        let id = window.window_handle().window_id();
-        state.selections.remove(&id);
-        state.configurations.remove(&id);
-    }
-}
-
-#[derive(Debug, Default)]
-struct StyleEditState {
-    selected: Option<InspectorElementId>,
-    original_style: Option<StyleRefinement>,
-    original_size: Option<gpui::Size<Pixels>>,
-    /// The color row whose picker is open, if any.
-    expanded: Option<ColorTarget>,
-}
-
-impl StyleEditState {
-    fn select(
-        &mut self,
-        id: InspectorElementId,
-        style: &StyleRefinement,
-        size: gpui::Size<Pixels>,
-    ) -> bool {
-        if self.selected.as_ref() == Some(&id) {
-            return false;
-        }
-        self.selected = Some(id);
-        self.original_style = Some(style.clone());
-        self.original_size = Some(size);
-        self.expanded = None;
-        true
-    }
-
-    fn original_for(
-        &self,
-        id: &InspectorElementId,
-    ) -> Option<(StyleRefinement, gpui::Size<Pixels>)> {
-        (self.selected.as_ref() == Some(id))
-            .then(|| self.original_style.clone().zip(self.original_size))
-            .flatten()
-    }
-}
-
-#[derive(Clone, Copy)]
-enum EditableStyle {
-    Width,
-    Height,
-    Padding,
-    Margin,
-    Border,
-    Opacity,
-}
-
-/// A color a box writes: its surface, or the text it sets for its children.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ColorTarget {
-    Background,
-    Text,
-}
-
-impl ColorTarget {
-    const ALL: [Self; 2] = [Self::Background, Self::Text];
-
-    fn property(self) -> &'static str {
-        match self {
-            Self::Background => "Background",
-            Self::Text => "Text color",
-        }
-    }
-
-    fn from_property(property: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|target| target.property() == property)
-    }
-
-    fn control(self) -> &'static str {
-        match self {
-            Self::Background => "ely-inspector-background",
-            Self::Text => "ely-inspector-text-color",
-        }
-    }
-
-    /// The solid color written, if any. Gradients and inherited colors read as `None`.
-    fn read(self, style: &StyleRefinement) -> Option<Hsla> {
-        match self {
-            Self::Background => style
-                .background
-                .as_ref()
-                .and_then(|fill| fill.color())
-                .and_then(|background| background.as_solid()),
-            Self::Text => style.text.color,
-        }
-    }
-
-    fn write(self, style: &mut StyleRefinement, color: Hsla) {
-        match self {
-            Self::Background => style.background = Some(color.into()),
-            Self::Text => style.text.color = Some(color),
-        }
-    }
-
-    fn rust(self, color: Hsla) -> String {
-        let method = match self {
-            Self::Background => "bg",
-            Self::Text => "text_color",
-        };
-        format!("  .{method}({})", rust_color(color))
-    }
-}
-
-/// `none` for an unwritten color, else its hex as the picker shows it.
-fn describe_color(color: Option<Hsla>) -> String {
-    color.map_or_else(|| "none".to_string(), |color| hex(color.to_rgb()))
-}
-
-/// The gpui constructor for a color: `rgb(0xrrggbb)`, or `rgba(0xrrggbbaa)` when translucent.
-pub fn rust_color(color: Hsla) -> String {
-    let rgba = color.to_rgb();
-    let byte = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u32;
-    let (r, g, b, a) = (byte(rgba.r), byte(rgba.g), byte(rgba.b), byte(rgba.a));
-    if a == 255 {
-        format!("rgb(0x{:06x})", (r << 16) | (g << 8) | b)
-    } else {
-        format!("rgba(0x{:08x})", (r << 24) | (g << 16) | (b << 8) | a)
-    }
-}
-
-/// One side of a box as written: pixels, `auto`, or a share of the parent's width.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Side {
-    Px(f32),
-    Auto,
-    Share(f32),
-}
-
-impl Side {
-    /// What the overlay draws: `auto` and shares only layout knows, so they draw nothing.
-    fn drawn(self) -> Pixels {
-        match self {
-            Side::Px(px) => Pixels::from(px),
-            Side::Auto | Side::Share(_) => Pixels::ZERO,
-        }
-    }
-}
-
-fn number(value: f32) -> String {
-    ((value * 10.0).round() / 10.0).to_string()
-}
-
-impl fmt::Display for Side {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Side::Px(px) => write!(f, "{}", number(*px)),
-            Side::Auto => write!(f, "auto"),
-            Side::Share(share) => write!(f, "{}%", number(share * 100.0)),
-        }
-    }
-}
-
-/// A box's margin, border and padding, each top, right, bottom, left.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Layers {
-    margin: [Side; 4],
-    border: [Side; 4],
-    padding: [Side; 4],
-}
-
-/// The layers as the style writes them, rems at `rem`.
-fn layers(style: &StyleRefinement, rem: Pixels) -> Layers {
-    let definite = |length: DefiniteLength| match length {
-        DefiniteLength::Absolute(length) => Side::Px(length.to_pixels(rem).into()),
-        DefiniteLength::Fraction(share) => Side::Share(share),
-    };
-    let margin = |length: Option<Length>| match length {
-        None => Side::Px(0.0),
-        Some(Length::Auto) => Side::Auto,
-        Some(Length::Definite(length)) => definite(length),
-    };
-    let padding = |length: Option<DefiniteLength>| length.map_or(Side::Px(0.0), definite);
-    let border = |length: Option<AbsoluteLength>| {
-        Side::Px(length.map_or(0.0, |length| length.to_pixels(rem).into()))
-    };
-    let (m, b, p) = (&style.margin, &style.border_widths, &style.padding);
-    Layers {
-        margin: [m.top, m.right, m.bottom, m.left].map(margin),
-        border: [b.top, b.right, b.bottom, b.left].map(border),
-        padding: [p.top, p.right, p.bottom, p.left].map(padding),
-    }
-}
+// Temporary presentation bridge; relative paths bypass the Ely namespace adapter.
+pub use super::super::super::inspection::{
+    InspectorSelection, InspectorStyleChange, InspectorStyleConfiguration,
+    active_inspector_configuration, clear_inspector_selection, inspector_selection,
+    inspector_target, set_inspector_target,
+};
+pub use super::super::super::inspection::style::{restore_inspector_configuration, rust_color};
+use super::super::super::inspection::{self as service, style::*};
 
 fn edges(sides: [Side; 4]) -> Edges<Pixels> {
     let [top, right, bottom, left] = sides.map(Side::drawn);
@@ -502,304 +245,6 @@ fn box_model(state: &DivInspectorState, window: &mut Window, cx: &mut App) -> An
         .into_any_element()
 }
 
-fn definite_pixels(value: Option<DefiniteLength>, fallback: Pixels, rem: Pixels) -> f32 {
-    match value {
-        Some(DefiniteLength::Absolute(value)) => value.to_pixels(rem).into(),
-        Some(DefiniteLength::Fraction(_)) | None => fallback.into(),
-    }
-}
-
-fn length_pixels(value: Option<Length>, fallback: Pixels, rem: Pixels) -> f32 {
-    match value {
-        Some(Length::Definite(value)) => definite_pixels(Some(value), fallback, rem),
-        Some(Length::Auto) | None => fallback.into(),
-    }
-}
-
-fn absolute_pixels(value: Option<AbsoluteLength>, rem: Pixels) -> f32 {
-    value.map_or(0.0, |value| value.to_pixels(rem).into())
-}
-
-fn uniform_definite(style: &StyleRefinement, rem: Pixels) -> f32 {
-    definite_pixels(style.padding.top, Pixels::ZERO, rem)
-}
-
-fn uniform_length(style: &StyleRefinement, rem: Pixels) -> f32 {
-    length_pixels(style.margin.top, Pixels::ZERO, rem)
-}
-
-fn uniform_border(style: &StyleRefinement, rem: Pixels) -> f32 {
-    absolute_pixels(style.border_widths.top, rem)
-}
-
-fn set_edit(style: &mut StyleRefinement, edit: EditableStyle, value: f32) {
-    match edit {
-        EditableStyle::Width => style.size.width = Some(gpui::px(value).into()),
-        EditableStyle::Height => style.size.height = Some(gpui::px(value).into()),
-        EditableStyle::Padding => {
-            let value: DefiniteLength = gpui::px(value).into();
-            style.padding.top = Some(value);
-            style.padding.right = Some(value);
-            style.padding.bottom = Some(value);
-            style.padding.left = Some(value);
-        }
-        EditableStyle::Margin => {
-            let value: Length = gpui::px(value).into();
-            style.margin.top = Some(value);
-            style.margin.right = Some(value);
-            style.margin.bottom = Some(value);
-            style.margin.left = Some(value);
-        }
-        EditableStyle::Border => {
-            let value: AbsoluteLength = gpui::px(value).into();
-            style.border_widths.top = Some(value);
-            style.border_widths.right = Some(value);
-            style.border_widths.bottom = Some(value);
-            style.border_widths.left = Some(value);
-        }
-        EditableStyle::Opacity => style.opacity = Some(value.clamp(0.0, 1.0)),
-    }
-}
-
-fn style_configuration(
-    id: &InspectorElementId,
-    original: &StyleRefinement,
-    current: &StyleRefinement,
-    original_size: gpui::Size<Pixels>,
-    rem: Pixels,
-) -> Option<InspectorStyleConfiguration> {
-    let mut changes = Vec::new();
-    let mut rust = vec!["div()".to_string()];
-    let mut changed = |property: &str, before: String, after: String, line: String| {
-        if before != after {
-            changes.push(InspectorStyleChange {
-                property: property.into(),
-                before,
-                after,
-            });
-            rust.push(line);
-        }
-    };
-    let original_width = length_pixels(original.size.width, original_size.width, rem);
-    let current_width = length_pixels(current.size.width, original_size.width, rem);
-    changed(
-        "Width",
-        format!("{}px", number(original_width)),
-        format!("{}px", number(current_width)),
-        format!("  .w(px({current_width:.1}))"),
-    );
-    let original_height = length_pixels(original.size.height, original_size.height, rem);
-    let current_height = length_pixels(current.size.height, original_size.height, rem);
-    changed(
-        "Height",
-        format!("{}px", number(original_height)),
-        format!("{}px", number(current_height)),
-        format!("  .h(px({current_height:.1}))"),
-    );
-    let before_layers = layers(original, rem);
-    let after_layers = layers(current, rem);
-    for (property, before, after, method, value) in [
-        (
-            "Padding",
-            before_layers.padding,
-            after_layers.padding,
-            "p",
-            uniform_definite(current, rem),
-        ),
-        (
-            "Margin",
-            before_layers.margin,
-            after_layers.margin,
-            "m",
-            uniform_length(current, rem),
-        ),
-        (
-            "Border",
-            before_layers.border,
-            after_layers.border,
-            "border",
-            uniform_border(current, rem),
-        ),
-    ] {
-        let describe = |sides: [Side; 4]| sides.map(|side| side.to_string()).join(" / ");
-        changed(
-            property,
-            describe(before),
-            describe(after),
-            format!("  .{method}(px({value:.1}))"),
-        );
-    }
-    let before = original.opacity.unwrap_or(1.0);
-    let after = current.opacity.unwrap_or(1.0);
-    changed(
-        "Opacity",
-        number(before),
-        number(after),
-        format!("  .opacity({after:.1})"),
-    );
-    for target in ColorTarget::ALL {
-        let (before, after) = (target.read(original), target.read(current));
-        if let Some(after_color) = after.filter(|_| before != after) {
-            changed(
-                target.property(),
-                describe_color(before),
-                describe_color(after),
-                target.rust(after_color),
-            );
-        }
-    }
-    if changes.is_empty() {
-        return None;
-    }
-    let location = id.path.source_location;
-    Some(InspectorStyleConfiguration {
-        source: format!(
-            "{}:{}:{}",
-            location.file(),
-            location.line(),
-            location.column()
-        ),
-        element_path: id.path.global_id.to_string(),
-        changes,
-        rust: rust.join("\n"),
-    })
-}
-
-fn publish_configuration(
-    id: &InspectorElementId,
-    current: &StyleRefinement,
-    edits: &Entity<StyleEditState>,
-    rem: Pixels,
-    window: &Window,
-    cx: &mut App,
-) {
-    let configuration = edits
-        .read(cx)
-        .original_for(id)
-        .and_then(|(original, size)| style_configuration(id, &original, current, size, rem));
-    let configurations = &mut cx.global_mut::<InspectorConfiguration>().configurations;
-    let window_id = window.window_handle().window_id();
-    if let Some(configuration) = configuration {
-        configurations.insert(window_id, configuration);
-    } else {
-        configurations.remove(&window_id);
-    }
-}
-
-fn apply_edit(
-    id: &InspectorElementId,
-    edit: EditableStyle,
-    value: f32,
-    edits: &Entity<StyleEditState>,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let target = inspector_target(window, cx);
-    if target != window.window_handle() {
-        let _ = target.update(cx, |_, window, cx| {
-            apply_edit(id, edit, value, edits, window, cx)
-        });
-        window.refresh();
-        return;
-    }
-    let rem = window.rem_size();
-    let mut current = None;
-    let _ = window.with_inspector_state::<DivInspectorState, _>(Some(id), cx, |state, _| {
-        if let Some(state) = state {
-            set_edit(&mut state.base_style, edit, value);
-            current = Some((*state.base_style).clone());
-        }
-    });
-    if let Some(current) = current {
-        publish_configuration(id, &current, edits, rem, window, cx);
-        window.refresh();
-    }
-}
-
-fn apply_color(
-    id: &InspectorElementId,
-    target: ColorTarget,
-    color: Hsla,
-    edits: &Entity<StyleEditState>,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let host = inspector_target(window, cx);
-    if host != window.window_handle() {
-        let _ = host.update(cx, |_, window, cx| {
-            apply_color(id, target, color, edits, window, cx)
-        });
-        window.refresh();
-        return;
-    }
-    let rem = window.rem_size();
-    let mut current = None;
-    let _ = window.with_inspector_state::<DivInspectorState, _>(Some(id), cx, |state, _| {
-        if let Some(state) = state {
-            target.write(&mut state.base_style, color);
-            current = Some((*state.base_style).clone());
-        }
-    });
-    if let Some(current) = current {
-        publish_configuration(id, &current, edits, rem, window, cx);
-        window.refresh();
-    }
-}
-
-/// Restore a saved note's overrides after its live element has captured a baseline.
-pub fn restore_inspector_configuration(id: &InspectorElementId, configuration: InspectorStyleConfiguration, window: &mut Window, cx: &mut App) {
-    let mut applied = false;
-    let _ = window.with_inspector_state::<DivInspectorState, _>(Some(id), cx, |state, _| {
-        let Some(state) = state else { return; };
-        for change in &configuration.changes {
-            if let Some(target) = ColorTarget::from_property(&change.property) {
-                if let Ok(color) = parse_hex(&change.after) {
-                    target.write(&mut state.base_style, color.into());
-                    applied = true;
-                }
-                continue;
-            }
-            let edit = match change.property.as_str() {
-                "Width" => EditableStyle::Width, "Height" => EditableStyle::Height,
-                "Padding" => EditableStyle::Padding, "Margin" => EditableStyle::Margin,
-                "Border" => EditableStyle::Border, "Opacity" => EditableStyle::Opacity,
-                _ => continue,
-            };
-            let Some(value) = change.after.split('/').next().and_then(|part| part.trim().trim_end_matches("px").parse::<f32>().ok()).filter(|value| value.is_finite()) else { continue; };
-            set_edit(&mut state.base_style, edit, value);
-            applied = true;
-        }
-    });
-    if applied {
-        cx.global_mut::<InspectorConfiguration>().configurations.insert(window.window_handle().window_id(), configuration);
-        window.refresh();
-    }
-}
-
-fn reset_edits(
-    id: &InspectorElementId,
-    edits: &Entity<StyleEditState>,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let target = inspector_target(window, cx);
-    if target != window.window_handle() {
-        let _ = target.update(cx, |_, window, cx| reset_edits(id, edits, window, cx));
-        window.refresh();
-        return;
-    }
-    let original = edits.read(cx).original_for(id).map(|(style, _)| style);
-    let _ = window.with_inspector_state::<DivInspectorState, _>(Some(id), cx, |state, _| {
-        if let (Some(state), Some(original)) = (state, original) {
-            *state.base_style = original;
-        }
-    });
-    cx.global_mut::<InspectorConfiguration>()
-        .configurations
-        .remove(&window.window_handle().window_id());
-    window.refresh();
-}
-
 fn edit_row(
     label: &'static str,
     id: &'static str,
@@ -868,13 +313,17 @@ fn color_row(
     fallback: Hsla,
     selected: InspectorElementId,
     edits: Entity<StyleEditState>,
+    picker: &Entity<Option<ColorTarget>>,
     cx: &App,
 ) -> AnyElement {
     let theme = cx.theme();
-    let control = target.control();
-    let expanded = edits.read(cx).expanded == Some(target);
+    let control = match target {
+        ColorTarget::Background => "ely-inspector-background",
+        ColorTarget::Text => "ely-inspector-text-color",
+    };
+    let expanded = picker.read(cx).as_ref() == Some(&target);
     let shown = current.unwrap_or(fallback);
-    let toggle = edits.clone();
+    let toggle = picker.clone();
     let picker_id = selected.clone();
     let picker_edits = edits.clone();
     div()
@@ -908,9 +357,8 @@ fn color_row(
                                     "Pick a color"
                                 })
                                 .on_click(move |window, cx| {
-                                    toggle.update(cx, |edits, _| {
-                                        edits.expanded =
-                                            (edits.expanded != Some(target)).then_some(target);
+                                    toggle.update(cx, |expanded, _| {
+                                        *expanded = (*expanded != Some(target)).then_some(target);
                                     });
                                     window.refresh();
                                 }),
@@ -944,6 +392,7 @@ fn configuration_panel(
     id: InspectorElementId,
     state: &DivInspectorState,
     edits: &Entity<StyleEditState>,
+    picker: &Entity<Option<ColorTarget>>,
     window: &Window,
     cx: &App,
 ) -> AnyElement {
@@ -1062,6 +511,7 @@ fn configuration_panel(
             theme.colors.surface,
             id.clone(),
             edits.clone(),
+            picker,
             cx,
         ))
         .child(color_row(
@@ -1071,6 +521,7 @@ fn configuration_panel(
             theme.colors.fg,
             id.clone(),
             edits.clone(),
+            picker,
             cx,
         ))
         .children((!changes.is_empty()).then(|| {
@@ -1256,82 +707,30 @@ pub fn inspector_panel_with_header(
 
 /// Draws gpui's inspector, which debug builds have, in Ely's look. `window.toggle_inspector` opens it at the window's right, and the page gives up its width. Hovering picks the box under the pointer, the wheel steps out to the boxes around it, and a press holds it; the picked box shows its margin, border, padding and size over the page, and its model in the panel.
 pub fn install_inspector(cx: &mut App) {
-    if !cx.has_global::<InspectorConfiguration>() {
-        cx.set_global(InspectorConfiguration::default());
+    register_inspector_element(cx);
+    if service::claim_renderer(service::RendererOwner::Default, cx) {
+        cx.set_inspector_renderer(Box::new(|inspector, window, cx| {
+            inspector_panel(inspector, window, cx, |_, _, _| None)
+        }));
     }
-    cx.set_inspector_renderer(Box::new(|inspector, window, cx| {
-        inspector_panel(inspector, window, cx, |_, _, _| None)
-    }));
+}
+
+/// Register the Ely controls without taking ownership of the window renderer.
+pub(crate) fn register_inspector_element(cx: &mut App) {
+    if !service::register_element_renderer(cx) { return; }
     cx.register_inspector_element(move |_window, cx| {
         // Each inspector owns its baseline; windows must never share edits.
         let edits = cx.new(|_| StyleEditState::default());
+        let picker = cx.new(|_| None::<ColorTarget>);
         move |id, state: &DivInspectorState, window: &mut Window, cx: &mut App| {
-            let target_id = inspector_target(window, cx).window_id();
-            if edits.update(cx, |edits, _| {
-                edits.select(id.clone(), &state.base_style, state.bounds.size)
-            }) {
-                let configuration = cx.global_mut::<InspectorConfiguration>();
-                configuration.selections.remove(&target_id);
-                configuration.configurations.remove(&target_id);
+            if service::capture(id.clone(), state, &edits, window, cx) {
+                picker.update(cx, |expanded, _| *expanded = None);
             }
-            cx.global_mut::<InspectorConfiguration>().selections.insert(
-                target_id,
-                InspectorSelection {
-                    id: id.clone(),
-                    bounds: state.bounds,
-                    properties: {
-                        let rem = window.rem_size();
-                        let written = layers(&state.base_style, rem);
-                        let sides = |values: [Side; 4]| {
-                            values.map(|value| value.to_string()).join(" / ")
-                        };
-                        std::collections::BTreeMap::from([
-                            (
-                                "Width".into(),
-                                format!(
-                                    "{} px",
-                                    number(length_pixels(
-                                        state.base_style.size.width,
-                                        state.bounds.size.width,
-                                        rem
-                                    ))
-                                ),
-                            ),
-                            (
-                                "Height".into(),
-                                format!(
-                                    "{} px",
-                                    number(length_pixels(
-                                        state.base_style.size.height,
-                                        state.bounds.size.height,
-                                        rem
-                                    ))
-                                ),
-                            ),
-                            ("Padding".into(), sides(written.padding)),
-                            ("Margin".into(), sides(written.margin)),
-                            ("Border".into(), sides(written.border)),
-                            (
-                                "Opacity".into(),
-                                number(state.base_style.opacity.unwrap_or(1.)),
-                            ),
-                            (
-                                "Background".into(),
-                                describe_color(ColorTarget::Background.read(&state.base_style)),
-                            ),
-                            (
-                                "Text color".into(),
-                                describe_color(ColorTarget::Text.read(&state.base_style)),
-                            ),
-                        ])
-                    },
-                },
-            );
             div()
                 .flex()
                 .flex_col()
                 .gap_3()
-                .child(configuration_panel(id, state, &edits, window, cx))
+                .child(configuration_panel(id, state, &edits, &picker, window, cx))
                 .child(box_model(state, window, cx))
                 .into_any_element()
         }
@@ -1339,76 +738,3 @@ pub fn install_inspector(cx: &mut App) {
     log::info!("inspector: installed");
 }
 
-#[cfg(test)]
-mod tests {
-    use std::rc::Rc;
-
-    use gpui::{
-        GlobalElementId, InspectorElementId, InspectorElementPath, StyleRefinement, Styled, div,
-        px, relative, rems, size,
-    };
-
-    use super::{EditableStyle, Side, layers, set_edit, style_configuration};
-
-    #[test]
-    fn layers_read_as_written() {
-        let mut style = div().mt(px(4.0)).mx_auto().p(rems(0.5)).border_2();
-        let written = layers(style.style(), px(16.0));
-        assert_eq!(
-            written.margin,
-            [Side::Px(4.0), Side::Auto, Side::Px(0.0), Side::Auto]
-        );
-        assert_eq!(written.padding, [Side::Px(8.0); 4]);
-        assert_eq!(written.border, [Side::Px(2.0); 4]);
-        let bare = layers(&StyleRefinement::default(), px(16.0));
-        assert_eq!(
-            bare.border,
-            [Side::Px(0.0); 4],
-            "no border written, none read"
-        );
-        let mut share = StyleRefinement::default();
-        share.padding.left = Some(relative(0.25));
-        let shown = layers(&share, px(16.0))
-            .padding
-            .map(|side| side.to_string());
-        assert_eq!(shown, ["0", "0", "0", "25%"]);
-        assert_eq!(Side::Share(0.25).drawn(), px(0.0), "a share draws nothing");
-    }
-
-    #[test]
-    fn visual_edits_export_only_changed_gpui_configuration() {
-        let original = StyleRefinement::default();
-        let mut current = original.clone();
-        set_edit(&mut current, EditableStyle::Width, 140.0);
-        set_edit(&mut current, EditableStyle::Padding, 12.0);
-        set_edit(&mut current, EditableStyle::Opacity, 0.5);
-        let id = InspectorElementId {
-            path: Rc::new(InspectorElementPath {
-                global_id: GlobalElementId::default(),
-                source_location: std::panic::Location::caller(),
-            }),
-            instance_id: 0,
-        };
-
-        let exported = style_configuration(
-            &id,
-            &original,
-            &current,
-            size(px(100.0), px(40.0)),
-            px(16.0),
-        )
-        .expect("changed styles export");
-
-        assert_eq!(
-            exported
-                .changes
-                .iter()
-                .map(|change| change.property.as_str())
-                .collect::<Vec<_>>(),
-            ["Width", "Padding", "Opacity"]
-        );
-        assert!(exported.rust.contains(".w(px(140.0))"));
-        assert!(exported.rust.contains(".p(px(12.0))"));
-        assert!(exported.rust.contains(".opacity(0.5)"));
-    }
-}

@@ -338,16 +338,18 @@ fn open_companion(
                     });
                 let focus = cx.focus_handle();
                 window.focus(&focus, cx);
-                crate::ely::tooling::set_inspector_target(
+                crate::inspection::register_target(
                     window.window_handle().window_id(),
-                    Some(host_handle),
+                    host_handle,
+                    cx.entity_id(),
                     cx,
                 );
                 let comments = comments::mount(owner.clone(), host_handle, cx);
                 let external_release = {
                     let id = window.window_handle().window_id();
+                    let owner_id = cx.entity_id();
                     cx.on_release(move |_, cx| {
-                        crate::ely::tooling::set_inspector_target(id, None, cx)
+                        crate::inspection::unregister_target(id, owner_id, cx)
                     })
                 };
                 let content_resize =

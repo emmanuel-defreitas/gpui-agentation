@@ -185,7 +185,7 @@ pub(super) fn consumer_action(
     cx: &mut App,
     action: impl FnOnce(&mut AnnotationOverlay, &mut Window, &mut Context<AnnotationOverlay>) + 'static,
 ) {
-    let host = crate::ely::tooling::inspector_target(window, cx);
+    let host = crate::inspection::inspector_target(window, cx);
     if host == window.window_handle() {
         owner.update(cx, |this, cx| action(this, window, cx));
     } else {
@@ -1160,7 +1160,7 @@ impl AnnotationOverlay {
                                             if this.inspecting
                                                 && this.inspected_id.is_some()
                                                 && !super::inspector::is_picking(window, cx)
-                                                && crate::ely::tooling::inspector_selection(
+                                                && crate::inspection::inspector_selection(
                                                     window, cx,
                                                 )
                                                 .filter(|selection| {
