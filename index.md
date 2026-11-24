@@ -4,9 +4,15 @@ Source: https://emmanuel-defreitas.github.io/gpui-agentation/
 
 Visual feedback for your native GPUI app. Annotate the interface. Give your agent the context.
 
-[Add to your app ↗](https://emmanuel-defreitas.github.io/gpui-agentation/#installation) [Rust crate v0.5.1](https://crates.io/crates/gpui-agentation/0.5.1) 
+[Add to your app ↗](https://emmanuel-defreitas.github.io/gpui-agentation/#installation) [Rust crate v0.7.0](https://crates.io/crates/gpui-agentation/0.7.0) 
 
 ## See feedback take shape.
+
+Native app · v0.7.0
+
+[![GPUI Agentation in a running macOS app: colored pins, a green arrow, and a blue selection box connect interface details to four notes in the Comments panel.](https://emmanuel-defreitas.github.io/gpui-agentation/_astro/native-annotations.h6spXlWK_1d5e4D.webp)](https://emmanuel-defreitas.github.io/gpui-agentation/_astro/native-annotations.h6spXlWK.png) 
+
+## The workflow, step by step.
 
 Illustrated demo
 
@@ -30,41 +36,41 @@ Copy structured Markdown or connect an MCP client to read, reply, and resolve fe
 
 Add the library to your GPUI app. Install the bridge separately if you want your coding agent to read and respond to annotations through MCP.
 
-Rust 1.95+ · GPUI 0.3.8 · Debug builds · MIT
+Rust 1.95+ · Kit 0.11.0 · GPUI 0.3.14 · Debug builds · MIT
 
 ### 01 Add the native library
 
-In your app’s `Cargo.toml`, enable `native` and turn off default features. Ely’s pinned source and assets come bundled in the package.
+In your app’s `Cargo.toml`, enable `native` and turn off default features. Use the same registry GPUI Kit version in your host. Inspector picking compatibility is handled inside Agentation.
 
 Cargo.toml
 
 ```toml
 [dependencies]
-gpui-agentation = { version = "0.5.1", default-features = false, features = ["native"] }
-gpui = { package = "gpui-pre", version = "=0.3.8", default-features = false, features = ["stacker"] }
+gpui-agentation = { version = "0.7.0", default-features = false, features = ["native"] }
+gpui = { package = "gpui-kit", version = "=0.11.0", default-features = false, features = ["component", "assets", "inspector"] }
 ```
 
-Use the same `gpui-pre` version and registry source throughout your app. Other GPUI sources produce incompatible Rust types.
+Host and Agentation must resolve to the same registry Kit version and GPUI backend.
 
 ### 02 Install the optional MCP bridge
 
 Terminal
 
 ```shell
-cargo install gpui-agentation --version 0.5.1 --locked
+cargo install gpui-agentation --version 0.7.0 --locked
 ```
 
-The default install builds the portable bridge executable. It does not compile GPUI or Ely and does not launch your app.
+The default install builds the portable bridge executable. It does not compile GPUI or GPUI Kit and does not launch your app.
 
 ## Wire it in once.
 
 Keep the integration at your application root. Register meaningful component boundaries you want to select, rather than wrapping every widget.
 
-These instructions target the 0.5.1 Agentation API. Gate all annotation imports, initialization, fields, and render hooks with `#[cfg(debug_assertions)]`: release builds expose no annotation API.
+These instructions target the 0.7.0 Agentation API. Gate all annotation imports, initialization, fields, and render hooks with `#[cfg(debug_assertions)]`: release builds expose no annotation API.
 
 1.  ### Initialize Agentation
     
-    Configure `gpui_agentation::Assets` on your Application, then call `gpui_agentation::init(cx)` in the launch callback. Agentation handles its bundled Ely setup and focus internally.
+    Configure `gpui_agentation::Assets` on your Application, then call `gpui_agentation::init(cx)` in the launch callback. Standalone hosts let Agentation initialize Kit. Existing Kit hosts use `init_with_options` with `HostMode::KitInitialized` and an explicit renderer policy. Keep one Kit Root around the host view; release builds initialize Kit directly.
     
 2.  ### Mount once per window
     
@@ -111,7 +117,7 @@ Use your client’s equivalent server configuration if its schema differs. The a
 
 Loopback only. No API key. Browser origins are rejected by the native API. The site’s illustrations do not connect to your local server.
 
-[View the MCP Registry entry ↗](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.emmanuel-defreitas%2Fgpui-agentation/versions/0.5.1) 
+[View the MCP metadata ↗](https://github.com/emmanuel-defreitas/gpui-agentation/blob/dev/server.json) 
 
 ## Give your agent a working guide.
 
@@ -125,7 +131,7 @@ Two reusable skills help your agent install gpui-agentation and explore feedback
 
 `gpui-agentation-explore` discovers MCP tools, reads sessions and pending notes, exports Markdown, and guides requested fixes through acknowledgment, replies, and verified resolution. It also explains the native drawing tools and API limits.
 
-From a repository clone, copy the chosen directory under `skills/` into your host project’s `.agents/skills/`, or `~/.agents/skills/` for personal use across projects. In Zed, start a new conversation and invoke `/gpui-agentation-explore` or `/gpui-agentation-setup`. Other agents can load the linked `SKILL.md` directly or use their supported skill directory.
+Install them from [skills.sh](https://skills.sh/)  in your app’s folder with `npx skills add emmanuel-defreitas/gpui-agentation`, then choose the skills and agents. Add `--skill gpui-agentation-setup` for one skill, or `-g` to install for every project. Start a new conversation and invoke `/gpui-agentation-explore` or `/gpui-agentation-setup`.
 
 Try: “Use gpui-agentation-explore to discover my app’s MCP tools and summarize pending feedback without changing notes.” Connect the running debug app’s MCP server first; installing a skill provides instructions, not a server connection.
 
@@ -159,12 +165,12 @@ Use Inspect, Box, Arrow, and Pen in the native toolbar. Four built-in color swat
 
 Use `native` for the debug library, default `mcp` for the bridge, or both when developing this package.
 
-Version 0.5.1 does not expose a public toolbar layout or custom palette builder.
+Version 0.7.0 does not expose a public toolbar layout or custom palette builder.
 
 ## A familiar idea. A native implementation.
 
 Inspired by [Agentation](https://www.agentation.com/)  and its approach to giving agents precise visual feedback. Thank you for the inspiration.
 
-gpui-agentation is an independent Rust implementation for GPUI. It is not affiliated with Agentation and does not implement its complete protocol. The native interface uses bundled [Ely components](https://elygpui.com/) ; upstream licenses and attribution are preserved.
+gpui-agentation is an independent Rust implementation for GPUI. It is not affiliated with Agentation and does not implement its complete protocol. The native interface uses [GPUI Kit components](https://github.com/longbridge/gpui-kit) ; upstream licenses and attribution are preserved.
 
 [Project source ↗](https://github.com/emmanuel-defreitas/gpui-agentation) [MIT license ↗](https://github.com/emmanuel-defreitas/gpui-agentation/blob/main/LICENSE) [Agentation ↗](https://www.agentation.com/)
