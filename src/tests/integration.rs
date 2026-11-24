@@ -1,8 +1,8 @@
 use super::*;
 use gpui::component::{ActiveTheme, ThemeMode as Mode};
 use gpui::{
-    AppContext, Context, IntoElement, Modifiers, Render, Styled, TestAppContext, VisualTestContext,
-    Window, div, px,
+    AppContext, Context, IntoElement, Modifiers, Render, StatefulInteractiveElement, Styled,
+    TestAppContext, VisualTestContext, Window, div, px,
 };
 
 struct HostAssets;
@@ -479,4 +479,211 @@ fn host_assets_take_precedence_on_collisions() {
             .unwrap()
             .starts_with(b"<svg")
     );
+}
+
+struct ScrollingAnnotationsHost {
+    tools: Agentation,
+    scroll: gpui::ScrollHandle,
+    oversized: bool,
+}
+impl Render for ScrollingAnnotationsHost {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let content = if self.oversized {
+            crate::target(
+                "content",
+                "Content",
+                div().w_full().h(px(1400.)).child("Tall content"),
+            )
+            .into_any_element()
+        } else {
+            div()
+                .w_full()
+                .h(px(1400.))
+                .flex()
+                .flex_col()
+                .child(div().h(px(100.)).flex_none())
+                .child(crate::target(
+                    "first",
+                    "First",
+                    div().w_full().h(px(80.)).flex_none().child("First card"),
+                ))
+                .child(div().h(px(320.)).flex_none())
+                .child(crate::target(
+                    "second",
+                    "Second",
+                    div().w_full().h(px(80.)).flex_none().child("Second card"),
+                ))
+                .into_any_element()
+        };
+        self.tools.root(
+            "screen",
+            "Screen",
+            div()
+                .id("scrolling-host")
+                .size_full()
+                .overflow_y_scroll()
+                .track_scroll(&self.scroll)
+                .child(content),
+            window,
+            cx,
+        )
+    }
+}
+
+// Deliver only requested native-frame callbacks. Avoid unconditional duplicate
+// draws, which used to conceal missing invalidation after a scroll.
+fn settle_annotation_frames(cx: &mut VisualTestContext) {
+    cx.run_until_parked();
+    for _ in 0..8 {
+        let callbacks = cx.update(|window, cx| window.simulate_next_frame(cx));
+        if callbacks == 0 {
+            break;
+        }
+        cx.run_until_parked();
+    }
+}
+
+fn check_native_annotation_scrolling(cx: &mut TestAppContext, oversized: bool) {
+    use crate::{AnnotationInput, AnnotationShape, Rect, Store};
+    use gpui::{ScrollDelta, ScrollEvent, ScrollSource, TouchPhase, point, size};
+    cx.update(crate::integration::init_for_tests);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("annotations.json");
+    let store = Store::open(&path).unwrap();
+    let session = store
+        .ensure_session("Native scrolling", "gpui://native-scroll")
+        .unwrap();
+    // Both notes exist before the host has registered any geometry. The box is
+    // in a gap between cards, where the stationary screen root used to win.
+    for shape in [
+        AnnotationShape::Box {
+            from: (0.2, 200. / 600.),
+            to: (0.4, 280. / 600.),
+            color: 0,
+        },
+        AnnotationShape::Text {
+            at: (0.5, 240. / 600.),
+            text: "Scrolling text".into(),
+            color: 0,
+            width: Some(0.3),
+            height: Some(0.1),
+        },
+    ] {
+        store
+            .add(
+                &session.id,
+                AnnotationInput {
+                    inspection: None,
+                    comment: "Scrolling note".into(),
+                    element_path: "drawing:test".into(),
+                    element: "Drawing".into(),
+                    x: 30.,
+                    y: 240.,
+                    bounding_box: Rect::default(),
+                    source_file: None,
+                    gpui_configuration: None,
+                    shape: Some(shape),
+                },
+            )
+            .unwrap();
+    }
+    let (host, cx) = cx.add_window_view(|window, cx| ScrollingAnnotationsHost {
+        tools: Agentation::mount(
+            "Native scrolling",
+            "gpui://native-scroll",
+            &path,
+            0,
+            window,
+            cx,
+        )
+        .unwrap(),
+        scroll: gpui::ScrollHandle::new(),
+        oversized,
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.update(|window, _| window.activate_window());
+    settle_annotation_frames(cx);
+    let pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    let text = cx.debug_bounds("feedback-textbox").unwrap();
+    // Open the box's read-only preview before scrolling.
+    cx.simulate_click(pin.center(), Modifiers::none());
+    settle_annotation_frames(cx);
+    let panel = cx.debug_bounds("feedback-editor-panel").unwrap();
+    let wheel = || ScrollEvent {
+        position: point(px(750.), px(400.)),
+        delta: ScrollDelta::Pixels(point(px(0.), px(-30.))),
+        modifiers: Modifiers::none(),
+        touch_phase: TouchPhase::Moved,
+        source: ScrollSource::default(),
+    };
+    cx.simulate_event(wheel());
+    settle_annotation_frames(cx);
+    let offset = cx.update(|_, cx| host.read(cx).scroll.offset().y);
+    assert_eq!(offset, px(-30.), "the real scroll container moved");
+    let moved_pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    let moved_text = cx.debug_bounds("feedback-textbox").unwrap();
+    let moved_panel = cx.debug_bounds("feedback-editor-panel").unwrap();
+    assert_eq!(
+        moved_pin.center().y,
+        pin.center().y + offset,
+        "drawing pin follows content"
+    );
+    assert_eq!(
+        moved_text.top(),
+        text.top() + offset,
+        "textbox follows content"
+    );
+    assert_eq!(
+        moved_panel.top(),
+        panel.top() + offset,
+        "unfocused note preview follows content"
+    );
+    // Enter editing with annotation mode still off. The editor can scroll
+    // internally, but wheel events over the host must not move its content.
+    let edit = cx.debug_bounds("feedback-editor-primary").unwrap();
+    cx.simulate_click(edit.center(), Modifiers::none());
+    settle_annotation_frames(cx);
+    cx.simulate_event(wheel());
+    settle_annotation_frames(cx);
+    assert_eq!(
+        cx.update(|_, cx| host.read(cx).scroll.offset().y),
+        offset,
+        "typing locks host scrolling"
+    );
+    cx.update(|window, cx| {
+        let focus = host.read(cx).tools.focus.clone();
+        window.focus(&focus, cx);
+    });
+    settle_annotation_frames(cx);
+    cx.simulate_event(wheel());
+    settle_annotation_frames(cx);
+    let unfocused_offset = cx.update(|_, cx| host.read(cx).scroll.offset().y);
+    assert!(
+        unfocused_offset < offset,
+        "leaving editor focus restores scrolling"
+    );
+    cx.simulate_click(point(px(750.), px(400.)), Modifiers::none());
+    settle_annotation_frames(cx);
+    assert!(
+        cx.debug_bounds("feedback-editor-panel").is_none(),
+        "clicking outside dismisses the editor"
+    );
+    cx.simulate_event(wheel());
+    settle_annotation_frames(cx);
+    assert!(
+        cx.update(|_, cx| host.read(cx).scroll.offset().y) < unfocused_offset,
+        "closing editor restores scrolling"
+    );
+}
+
+#[gpui::test]
+fn saved_drawings_text_and_note_preview_follow_native_scrolling(cx: &mut TestAppContext) {
+    check_native_annotation_scrolling(cx, false);
+}
+
+#[gpui::test]
+fn annotations_follow_oversized_content_even_when_clipped_bounds_stay_the_same(
+    cx: &mut TestAppContext,
+) {
+    check_native_annotation_scrolling(cx, true);
 }

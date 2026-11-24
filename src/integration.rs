@@ -7,7 +7,7 @@ use gpui::{
     ParentElement, SharedString, Styled, Subscription, Window, div,
 };
 
-use crate::{AnnotationOverlay, Error, begin_frame, target};
+use crate::{AnnotationOverlay, Error, begin_frame};
 
 /// Embedded fonts and icons used by Agentation. Configure before calling [`init`].
 ///
@@ -268,7 +268,7 @@ impl Agentation {
                     .flex()
                     .flex_col()
                     .child(self.overlay.clone())
-                    .child(target(id, label, content)),
+                    .child(crate::target::screen_target(id, label, content)),
             )
             .into_any_element()
     }

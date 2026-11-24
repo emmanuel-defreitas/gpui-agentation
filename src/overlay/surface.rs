@@ -711,18 +711,42 @@ impl AnnotationOverlay {
             .map(|note| note.id.clone())
     }
 
+    fn draft_bounds(&self, window: &Window, cx: &App) -> Option<Rect> {
+        let draft = self.draft.as_ref()?;
+        let (w, h) = viewport(window, cx);
+        let mut bounds = draft
+            .shape
+            .as_ref()
+            .map_or(draft.target.bounds, |shape| shape.bounds(w, h));
+        if let Some(id) = &draft.id {
+            let shift = if draft.shape.is_some() {
+                self.session
+                    .annotations
+                    .iter()
+                    .find(|note| &note.id == id)
+                    .map(|note| self.scroll_shift(note, window, cx))
+                    .unwrap_or(Some((0., 0.)))?
+            } else if let Some(anchor) = self.follow_anchors.get(id) {
+                let at = target::origin(window, cx, &anchor.target)?;
+                let base = anchor.baseline.get().unwrap_or(at);
+                (at.0 - base.0, at.1 - base.1)
+            } else {
+                (0., 0.)
+            };
+            bounds.x += shift.0;
+            bounds.y += shift.1;
+        } else if draft.shape.is_none() {
+            bounds = target::targets(window, cx)
+                .into_iter()
+                .find(|t| draft.url == self.session.url && t.id == draft.target.id)
+                .map_or(bounds, |target| target.bounds);
+        }
+        Some(bounds)
+    }
+
     fn panel(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let (w, h) = viewport(window, cx);
-        let annotation = if let Some(draft) = &self.draft {
-            let mut bounds = if let Some(shape) = &draft.shape {
-                shape.bounds(w, h)
-            } else {
-                target::targets(window, cx)
-                    .into_iter()
-                    .find(|t| draft.url == self.session.url && t.id == draft.target.id)
-                    .map(|t| t.bounds)
-                    .unwrap_or(draft.target.bounds)
-            };
+        let annotation = self.draft_bounds(window, cx).map(|mut bounds| {
             let marker_height = f32::from(
                 cx.theme()
                     .control_height(ControlSize::Lg)
@@ -732,10 +756,8 @@ impl AnnotationOverlay {
                 bounds.y -= (marker_height - bounds.height) / 2.0;
                 bounds.height = marker_height;
             }
-            Some(bounds)
-        } else {
-            None
-        };
+            bounds
+        });
         let width =
             f32::from(gpui::rems(16.0).to_pixels(window.rem_size())).min((w - 16.0).max(1.0));
         let panel_size = (width, self.editor_size.1.min((h - 16.0).max(1.0)));
@@ -831,11 +853,7 @@ impl AnnotationOverlay {
         if draft.shape.is_some() || self.inspected_id.is_some() {
             return None;
         }
-        let bounds = target::targets(window, cx)
-            .into_iter()
-            .find(|t| draft.url == self.session.url && t.id == draft.target.id)
-            .map(|t| t.bounds)
-            .unwrap_or(draft.target.bounds);
+        let bounds = self.draft_bounds(window, cx)?;
         if bounds.width <= 0.0 || bounds.height <= 0.0 {
             return None;
         }
@@ -874,6 +892,20 @@ impl AnnotationOverlay {
         let owner = cx.entity_id();
         let start_drag = cx.entity().downgrade();
         let mut layer = div().absolute().size_full();
+        // A reopened editor can be focused while drawing mode is off. Keep
+        // its editable geometry stable, but leave scrolling available for
+        // unfocused previews and preserve the editor's own scrolling.
+        if self.draft.as_ref().is_some_and(|draft| draft.editing)
+            && self.input.focus_handle(cx).contains_focused(window, cx)
+        {
+            layer = layer.child(
+                div()
+                    .id("feedback-editor-scroll-guard")
+                    .absolute()
+                    .size_full()
+                    .on_scroll(|_, _, cx| cx.stop_propagation()),
+            );
+        }
         if self.active && !self.inspecting && !self.review_open && self.tool.is_some() {
             let drawing = self.active && self.tool.is_some() && self.draft.is_none();
             let picker = div()
@@ -1136,7 +1168,7 @@ impl AnnotationOverlay {
             layer = layer.child(editor);
         }
         // Textboxes edit on the canvas; only other drafts get the floating editor.
-        if self.draft.is_some() && self.inspected_id.is_none() && !text_draft {
+        if self.draft_bounds(window, cx).is_some() && self.inspected_id.is_none() && !text_draft {
             layer = layer.child(self.panel(window, cx));
         }
         if let Some(popup) = self.mention_popup(window, cx) {

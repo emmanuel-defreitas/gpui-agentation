@@ -562,3 +562,45 @@ fn fullscreen_and_hidden_toolbar_keep_the_selected_inspector_visible(cx: &mut Te
         );
     });
 }
+
+#[gpui::test]
+fn unfocused_inspection_note_and_outline_follow_the_pin(cx: &mut TestAppContext) {
+    let (host, overlay, cx) = setup(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| this.stop_inspection(window, cx));
+        host.update(cx, |host, cx| {
+            host.offset = 180.;
+            cx.notify();
+        });
+    });
+    draw(cx);
+    let pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.simulate_click(pin.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|window, cx| {
+        let focus = overlay.read(cx).focus.clone();
+        window.focus(&focus, cx);
+    });
+    draw(cx);
+    let panel = cx.debug_bounds("feedback-editor-panel").unwrap();
+    let outline = cx.debug_bounds("feedback-selection-outline").unwrap();
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.offset += 75.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    cx.update(|window, cx| window.simulate_next_frame(cx));
+    cx.run_until_parked();
+    assert_eq!(
+        cx.debug_bounds("feedback-selection-outline")
+            .unwrap()
+            .left(),
+        outline.left() + px(75.)
+    );
+    assert_eq!(
+        cx.debug_bounds("feedback-editor-panel").unwrap().left(),
+        panel.left() + px(75.)
+    );
+}
