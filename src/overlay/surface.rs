@@ -553,7 +553,7 @@ impl AnnotationOverlay {
             url: self.session.url.clone(),
             target: Target {
                 id: format!("drawing:{}", uuid::Uuid::new_v4()),
-                label: format!("{tool:?}"),
+                label: tool.persisted_label().into(),
                 source: String::new(),
                 bounds,
             },

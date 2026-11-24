@@ -552,6 +552,7 @@ fn textbox_saves_inline_and_reopens_for_editing_without_a_comment(cx: &mut TestA
         assert!(this.draft.is_none(), "saving closes the inline editor");
         let note = &this.session.annotations[0];
         assert!(matches!(&note.feedback.shape, Some(AnnotationShape::Text { text, color: 2, .. }) if text == "Plain textbox"));
+        assert_eq!(note.feedback.element, "Select");
         note.id.clone()
     });
     assert!(cx.debug_bounds("feedback-editor-panel").is_none());
@@ -578,6 +579,7 @@ fn textbox_saves_inline_and_reopens_for_editing_without_a_comment(cx: &mut TestA
     cx.update(|_, cx| {
         let note = overlay.read(cx).store.annotation(&id).unwrap();
         assert_eq!(note.feedback.comment, "Plain textbox edited");
+        assert_eq!(note.feedback.element, "Select");
         assert!(matches!(note.feedback.shape, Some(AnnotationShape::Text { text, .. }) if text == "Plain textbox edited"));
     });
     cx.simulate_keystrokes("ctrl-z");

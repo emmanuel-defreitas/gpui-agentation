@@ -12,6 +12,20 @@ pub(crate) enum AnnotationTool {
     Text,
 }
 
+impl AnnotationTool {
+    /// Stable label stored in annotation payloads, independent of enum names.
+    pub(crate) fn persisted_label(self) -> &'static str {
+        match self {
+            Self::Box => "Box",
+            Self::Arrow => "Arrow",
+            Self::Pen => "Pen",
+            Self::Pin => "Pin",
+            // Textboxes historically used Ely's Select tool label.
+            Self::Text => "Select",
+        }
+    }
+}
+
 /// A serializable live-surface mark in normalized coordinates.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
