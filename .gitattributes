@@ -1,2 +1,4 @@
 # Byte-identical pinned upstream dependency; review provenance and packaging.
 vendor/ely/** linguist-vendored=true -whitespace -text
+# Unified diffs retain a single space on empty context lines.
+migration/kit-inspector/patches/*.patch -whitespace
