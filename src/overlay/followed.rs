@@ -46,6 +46,14 @@ pub(super) struct FollowMark {
     pub marker: AnyElement,
 }
 
+// GPUI 0.3.12 (Kit 0.10) has no blanket `IntoElement` for elements.
+impl IntoElement for FollowMark {
+    type Element = Self;
+    fn into_element(self) -> Self {
+        self
+    }
+}
+
 impl Element for FollowMark {
     type RequestLayoutState = ();
     type PrepaintState = bool;

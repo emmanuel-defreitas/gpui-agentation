@@ -1,6 +1,6 @@
 //! Skip Kit's invisible overlay scaffolding using GPUI's public pick-depth controls.
 //!
-//! These call sites are pinned to registry Kit 0.11.0. Only the containers are
+//! These call sites are pinned to Kit 0.10.0, from the registry or a Git checkout. Only the containers are
 //! skipped: notification content, dialogs, sheets and their controls still pick
 //! normally. No host events are dispatched while the inspector is inactive.
 use gpui::{
@@ -29,10 +29,16 @@ impl Global for Picks {}
 fn scaffold(id: &InspectorElementId) -> bool {
     let source = id.path.source_location;
     let file = source.file().replace('\\', "/");
-    (file.ends_with("gpui-base-0.11.0/src/root.rs") && source.line() == 294)
-        || (file.ends_with("gpui-component-0.11.0/src/root.rs")
-            && matches!(source.line(), 196 | 203 | 769 | 793))
-        || (file.ends_with("gpui-component-0.11.0/src/notification.rs") && source.line() == 1085)
+    // Base may come from the registry or from a Git checkout of the Kit
+    // repository, where the same file is `crates/base/src/root.rs`.
+    ((file.ends_with("gpui-base-0.10.0/src/root.rs") || file.ends_with("crates/base/src/root.rs"))
+        && source.line() == 264)
+        || ((file.ends_with("gpui-component-0.10.0/src/root.rs")
+            || file.ends_with("crates/component/src/root.rs"))
+            && matches!(source.line(), 192 | 199 | 763 | 787))
+        || ((file.ends_with("gpui-component-0.10.0/src/notification.rs")
+            || file.ends_with("crates/component/src/notification.rs"))
+            && source.line() == 1085)
 }
 
 /// Return true while a transient scaffold selection must not reach annotations.

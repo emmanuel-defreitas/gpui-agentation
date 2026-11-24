@@ -399,7 +399,9 @@ pub(super) struct DisclosureButton {
 
 impl RenderOnce for DisclosureButton {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        self.button.aria_expanded(self.expanded).child(
+        // Kit 0.10's button has no `aria_expanded`; the state is visual only here.
+        let _ = self.expanded;
+        self.button.child(
             div()
                 .w_full()
                 .flex()

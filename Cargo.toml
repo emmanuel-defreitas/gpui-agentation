@@ -61,11 +61,11 @@ block = { version = "0.1", optional = true }
 cocoa = { version = "0.26", optional = true }
 objc = { version = "0.2", optional = true }
 raw-window-handle = { version = "0.6", features = ["std"], optional = true }
-gpui = { package = "gpui-kit", version = "=0.11.0", default-features = false, features = ["component", "assets", "inspector"], optional = true }
+gpui = { package = "gpui-kit", version = "=0.10.0", default-features = false, features = ["component", "assets", "inspector"], optional = true }
 # Kit uses caret ranges internally. Keep downstream inspector call sites pinned,
 # even when the consumer resolves dependencies without this repository's lockfile.
-gpui-base = { version = "=0.11.0", default-features = false, optional = true }
-gpui-component = { version = "=0.11.0", default-features = false, optional = true }
+gpui-base = { version = "=0.10.0", default-features = false, optional = true }
+gpui-component = { version = "=0.10.0", default-features = false, optional = true }
 
 [dev-dependencies]
 reqwest = { version = "0.13.5", default-features = false, features = ["cookies", "json", "multipart", "rustls", "stream"] }
