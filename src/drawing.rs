@@ -1,9 +1,32 @@
 use crate::Rect;
-use crate::ely::media::{Mark, Tool};
 use gpui::{PathBuilder, Window, point, px};
 use serde::{Deserialize, Serialize};
 
-/// A serializable live-surface mark in Ely ImageAnnotator's normalized coordinate model.
+/// A drawing tool owned by Agentation. Inspect mode is represented by `None`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AnnotationTool {
+    Box,
+    Arrow,
+    Pen,
+    Pin,
+    Text,
+}
+
+impl AnnotationTool {
+    /// Stable label stored in annotation payloads, independent of enum names.
+    pub(crate) fn persisted_label(self) -> &'static str {
+        match self {
+            Self::Box => "Box",
+            Self::Arrow => "Arrow",
+            Self::Pen => "Pen",
+            Self::Pin => "Pin",
+            // Textboxes historically used previous presentation's Select tool label.
+            Self::Text => "Select",
+        }
+    }
+}
+
+/// A serializable live-surface mark in normalized coordinates.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
 pub enum AnnotationShape {
@@ -13,7 +36,7 @@ pub enum AnnotationShape {
         from: (f32, f32),
         /// Opposite normalized corner.
         to: (f32, f32),
-        /// Ely chart color, zero through three.
+        /// Stable annotation palette index, zero through three.
         color: usize,
     },
     /// Directed arrow.
@@ -22,14 +45,14 @@ pub enum AnnotationShape {
         from: (f32, f32),
         /// Normalized tip.
         to: (f32, f32),
-        /// Ely chart color, zero through three.
+        /// Stable annotation palette index, zero through three.
         color: usize,
     },
     /// Freehand polyline.
     Pen {
         /// Normalized points, at most 4,096.
         points: Vec<(f32, f32)>,
-        /// Ely chart color, zero through three.
+        /// Stable annotation palette index, zero through three.
         color: usize,
     },
     /// Plain text at a normalized position, rendered at one fixed size.
@@ -38,62 +61,49 @@ pub enum AnnotationShape {
         at: (f32, f32),
         /// Plain text, at most 8,000 characters.
         text: String,
-        /// Ely chart color, zero through three.
+        /// Stable annotation palette index, zero through three.
         color: usize,
+        /// Normalized wrap width. `None` sizes the box to its content.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        width: Option<f32>,
+        /// Normalized minimum height. `None` sizes the box to its text.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        height: Option<f32>,
     },
     /// Point marker.
     Pin {
         /// Normalized position.
         at: (f32, f32),
-        /// Ely chart color, zero through three.
+        /// Stable annotation palette index, zero through three.
         color: usize,
     },
 }
 
 impl AnnotationShape {
-    pub(crate) fn from_stroke(tool: Tool, points: &[(f32, f32)], color: usize) -> Option<Self> {
+    pub(crate) fn from_stroke(
+        tool: AnnotationTool,
+        points: &[(f32, f32)],
+        color: usize,
+    ) -> Option<Self> {
         let (&first, &last) = (points.first()?, points.last()?);
         match tool {
-            Tool::Select => None,
-            Tool::Pin => Some(Self::Pin { at: last, color }),
-            Tool::Box if first != last => Some(Self::Box {
+            AnnotationTool::Text => None,
+            AnnotationTool::Pin => Some(Self::Pin { at: last, color }),
+            AnnotationTool::Box if first != last => Some(Self::Box {
                 from: first,
                 to: last,
                 color,
             }),
-            Tool::Arrow if first != last => Some(Self::Arrow {
+            AnnotationTool::Arrow if first != last => Some(Self::Arrow {
                 from: first,
                 to: last,
                 color,
             }),
-            Tool::Pen if points.iter().any(|p| *p != first) => Some(Self::Pen {
+            AnnotationTool::Pen if points.iter().any(|p| *p != first) => Some(Self::Pen {
                 points: points.to_vec(),
                 color,
             }),
             _ => None,
-        }
-    }
-
-    pub(crate) fn mark(&self) -> Mark {
-        match self {
-            Self::Box { from, to, color } => Mark::Box {
-                from: *from,
-                to: *to,
-                color: *color,
-            },
-            Self::Arrow { from, to, color } => Mark::Arrow {
-                from: *from,
-                to: *to,
-                color: *color,
-            },
-            Self::Pen { points, color } => Mark::Pen {
-                points: points.clone(),
-                color: *color,
-            },
-            Self::Text { at, color, .. } | Self::Pin { at, color } => Mark::Pin {
-                at: *at,
-                color: *color,
-            },
         }
     }
 
@@ -107,11 +117,53 @@ impl AnnotationShape {
         }
     }
 
+    /// Offset every normalized point by `delta`, clamped to the surface, so a
+    /// duplicated shape lands just beside its original.
+    pub(crate) fn nudge(&mut self, delta: f32) {
+        let shift = |p: &mut (f32, f32)| {
+            p.0 = (p.0 + delta).clamp(0.0, 1.0);
+            p.1 = (p.1 + delta).clamp(0.0, 1.0);
+        };
+        match self {
+            Self::Box { from, to, .. } | Self::Arrow { from, to, .. } => {
+                shift(from);
+                shift(to);
+            }
+            Self::Pen { points, .. } => points.iter_mut().for_each(shift),
+            Self::Pin { at, .. } | Self::Text { at, .. } => shift(at),
+        }
+    }
+
+    /// A copy moved by a normalized delta, unclamped: it may lie partly
+    /// outside the window, and is only storable while [`Self::valid`].
+    pub(crate) fn translated(&self, dx: f32, dy: f32) -> Self {
+        let mut moved = self.clone();
+        let shift = |p: &mut (f32, f32)| {
+            p.0 += dx;
+            p.1 += dy;
+        };
+        match &mut moved {
+            Self::Box { from, to, .. } | Self::Arrow { from, to, .. } => {
+                shift(from);
+                shift(to);
+            }
+            Self::Pen { points, .. } => points.iter_mut().for_each(shift),
+            Self::Pin { at, .. } | Self::Text { at, .. } => shift(at),
+        }
+        moved
+    }
+
     fn points(&self) -> Vec<(f32, f32)> {
         match self {
             Self::Box { from, to, .. } | Self::Arrow { from, to, .. } => vec![*from, *to],
             Self::Pen { points, .. } => points.clone(),
-            Self::Pin { at, .. } | Self::Text { at, .. } => vec![*at],
+            Self::Pin { at, .. } => vec![*at],
+            Self::Text {
+                at, width, height, ..
+            } => vec![
+                *at,
+                (at.0 + width.unwrap_or(0.0), at.1 + height.unwrap_or(0.0)),
+            ],
         }
     }
 
@@ -145,20 +197,29 @@ impl AnnotationShape {
     pub(crate) fn hit(&self, at: (f32, f32), viewport: (f32, f32), reach: f32) -> bool {
         let scale = |p: (f32, f32)| (p.0 * viewport.0, p.1 * viewport.1);
         if let Self::Text {
-            at: origin, text, ..
+            at: origin,
+            text,
+            width,
+            height,
+            ..
         } = self
         {
             let origin = scale(*origin);
-            let width = text
+            let estimated = text
                 .lines()
                 .map(|line| line.chars().count())
                 .max()
                 .unwrap_or(1) as f32
                 * 9.0;
+            let width = width.map_or(estimated, |width| width * viewport.0);
+            let height = height
+                .map(|height| height * viewport.1)
+                .unwrap_or(0.0)
+                .max(text.lines().count().max(1) as f32 * 22.0);
             return at.0 >= origin.0 - reach
                 && at.0 <= origin.0 + width + reach
                 && at.1 >= origin.1 - reach
-                && at.1 <= origin.1 + text.lines().count().max(1) as f32 * 22.0 + reach;
+                && at.1 <= origin.1 + height + reach;
         }
         if let Self::Pin { at: pin, .. } = self {
             let pin = scale(*pin);
@@ -191,15 +252,15 @@ impl AnnotationShape {
     ) {
         let place = |p: (f32, f32)| point(px(p.0 * viewport.0), px(p.1 * viewport.1));
         let mut path = PathBuilder::stroke(px(stroke));
-        match self.mark() {
-            Mark::Box { from, to, .. } => {
-                path.move_to(place(from));
-                for p in [(to.0, from.1), to, (from.0, to.1), from] {
+        match self {
+            Self::Box { from, to, .. } => {
+                path.move_to(place(*from));
+                for p in [(to.0, from.1), *to, (from.0, to.1), *from] {
                     path.line_to(place(p));
                 }
             }
-            Mark::Arrow { from, to, .. } => {
-                let (tail, tip) = (place(from), place(to));
+            Self::Arrow { from, to, .. } => {
+                let (tail, tip) = (place(*from), place(*to));
                 path.move_to(tail);
                 path.line_to(tip);
                 let angle = f32::from(tip.y - tail.y).atan2(f32::from(tip.x - tail.x));
@@ -211,7 +272,7 @@ impl AnnotationShape {
                     path.line_to(tip);
                 }
             }
-            Mark::Pen { points, .. } => {
+            Self::Pen { points, .. } => {
                 if let Some(first) = points.first() {
                     path.move_to(place(*first));
                 }
@@ -219,11 +280,47 @@ impl AnnotationShape {
                     path.line_to(place(*p));
                 }
             }
-            Mark::Pin { .. } => return,
+            Self::Pin { .. } | Self::Text { .. } => return,
         }
         if let Ok(path) = path.build() {
             window.paint_path(path, color);
         }
+    }
+}
+
+/// Below this many pixels on either axis, a textbox drag is a click: the box
+/// sizes itself to its text instead of keeping a drawn frame.
+pub(crate) const TEXT_BOX_DRAG_THRESHOLD: f32 = 24.0;
+
+/// A textbox from the Textbox tool's press at `start` and release at `end`.
+///
+/// A drag frames a box like Freeform or Sketch: the drawn rectangle becomes its
+/// wrap width and minimum height, in either drag direction. A click places an
+/// auto-sized box at the press.
+pub(crate) fn text_box(
+    start: (f32, f32),
+    end: (f32, f32),
+    viewport: (f32, f32),
+    color: usize,
+) -> AnnotationShape {
+    let dragged = ((end.0 - start.0) * viewport.0).abs() >= TEXT_BOX_DRAG_THRESHOLD
+        && ((end.1 - start.1) * viewport.1).abs() >= TEXT_BOX_DRAG_THRESHOLD;
+    let (at, width, height) = if dragged {
+        let at = (start.0.min(end.0), start.1.min(end.1));
+        (
+            at,
+            Some((start.0 - end.0).abs()),
+            Some((start.1 - end.1).abs()),
+        )
+    } else {
+        (start, None, None)
+    };
+    AnnotationShape::Text {
+        at,
+        text: String::new(),
+        color,
+        width,
+        height,
     }
 }
 
@@ -240,7 +337,7 @@ pub(crate) fn centered_panel(
 }
 
 pub(crate) fn finish_shape(
-    tool: Tool,
+    tool: AnnotationTool,
     mut points: Vec<(f32, f32)>,
     end: (f32, f32),
     color: usize,
@@ -283,5 +380,5 @@ pub(crate) fn note_panel_position(
 }
 
 #[cfg(test)]
-#[path = "drawing.test.rs"]
+#[path = "tests/drawing.rs"]
 mod tests;

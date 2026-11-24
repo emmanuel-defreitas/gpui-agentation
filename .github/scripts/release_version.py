@@ -25,8 +25,8 @@ PATTERNS = [
     rf"> \*\*Version: {V}\.\*\*",
 ]
 FILES = [
-    "README.md", "docs/consumer-setup.md", "docs/package-layout.md",
-    "docs/publishing-bridge.md", "docs/reference.md",
+    "README.md", "site/docs/consumer-setup.md", "site/docs/package-layout.md",
+    "site/docs/publishing-bridge.md", "site/docs/reference.md",
     "skills/gpui-agentation-setup/SKILL.md", "site/src/pages/index.astro",
 ]
 

@@ -3,8 +3,7 @@
 .github/aw/logs/
 .DS_Store
 
-# Secrets — never commit. See .pre-commit-config.yaml and
-# .github/workflows/secret-scan.yml for the scanning that backs this up.
+# Secrets — never commit.
 .env
 .env.*
 !.env.example
@@ -17,12 +16,9 @@
 /crates/gpui-agentation-mcp/target/
 
 # Pinned dependency packaging outputs
-/vendor/ely/target/
-/vendor/ely/Cargo.lock
+/vendor/*/target/
+/vendor/*/Cargo.lock
 /target-mcp/
-
-# Website visual review captures
-/.impeccable/review/
 
 /.worktrees/
 __pycache__/

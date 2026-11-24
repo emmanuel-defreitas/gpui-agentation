@@ -1,2 +1,2 @@
-# Byte-identical pinned upstream dependency; review provenance and packaging.
-vendor/ely/** linguist-vendored=true -whitespace -text
+# Pinned Kit sources; verify provenance and recorded local patches.
+vendor/** linguist-vendored=true -whitespace -text

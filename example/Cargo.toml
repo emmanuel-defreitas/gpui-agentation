@@ -1,0 +1,27 @@
+[package]
+name = "agentation-consumer"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+license = "MIT"
+
+# Used by `cargo bundle` and mirrored by scripts/bundle-example.py, which needs
+# no extra tooling. Both wrap the binary in a macOS .app so the Dock shows the
+# project icon instead of a generic one.
+[package.metadata.bundle]
+name = "Agentation Example"
+identifier = "com.agentation.consumer-example"
+icon = ["assets/icon.png"]
+
+[features]
+native-smoke = ["gpui/test-support"]
+
+[dependencies]
+gpui_agentation = { package = "gpui-agentation", path = "..", default-features = false, features = ["native"] }
+gpui = { package = "gpui-kit", version = "=0.11.0", default-features = false, features = ["component", "assets", "inspector"] }
+
+[dev-dependencies]
+gpui = { package = "gpui-kit", version = "=0.11.0", features = ["test-support"] }
+gpui_agentation = { package = "gpui-agentation", path = "..", default-features = false, features = ["test-support"] }
+tempfile = "3.27.0"

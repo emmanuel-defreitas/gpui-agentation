@@ -12,15 +12,32 @@ and copyright notice are preserved in LICENSE.
 The GitHub repository was generated from `exegia/corpora-template`. Its initial
 commit is retained as the parent of the export commit.
 
-## Development reload supervisor
+## Retained inspector service attribution
 
-`src/hot_reload/runner.py` adapts `scripts/dev.py` from
-`exegia/gpui-corpora` at `a240711296727d8379dfb9477d3cff99f162bab5`.
-Its polling snapshot, save debounce, build-before-restart, failed-build recovery,
-and process cleanup approach are retained. Cargo target discovery and the
-settings control channel are Agentation adaptations. The original copyright
-notice and full MIT license are preserved in `src/hot_reload/LICENSE`.
-The crate does not depend on Corpora.
+The former presentation library has been removed. Agentation-owned inspection
+services in `src/inspection/` retain code derived from Ely GPUI Components at
+commit `da3fdcaf39f2fa85ce1dd9cad07c3c81cf1dd721` and its local adaptations at
+Agentation commit `2a370c4a420ccfb8c1e68dea5467baf18161026c`.
+Copyright (c) 2026 Ely GPUI Component contributors. Its full MIT notice is
+preserved in LICENSE. Original source:
+https://git.zacharyzhang.com/ZacharyZhang-NY/Ely-GPUI-Components.
+
+Style editing/export and the box model also derive from
+[`joris-gallot/gpui-devtools`](https://github.com/joris-gallot/gpui-devtools)
+commit `e967606d18709e89cad002db49f7d3b6eae19646` (MIT).
+These retained source notices do not indicate a runtime dependency.
+
+## GPUI Kit
+
+Agentation depends on the unmodified crates.io GPUI Kit 0.11.0 family from
+https://github.com/longbridge/gpui-kit, under Apache-2.0, using GPUI 0.3.14.
+The dependency packages retain their upstream license and attribution.
+
+The development cutover used a local source bundle with inspector-transparent
+containers. That historical bundle and its original/modified hashes remain in
+Git history at commit `72adf7703e6d23222371d2b45f3c7bb068f89539`.
+The release instead handles picking inside Agentation through public GPUI APIs;
+no modified Kit packages are shipped or published by this repository.
 
 ## Model Context Protocol mark
 

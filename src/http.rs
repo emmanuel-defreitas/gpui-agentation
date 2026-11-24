@@ -111,16 +111,16 @@ fn router(store: Store, mcp_enabled: Arc<AtomicBool>) -> Router {
         )
         .route("/status", get(status))
         .route("/sessions", get(sessions).post(create_session))
-        .route("/sessions/:id", get(session))
-        .route("/sessions/:id/annotations", post(add))
-        .route("/sessions/:id/pending", get(session_pending))
-        .route("/sessions/:id/markdown", get(markdown))
-        .route("/sessions/:id/events", get(session_events))
+        .route("/sessions/{id}", get(session))
+        .route("/sessions/{id}/annotations", post(add))
+        .route("/sessions/{id}/pending", get(session_pending))
+        .route("/sessions/{id}/markdown", get(markdown))
+        .route("/sessions/{id}/events", get(session_events))
         .route(
-            "/annotations/:id",
+            "/annotations/{id}",
             get(annotation).patch(update).delete(delete),
         )
-        .route("/annotations/:id/thread", post(reply))
+        .route("/annotations/{id}/thread", post(reply))
         .route("/pending", get(pending))
         .route("/events", get(events))
         .layer(DefaultBodyLimit::max(32 * 1024))
@@ -363,5 +363,5 @@ fn event_stream(
 }
 
 #[cfg(test)]
-#[path = "http.test.rs"]
+#[path = "tests/http.rs"]
 mod tests;

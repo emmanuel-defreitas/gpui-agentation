@@ -1,21 +1,15 @@
 use super::*;
-use crate::ely::{
-    lists::ListItem,
-    motion,
-    primitives::{Measure, raise},
-    theme::{Elevation, Radius},
-};
 use gpui::{AnyElement, Bounds, KeystrokeEvent, MouseButton, Pixels, Point, anchored, px};
 
 #[derive(Clone, Debug, PartialEq)]
-struct Query {
-    start: usize,
+pub(super) struct Query {
+    pub(super) start: usize,
     end: usize,
-    search: String,
-    dropdown: bool,
+    pub(super) search: String,
+    pub(super) dropdown: bool,
 }
 
-fn query(text: &str, caret: usize) -> Option<Query> {
+pub(super) fn query(text: &str, caret: usize) -> Option<Query> {
     let before = text.get(..caret)?;
     let start = before
         .char_indices()
@@ -39,13 +33,13 @@ fn query(text: &str, caret: usize) -> Option<Query> {
     })
 }
 
-struct Motion {
-    from: f32,
-    to: f32,
-    since: Instant,
+pub(super) struct Motion {
+    pub(super) from: f32,
+    pub(super) to: f32,
+    pub(super) since: Instant,
 }
 impl Motion {
-    fn sample(&self, duration: Duration) -> (f32, bool) {
+    pub(super) fn sample(&self, duration: Duration) -> (f32, bool) {
         let t = if duration.is_zero() {
             1.0
         } else {
@@ -65,13 +59,13 @@ pub(super) struct Mentions {
     hovered: Option<String>,
     dismissed: Option<usize>,
     escape_consumed: bool,
-    preview: Option<String>,
+    pub(super) preview: Option<String>,
     motions: std::collections::HashMap<String, Motion>,
     pub bounds: Option<Bounds<Pixels>>,
 }
 
 impl AnnotationOverlay {
-    fn mention_candidates(&self) -> Vec<crate::Annotation> {
+    pub(super) fn mention_candidates(&self) -> Vec<crate::Annotation> {
         let Some(query) = &self.mentions.query else {
             return vec![];
         };
@@ -146,7 +140,7 @@ impl AnnotationOverlay {
             .draft
             .as_ref()
             .filter(|d| d.editing)
-            .and_then(|_| query(input.text(), input.cursor()));
+            .and_then(|_| query(&input.value(), input.cursor()));
         if self.mentions.query != next {
             if next.as_ref().map(|q| q.start) != self.mentions.query.as_ref().map(|q| q.start) {
                 self.mentions.dismissed = None;
@@ -186,14 +180,19 @@ impl AnnotationOverlay {
     }
 
     pub(super) fn pin_scale(&self, id: &str, window: &mut Window, cx: &App) -> f32 {
+        let hover_scale: f32 = if self.hovered_note.as_deref() == Some(id) {
+            1.15
+        } else {
+            1.0
+        };
         let Some(motion) = self.mentions.motions.get(id) else {
-            return 1.0;
+            return hover_scale;
         };
         let (scale, animating) = motion.sample(motion::duration(motion::FAST, cx));
         if animating {
             window.request_animation_frame();
         }
-        scale
+        scale.max(hover_scale)
     }
 
     fn insert_mention(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -208,8 +207,8 @@ impl AnnotationOverlay {
         self.mentions.hovered = None;
         self.preview_pin(None, cx);
         self.input.update(cx, |input, cx| {
-            input.select(query.start..query.end, cx);
-            input.insert(&format!("@#{} ", note.index), cx);
+            input.set_selected_range(query.start..query.end, cx);
+            input.replace(format!("@#{} ", note.index), window, cx);
         });
         window.focus(&self.input.focus_handle(cx), cx);
         cx.notify();
@@ -277,7 +276,11 @@ impl AnnotationOverlay {
         {
             return None;
         }
-        let anchor = self.input.read(cx).caret_bounds()?;
+        let anchor = self
+            .input
+            .read(cx)
+            .cursor_layout()
+            .map(|(bounds, _)| bounds)?;
         let notes = self.mention_candidates();
         if notes.is_empty() {
             return None;
@@ -290,12 +293,12 @@ impl AnnotationOverlay {
             .aria_label("Mention a comment")
             .w(gpui::rems(16.0))
             .p_1()
-            .bg(cx.theme().colors.overlay)
-            .text_color(cx.theme().colors.fg)
+            .bg(cx.theme().colors.popover)
+            .text_color(cx.theme().colors.foreground)
             .border_1()
             .border_color(cx.theme().colors.border)
-            .rounded(cx.theme().radius(Radius::Md))
-            .shadow(cx.theme().elevation(Elevation::Floating))
+            .rounded(cx.theme().radius_tokens().md)
+            .shadow(cx.theme().shadow_tokens().md)
             .on_mouse_down(MouseButton::Left, |_, window, cx| {
                 window.prevent_default();
                 cx.stop_propagation();
@@ -317,8 +320,16 @@ impl AnnotationOverlay {
                         this.sync_mentions(cx);
                     }))
                     .child(
-                        ListItem::new(format!("mention-{id}"), format!("Note #{}", note.index))
-                            .description(note.feedback.comment.chars().take(80).collect::<String>())
+                        gpui::component::list::ListItem::new(format!("mention-{id}"))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .child(format!("Note #{}", note.index))
+                                    .child(
+                                        note.feedback.comment.chars().take(80).collect::<String>(),
+                                    ),
+                            )
                             .selected(self.mentions.selected == Some(index))
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.insert_mention(index, window, cx)
@@ -339,7 +350,7 @@ impl AnnotationOverlay {
             raise(
                 "annotation-mention-layer",
                 anchored().position(at).child(
-                    Measure::new("annotation-mention-bounds", move |bounds, _, cx| {
+                    BoundsObserver::new("annotation-mention-bounds", move |bounds, _, cx| {
                         let _ = owner.update(cx, |this, _| this.mentions.bounds = Some(bounds));
                     })
                     .child(list),
@@ -349,7 +360,3 @@ impl AnnotationOverlay {
         )
     }
 }
-
-#[cfg(test)]
-#[path = "mentions.test.rs"]
-mod tests;
