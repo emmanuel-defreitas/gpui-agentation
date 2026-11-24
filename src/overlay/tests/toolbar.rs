@@ -650,3 +650,163 @@ fn preserved_host_inspector_stays_owned_by_the_host(cx: &mut TestAppContext) {
         });
     });
 }
+
+struct HoverSample(bool);
+impl Render for HoverSample {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().size_full().child(
+            surface_button::SurfaceButton::new(
+                "hover-sample",
+                "Inspect",
+                IconName::Settings,
+                self.0,
+            )
+            .icon_only(),
+        )
+    }
+}
+
+#[gpui::test]
+fn toolbar_hover_keeps_icon_contrast_in_light_and_dark_themes(cx: &mut TestAppContext) {
+    use gpui::component::{Theme, ThemeMode};
+    cx.update(crate::integration::init_for_tests);
+    let (sample, cx) = cx.add_window_view(|_, _| HoverSample(false));
+    cx.update(|window, _| window.activate_window());
+    for mode in [ThemeMode::Light, ThemeMode::Dark] {
+        for selected in [false, true] {
+            cx.update(|_, cx| {
+                Theme::change(mode, None, cx);
+                sample.update(cx, |sample, cx| {
+                    sample.0 = selected;
+                    cx.notify();
+                });
+            });
+            draw(cx);
+            let bounds = cx.update(|window, _| {
+                gpui::base::test_support::find(window, &[], &"hover-sample".into())
+                    .unwrap()
+                    .bounds()
+            });
+            for pointer in [point(px(-10.), px(-10.)), bounds.center()] {
+                cx.simulate_mouse_move(pointer, None, Modifiers::none());
+                draw(cx);
+                cx.update(|window, cx| {
+                    let foreground = if selected {
+                        cx.theme().primary_foreground
+                    } else {
+                        cx.theme().foreground
+                    };
+                    let scale = window.scale_factor();
+                    let background = window
+                        .painted_quads()
+                        .iter()
+                        .find_map(|quad| {
+                            ((quad.bounds.origin.x.0 - f32::from(bounds.origin.x) * scale).abs()
+                                < 1.
+                                && (quad.bounds.origin.y.0 - f32::from(bounds.origin.y) * scale)
+                                    .abs()
+                                    < 1.
+                                && (quad.bounds.size.width.0
+                                    - f32::from(bounds.size.width) * scale)
+                                    .abs()
+                                    < 1.)
+                                .then(|| quad.background.as_solid())
+                                .flatten()
+                        })
+                        .expect("painted toolbar button");
+                    if selected {
+                        assert_eq!(background.a, 1., "selected tools must have an opaque fill");
+                    }
+                    fn luminance(color: gpui::Hsla) -> f32 {
+                        let color: gpui::Rgba = color.into();
+                        let linear = |c: f32| {
+                            if c <= 0.04045 {
+                                c / 12.92
+                            } else {
+                                ((c + 0.055) / 1.055).powf(2.4)
+                            }
+                        };
+                        0.2126 * linear(color.r)
+                            + 0.7152 * linear(color.g)
+                            + 0.0722 * linear(color.b)
+                    }
+                    let (a, b) = (luminance(background), luminance(foreground));
+                    let contrast = (a.max(b) + 0.05) / (a.min(b) + 0.05);
+                    assert!(
+                        contrast >= 3.,
+                        "{mode:?}, selected={selected}: contrast {contrast}"
+                    );
+                });
+            }
+        }
+    }
+}
+
+#[gpui::test]
+fn light_toolbar_is_white_and_selected_swatch_has_a_colored_border(cx: &mut TestAppContext) {
+    let (overlay, cx) = overlay(cx);
+    cx.update(|_, cx| gpui::component::Theme::change(gpui::component::ThemeMode::Light, None, cx));
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.toggle(window, cx)));
+    draw(cx);
+    let mut tools = toolbar(&overlay, cx);
+    let surface = tools
+        .debug_bounds("feedback-companion-window-surface")
+        .unwrap();
+    tools.update(|window, _| {
+        let scale = window.scale_factor();
+        let white: gpui::Hsla = gpui::rgb(0xffffff).into();
+        assert!(
+            window.painted_quads().iter().any(|quad| {
+                (quad.bounds.size.width.0 - f32::from(surface.size.width) * scale).abs() < 1.
+                    && (quad.bounds.size.height.0 - f32::from(surface.size.height) * scale).abs()
+                        < 1.
+                    && quad.background.as_solid() == Some(white)
+            }),
+            "light toolbar surface is pure white"
+        );
+    });
+    for color in 0..4 {
+        cx.update(|_, cx| {
+            overlay.update(cx, |this, cx| {
+                this.color = color;
+                cx.notify();
+            })
+        });
+        draw(cx);
+        draw(&mut tools);
+        tools.update(|window, cx| {
+            let bounds =
+                gpui::base::test_support::find(window, &[], &("feedback-color", color).into())
+                    .unwrap()
+                    .bounds();
+            let scale = window.scale_factor();
+            let quads: Vec<_> = window
+                .painted_quads()
+                .into_iter()
+                .filter(|quad| {
+                    (quad.bounds.origin.x.0 - f32::from(bounds.left()) * scale).abs() < 1.
+                        && (quad.bounds.origin.y.0 - f32::from(bounds.top()) * scale).abs() < 1.
+                        && (quad.bounds.size.width.0 - f32::from(bounds.size.width) * scale).abs()
+                            < 1.
+                })
+                .collect();
+            // Kit paints the fill and border in separate quads.
+            assert!(
+                quads.iter().any(|quad| quad.border_widths.top.0 > 0.
+                    && quad.border_color == annotation_style::palette(cx)[color]),
+                "selected swatch has a visible colored border"
+            );
+            let painted = quads
+                .iter()
+                .find(|quad| quad.background.as_solid().is_some_and(|fill| fill.a == 1.))
+                .expect("selected swatch fill");
+            let fill = painted.background.as_solid().unwrap();
+            assert_eq!(fill.a, 1.);
+            assert_ne!(
+                fill,
+                gpui::Hsla::from(gpui::rgb(0xffffff)),
+                "selected swatch differs from white toolbar"
+            );
+        });
+    }
+}

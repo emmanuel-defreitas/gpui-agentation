@@ -85,12 +85,14 @@ impl AnnotationOverlay {
             self.sheet_previous_focus = window.focused(cx);
         }
         self.settings_open = settings;
+        self.hovered_note = None;
         self.review_open = !settings;
         window.focus(&self.sheet_focus, cx);
         cx.notify();
     }
 
     pub(super) fn dismiss_sheet(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.hovered_note = None;
         self.settings_open = false;
         self.review_open = false;
         if let Some(focus) = self.sheet_previous_focus.take() {

@@ -73,6 +73,19 @@ impl SourceLocation {
     pub fn clipboard_path(&self) -> String {
         format!("{}:{}:{}", self.relative.display(), self.line, self.column)
     }
+
+    /// Begin at the source package, independent of the app's launch directory.
+    /// Keep the absolute path separately for editor navigation.
+    pub fn display_path(&self) -> PathBuf {
+        self.path
+            .ancestors()
+            .skip(1)
+            .find(|dir| dir.join("Cargo.toml").is_file())
+            .and_then(Path::parent)
+            .and_then(|parent| self.path.strip_prefix(parent).ok())
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| self.relative.clone())
+    }
 }
 
 #[derive(Debug, PartialEq)]

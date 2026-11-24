@@ -20,9 +20,15 @@ pub(crate) struct Target {
     pub bounds: Rect,
 }
 
-/// Unclipped top-left per target, so pins can follow content as it scrolls.
+struct Geometry {
+    origin: (f32, f32),
+    clip: Rect,
+    screen: bool,
+}
+
+/// Unclipped top-left and scroll viewport per target.
 #[derive(Default)]
-struct Origins(HashMap<(WindowId, String), (f32, f32)>);
+struct Origins(HashMap<(WindowId, String), Geometry>);
 impl Global for Origins {}
 
 #[derive(Default)]
@@ -48,8 +54,28 @@ pub fn target(
     label: impl Into<String>,
     child: impl IntoElement,
 ) -> impl IntoElement {
+    registered(id, label, child, false)
+}
+
+#[track_caller]
+pub(crate) fn screen_target(
+    id: impl Into<String>,
+    label: impl Into<String>,
+    child: impl IntoElement,
+) -> impl IntoElement {
+    registered(id, label, child, true)
+}
+
+#[track_caller]
+fn registered(
+    id: impl Into<String>,
+    label: impl Into<String>,
+    child: impl IntoElement,
+    screen: bool,
+) -> Registered {
     let source = Location::caller();
     Registered {
+        screen,
         child: child.into_any_element(),
         target: Target {
             id: id.into(),
@@ -84,7 +110,19 @@ pub(crate) fn nearest(window: &Window, cx: &App, x: f32, y: f32) -> Option<Targe
             .max(0.0);
         dx.hypot(dy)
     };
-    targets(window, cx).into_iter().min_by(|a, b| {
+    let mut candidates = targets(window, cx);
+    let is_screen = |target: &Target| {
+        cx.try_global::<Origins>().is_some_and(|origins| {
+            origins
+                .0
+                .get(&(window.window_handle().window_id(), target.id.clone()))
+                .is_some_and(|geometry| geometry.screen)
+        })
+    };
+    // The full-screen registration is a fallback for picking, not the content
+    // beneath a drawing in the gap between scrolling cards.
+    candidates.retain(|target| !is_screen(target));
+    candidates.into_iter().min_by(|a, b| {
         distance(a).total_cmp(&distance(b)).then_with(|| {
             (a.bounds.width * a.bounds.height).total_cmp(&(b.bounds.width * b.bounds.height))
         })
@@ -95,13 +133,32 @@ pub(crate) fn nearest(window: &Window, cx: &App, x: f32, y: f32) -> Option<Targe
 pub(crate) fn origin(window: &Window, cx: &App, id: &str) -> Option<(f32, f32)> {
     let window_id = window.window_handle().window_id();
     targets(window, cx).iter().find(|t| t.id == id)?;
-    cx.try_global::<Origins>()?
-        .0
-        .get(&(window_id, id.to_owned()))
-        .copied()
+    Some(
+        cx.try_global::<Origins>()?
+            .0
+            .get(&(window_id, id.to_owned()))?
+            .origin,
+    )
+}
+
+pub(crate) fn clip(window: &Window, cx: &App, id: &str) -> Option<Rect> {
+    Some(
+        cx.try_global::<Origins>()?
+            .0
+            .get(&(window.window_handle().window_id(), id.to_owned()))?
+            .clip,
+    )
 }
 
 pub(crate) fn targets(window: &Window, cx: &App) -> Vec<Target> {
+    registered_targets(window, cx)
+        .into_iter()
+        .filter(|t| t.bounds.width > 0.0 && t.bounds.height > 0.0)
+        .collect()
+}
+
+/// Includes clipped targets so saved pins retain their ancestor while offscreen.
+pub(crate) fn registered_targets(window: &Window, cx: &App) -> Vec<Target> {
     cx.try_global::<Registry>()
         .and_then(|r| r.0.get(&window.window_handle().window_id()))
         .map(|targets| {
@@ -109,7 +166,6 @@ pub(crate) fn targets(window: &Window, cx: &App) -> Vec<Target> {
                 .iter()
                 .filter_map(Weak::upgrade)
                 .map(|t| t.borrow().clone())
-                .filter(|t| t.bounds.width > 0.0 && t.bounds.height > 0.0)
                 .collect()
         })
         .unwrap_or_default()
@@ -118,6 +174,7 @@ pub(crate) fn targets(window: &Window, cx: &App) -> Vec<Target> {
 struct Registered {
     child: AnyElement,
     target: Target,
+    screen: bool,
 }
 impl Element for Registered {
     type RequestLayoutState = ();
@@ -162,9 +219,19 @@ impl Element for Registered {
         if !cx.has_global::<Origins>() {
             cx.set_global(Origins::default());
         }
-        cx.global_mut::<Origins>().0.insert(
+        let origin = (f32::from(bounds.origin.x), f32::from(bounds.origin.y));
+        let previous = cx.global_mut::<Origins>().0.insert(
             (window.window_handle().window_id(), self.target.id.clone()),
-            (f32::from(bounds.origin.x), f32::from(bounds.origin.y)),
+            Geometry {
+                origin,
+                screen: self.screen,
+                clip: Rect {
+                    x: clip.origin.x.into(),
+                    y: clip.origin.y.into(),
+                    width: clip.size.width.into(),
+                    height: clip.size.height.into(),
+                },
+            },
         );
         if let Some(global_id) = global_id {
             if !cx.has_global::<Registry>() {
@@ -186,8 +253,12 @@ impl Element for Registered {
                     .or_default()
                     .push(Rc::downgrade(&state));
             }
-            if moved {
-                window.request_animation_frame();
+            if moved || previous.is_none_or(|previous| previous.origin != origin) {
+                // Drawing and editor positions are computed during render,
+                // before this frame's target geometry is measured. Refresh all
+                // views next frame, including when a large target's clip stays
+                // unchanged while its unclipped origin moves.
+                window.on_next_frame(|window, _| window.refresh());
             }
         }
         self.child.prepaint(window, cx);

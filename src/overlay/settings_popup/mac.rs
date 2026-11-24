@@ -265,7 +265,7 @@ impl StatusItem {
             let image: id = msg_send![image, initWithData: data];
             anyhow::ensure!(image != nil, "missing Agentation status image");
             let image = image.autorelease();
-            let _: () = msg_send![image, setSize: NSSize::new(14., 14.)];
+            let _: () = msg_send![image, setSize: NSSize::new(18., 20.)];
             let _: () =
                 msg_send![image, setAccessibilityDescription: string("Agentation Settings")];
             let _: () = msg_send![image, setTemplate: YES];

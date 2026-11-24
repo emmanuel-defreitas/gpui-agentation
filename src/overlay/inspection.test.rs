@@ -12,16 +12,19 @@ impl Render for Host {
             .size_full()
             .child(self.overlay.clone())
             .children(self.shown.then(|| {
-                div()
-                    .id("anchored-card")
-                    .debug_selector(|| "inspection-target".into())
-                    .ml(px(self.offset))
-                    .mt(px(40.))
-                    .w(px(220.))
-                    .h(px(120.))
-                    .p_3()
-                    .border_1()
-                    .child("Inspect this element")
+                div().ml(px(self.offset)).child(crate::target::target(
+                    "card",
+                    "Card",
+                    div()
+                        .id("anchored-card")
+                        .debug_selector(|| "inspection-target".into())
+                        .mt(px(40.))
+                        .w(px(220.))
+                        .h(px(120.))
+                        .p_3()
+                        .border_1()
+                        .child("Inspect this element"),
+                ))
             }))
     }
 }
@@ -96,6 +99,43 @@ fn setup(
     draw(&mut palette);
     draw(cx);
     (host, overlay, cx)
+}
+
+#[gpui::test]
+fn inspection_pin_follows_its_content_after_inspecting_stops(cx: &mut TestAppContext) {
+    let (host, overlay, cx) = setup(cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.choose_tool(None, window, cx)));
+    draw(cx);
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.offset += 75.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    let after = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert_eq!(after.center().x, before.center().x + px(75.));
+    assert_eq!(after.center().y, before.center().y);
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.offset = -400.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    assert!(cx.debug_bounds("feedback-marker-number-1").is_none());
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.offset = 20.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    draw(cx);
+    assert_eq!(cx.debug_bounds("feedback-marker-number-1").unwrap(), before);
 }
 
 #[gpui::test]
@@ -376,9 +416,8 @@ fn editing_an_older_inspection_keeps_undo_transactions_valid(cx: &mut TestAppCon
 }
 
 #[gpui::test]
-fn inspection_pin_stays_where_the_element_was_inspected(cx: &mut TestAppContext) {
-    let (host, overlay, cx) = setup(cx);
-    cx.update(|window, cx| overlay.update(cx, |this, cx| this.stop_inspection(window, cx)));
+fn inspection_pin_follows_while_inspecting(cx: &mut TestAppContext) {
+    let (host, _, cx) = setup(cx);
     draw(cx);
     let inspected = cx.debug_bounds("inspection-target").unwrap();
     let pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
@@ -390,13 +429,11 @@ fn inspection_pin_stays_where_the_element_was_inspected(cx: &mut TestAppContext)
         })
     });
     draw(cx);
-    // Stock GPUI exposes no element identity outside picking, so the pin keeps
-    // the saved position rather than following the moved element.
     assert_eq!(
         cx.debug_bounds("feedback-marker-number-1")
             .unwrap()
             .center(),
-        pin.center()
+        pin.center() + point(px(160.), px(0.))
     );
 }
 
@@ -524,4 +561,147 @@ fn fullscreen_and_hidden_toolbar_keep_the_selected_inspector_visible(cx: &mut Te
                 .is_some()
         );
     });
+}
+
+#[gpui::test]
+fn unfocused_inspection_note_and_outline_follow_the_pin(cx: &mut TestAppContext) {
+    let (host, overlay, cx) = setup(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| this.stop_inspection(window, cx));
+        host.update(cx, |host, cx| {
+            host.offset = 180.;
+            cx.notify();
+        });
+    });
+    draw(cx);
+    let pin = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    cx.simulate_click(pin.center(), Modifiers::none());
+    draw(cx);
+    cx.update(|window, cx| {
+        let focus = overlay.read(cx).focus.clone();
+        window.focus(&focus, cx);
+    });
+    draw(cx);
+    let panel = cx.debug_bounds("feedback-editor-panel").unwrap();
+    let outline = cx.debug_bounds("feedback-selection-outline").unwrap();
+    cx.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.offset += 75.;
+            cx.notify();
+        })
+    });
+    draw(cx);
+    cx.update(|window, cx| window.simulate_next_frame(cx));
+    cx.run_until_parked();
+    assert_eq!(
+        cx.debug_bounds("feedback-selection-outline")
+            .unwrap()
+            .left(),
+        outline.left() + px(75.)
+    );
+    assert_eq!(
+        cx.debug_bounds("feedback-editor-panel").unwrap().left(),
+        panel.left() + px(75.)
+    );
+}
+
+#[gpui::test]
+fn empty_comment_rows_are_compact_and_hover_grows_the_matching_pin(cx: &mut TestAppContext) {
+    let (_, overlay, cx) = setup(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.stop_inspection(window, cx);
+            this.open_sheet(false, window, cx);
+        })
+    });
+    draw(cx);
+    let mut comments = tools(&overlay, cx);
+    draw(&mut comments);
+    draw(cx);
+    let row = comments.debug_bounds("feedback-note-row-1").unwrap();
+    assert!(
+        row.size.height < px(80.),
+        "empty notes must not show the internal element path"
+    );
+    let before = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    comments.simulate_mouse_move(row.center(), None, Modifiers::none());
+    draw(&mut comments);
+    draw(cx);
+    let hovered = cx.debug_bounds("feedback-marker-number-1").unwrap();
+    assert!((hovered.size.width / before.size.width - 1.15).abs() < 0.01);
+    assert!((f32::from(hovered.center().x - before.center().x)).abs() < 0.1);
+    assert!((f32::from(hovered.center().y - before.center().y)).abs() < 0.1);
+    cx.update(|_, cx| {
+        let this = overlay.read(cx);
+        assert!(
+            this.session.annotations[0].feedback.comment.is_empty(),
+            "fallback titles never overwrite saved comments"
+        );
+    });
+    comments.simulate_mouse_move(point(px(2.), px(2.)), None, Modifiers::none());
+    draw(&mut comments);
+    draw(cx);
+    assert_eq!(
+        cx.debug_bounds("feedback-marker-number-1").unwrap().size,
+        before.size
+    );
+    comments.simulate_mouse_move(row.center(), None, Modifiers::none());
+    draw(&mut comments);
+    draw(cx);
+    cx.update(|window, cx| overlay.update(cx, |this, cx| this.dismiss_sheet(window, cx)));
+    draw(cx);
+    assert_eq!(
+        cx.debug_bounds("feedback-marker-number-1").unwrap().size,
+        before.size
+    );
+}
+
+#[gpui::test]
+fn sidebar_number_uses_each_notes_saved_color(cx: &mut TestAppContext) {
+    let (_, overlay, cx) = setup(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.stop_inspection(window, cx);
+            this.open_sheet(false, window, cx);
+        })
+    });
+    for color in 0..4 {
+        cx.update(|_, cx| {
+            overlay.update(cx, |this, cx| {
+                let before = this.session.annotations[0].clone();
+                let mut after = before.clone();
+                after.color = Some(color);
+                this.store
+                    .replace_note(Some(&before), Some(&after))
+                    .unwrap();
+                this.session.annotations[0] = after;
+                this.color = (color + 1) % 4; // Current drawing color is independent.
+                cx.notify();
+            })
+        });
+        draw(cx);
+        let mut comments = tools(&overlay, cx);
+        draw(&mut comments);
+        let badge = comments.debug_bounds("feedback-note-badge-1").unwrap();
+        comments.update(|window, cx| {
+            let expected = annotation_style::palette(cx)[color];
+            let scale = window.scale_factor();
+            let fill = window
+                .painted_quads()
+                .iter()
+                .find_map(|quad| {
+                    ((quad.bounds.origin.x.0 - f32::from(badge.left()) * scale).abs() < 1.
+                        && (quad.bounds.origin.y.0 - f32::from(badge.top()) * scale).abs() < 1.
+                        && (quad.bounds.size.width.0 - f32::from(badge.size.width) * scale).abs()
+                            < 1.)
+                        .then(|| quad.background.as_solid())
+                        .flatten()
+                })
+                .expect("painted sidebar number circle");
+            assert_eq!(
+                fill, expected,
+                "badge uses the note color, not warning or active tool color"
+            );
+        });
+    }
 }

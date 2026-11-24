@@ -54,6 +54,7 @@ pub struct AnnotationOverlay {
     api_port: u16,
     session: Session,
     selected_note: Option<String>,
+    hovered_note: Option<String>,
     active: bool,
     inspecting: bool,
     inspection_note: Option<String>,
@@ -83,7 +84,7 @@ pub struct AnnotationOverlay {
     textbox_resize: Option<textbox::TextboxResize>,
     /// Measured bounds of the unsaved textbox draft's body, for its grips.
     draft_textbox_bounds: Option<gpui::Bounds<gpui::Pixels>>,
-    follow_baselines: std::collections::HashMap<String, followed::Baseline>,
+    follow_anchors: std::collections::HashMap<String, followed::Anchor>,
     /// Drawn notes' scroll anchors, so they move with the content under them.
     anchors: std::collections::HashMap<String, scrolled::Anchor>,
     annotation_press: Option<gpui::Point<gpui::Pixels>>,
@@ -306,6 +307,7 @@ impl AnnotationOverlay {
             api_port: port,
             session,
             selected_note: None,
+            hovered_note: None,
             active: false,
             inspecting: false,
             inspection_note: None,
@@ -338,7 +340,7 @@ impl AnnotationOverlay {
             textbox_drag: None,
             textbox_resize: None,
             draft_textbox_bounds: None,
-            follow_baselines: Default::default(),
+            follow_anchors: Default::default(),
             anchors: Default::default(),
             annotation_press: None,
             textbox_bounds: Default::default(),
@@ -387,11 +389,12 @@ impl AnnotationOverlay {
                 self.history.clear();
                 self.future.clear();
                 self.selected_note = None;
+                self.hovered_note = None;
                 self.pin_drag = None;
                 self.textbox_drag = None;
                 self.textbox_resize = None;
                 self.draft_textbox_bounds = None;
-                self.follow_baselines.clear();
+                self.follow_anchors.clear();
                 self.anchors.clear();
                 self.textbox_bounds.clear();
                 self.mentions = Default::default();
@@ -753,7 +756,8 @@ impl AnnotationOverlay {
             .unwrap_or_else(|| self.store.next_index(&self.session.id).unwrap_or(1));
         let editing = draft.editing;
         let textbox = matches!(draft.shape, Some(crate::AnnotationShape::Text { .. }));
-        let background = annotation_style::palette(cx)[draft.color];
+        let background = annotation_style::note_background(draft.color, cx);
+        let foreground = annotation_style::foreground(background);
         let confirm = surface_button::SurfaceButton::new(
             "feedback-save",
             if editing { "Save" } else { "Edit" },
@@ -765,7 +769,7 @@ impl AnnotationOverlay {
             false,
         )
         .icon_only()
-        .colors(background, cx.theme().colors.background)
+        .colors(background, foreground)
         .disabled(editing && self.input.read(cx).value().trim().is_empty())
         .on_click(cx.listener(|this, _, window, cx| {
             if this.draft.as_ref().is_some_and(|draft| draft.editing) {
@@ -777,7 +781,7 @@ impl AnnotationOverlay {
         let delete =
             surface_button::SurfaceButton::new("feedback-delete", "Delete", IconName::Trash, false)
                 .icon_only()
-                .colors(background, cx.theme().colors.background)
+                .colors(background, foreground)
                 .on_click(cx.listener(|this, _, window, cx| {
                     if let Some(id) = this.draft.as_ref().and_then(|draft| draft.id.clone()) {
                         if !this.delete(&id, window, cx) {
@@ -801,7 +805,7 @@ impl AnnotationOverlay {
                     .child(
                         Icon::new(surface::annotation_icon(draft.shape.as_ref()))
                             .size(gpui::px(14.))
-                            .text_color(cx.theme().colors.background),
+                            .text_color(foreground),
                     )
                     .child(
                         div()
@@ -843,7 +847,7 @@ impl AnnotationOverlay {
                             div()
                                 .w_full()
                                 .whitespace_normal()
-                                .text_color(cx.theme().colors.background.opacity(0.5))
+                                .text_color(foreground)
                                 .text_size(cx.theme().typography_tokens().md.size)
                                 .line_height(gpui::relative(1.4))
                                 .flex()

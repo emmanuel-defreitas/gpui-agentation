@@ -55,6 +55,7 @@ impl AnnotationOverlay {
             notes
                 .iter()
                 .any(|note| &note.id == id && drawn(note) && geometry(note) == anchor.geometry)
+                && anchor.target.is_some()
         });
         let (w, h) = viewport(window, cx);
         for note in notes.iter().filter(|note| drawn(note)) {

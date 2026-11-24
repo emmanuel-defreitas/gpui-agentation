@@ -50,14 +50,14 @@ pub(super) fn comment_input(
     window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
-    let colors = &cx.theme().colors;
+    let foreground = annotation_style::foreground(background);
     let focused = input.focus_handle(cx).is_focused(window);
     let field = Textarea::new(input)
         .appearance(false)
         .bordered(false)
         .aria_label("Feedback")
         .bg(background)
-        .text_color(colors.background)
+        .text_color(foreground)
         .p_0()
         .rounded_none();
     div()
@@ -72,7 +72,7 @@ pub(super) fn comment_input(
                     .top_0()
                     .left_0()
                     .text_size(cx.theme().typography_tokens().sm.size)
-                    .text_color(colors.background.opacity(0.65))
+                    .text_color(foreground.opacity(0.65))
                     .child(if textbox {
                         "Type text…"
                     } else {
@@ -185,6 +185,20 @@ pub(super) fn consumer_action(
     }
 }
 
+fn note_preview(note: &crate::Annotation) -> String {
+    let preview = note
+        .feedback
+        .comment
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if preview.is_empty() {
+        format!("Note {}", note.index)
+    } else {
+        preview
+    }
+}
+
 pub(super) fn notes_body(
     this: &AnnotationOverlay,
     owner: Entity<AnnotationOverlay>,
@@ -252,80 +266,90 @@ pub(super) fn notes_body(
                             },
                         );
                     });
-                // previous presentation ListItem uses a single-line ellipsis renderer. Keep the
-                // complete comment in storage/editor, flatten only its preview.
-                let preview = note
-                    .feedback
-                    .comment
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let preview = if preview.is_empty() && note.feedback.inspection.is_some() {
-                    format!("Inspection: {}", note.feedback.element)
-                } else {
-                    preview
-                };
+                let preview = note_preview(&note);
+                let hover_owner = owner.clone();
+                let hover_id = id.clone();
+                let index = note.index;
                 let selected = this.selected_note.as_deref() == Some(id.as_str());
                 let row_owner = owner.clone();
                 let row_close = close.clone();
                 let focus = this.notes_focus.clone();
                 let row_id = id.clone();
-                rows =
-                    rows.child(
-                        gpui::component::list::ListItem::new(format!("feedback-note-{id}"))
-                            .selected(selected)
-                            .accessibility_label(preview.clone())
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .w_full()
-                                    .when(sheet, |body| {
-                                        body.child(number_badge(
-                                            note.index.to_string(),
-                                            ControlSize::Sm,
-                                            cx,
-                                        ))
-                                    })
-                                    .child(Icon::new(annotation_icon(note.feedback.shape.as_ref())))
-                                    .child(
-                                        div().flex_1().min_w_0().child(preview).child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child(note.url.clone()),
-                                        ),
-                                    )
-                                    .child(row_action(edit))
-                                    .child(row_action(delete)),
-                            )
-                            .on_click(move |event, window, cx| {
-                                window.focus(&focus, cx);
-                                row_owner.update(cx, |this, cx| {
-                                    this.selected_note = Some(row_id.clone());
-                                    cx.notify();
-                                });
-                                if event.click_count() > 1 {
-                                    row_close(window, cx);
-                                    let id = row_id.clone();
-                                    consumer_action(
-                                        row_owner.clone(),
-                                        window,
-                                        cx,
-                                        move |this, window, cx| {
-                                            if this.store.annotation(&id).is_ok_and(|note| {
-                                                note.feedback.inspection.is_some()
-                                            }) {
-                                                this.open_inspection(&id, window, cx);
-                                            } else {
-                                                this.edit(&id, window, cx);
-                                            }
-                                        },
-                                    );
+                rows = rows.child(
+                    gpui::component::list::ListItem::new(format!("feedback-note-{id}"))
+                        .selected(selected)
+                        .accessibility_label(preview.clone())
+                        .debug_selector(move || format!("feedback-note-row-{index}"))
+                        .on_hover(move |hovered, _, cx| {
+                            hover_owner.update(cx, |this, cx| {
+                                if *hovered {
+                                    this.hovered_note = Some(hover_id.clone());
+                                } else if this.hovered_note.as_ref() == Some(&hover_id) {
+                                    this.hovered_note = None;
+                                } else {
+                                    return;
                                 }
-                            }),
-                    );
+                                cx.notify();
+                            });
+                        })
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .w_full()
+                                .when(sheet, |body| {
+                                    let color =
+                                        annotation_style::palette(cx)[note.annotation_color()];
+                                    body.child(
+                                        number_badge(note.index.to_string(), ControlSize::Sm, cx)
+                                            .bg(color)
+                                            .text_color(annotation_style::foreground(color))
+                                            .debug_selector(move || {
+                                                format!("feedback-note-badge-{index}")
+                                            }),
+                                    )
+                                })
+                                .child(Icon::new(annotation_icon(note.feedback.shape.as_ref())))
+                                .child(
+                                    div().flex_1().min_w_0().child(preview).child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(note.url.clone()),
+                                    ),
+                                )
+                                .child(row_action(edit))
+                                .child(row_action(delete)),
+                        )
+                        .on_click(move |event, window, cx| {
+                            window.focus(&focus, cx);
+                            row_owner.update(cx, |this, cx| {
+                                this.selected_note = Some(row_id.clone());
+                                cx.notify();
+                            });
+                            if event.click_count() > 1 {
+                                row_close(window, cx);
+                                let id = row_id.clone();
+                                consumer_action(
+                                    row_owner.clone(),
+                                    window,
+                                    cx,
+                                    move |this, window, cx| {
+                                        if this
+                                            .store
+                                            .annotation(&id)
+                                            .is_ok_and(|note| note.feedback.inspection.is_some())
+                                        {
+                                            this.open_inspection(&id, window, cx);
+                                        } else {
+                                            this.edit(&id, window, cx);
+                                        }
+                                    },
+                                );
+                            }
+                        }),
+                );
             }
         }
         Err(error) => message = Some(error.to_string()),
@@ -539,7 +563,7 @@ impl AnnotationOverlay {
         }
         if let Some((before, offset)) = self.pin_drag.take() {
             // The dropped spot is the new anchor; re-seed it from the target's current position.
-            self.follow_baselines.remove(&before.id);
+            self.follow_anchors.remove(&before.id);
             let mut after = before.clone();
             let p = normalized(at, window, cx);
             let p = (
@@ -711,18 +735,42 @@ impl AnnotationOverlay {
             .map(|note| note.id.clone())
     }
 
+    fn draft_bounds(&self, window: &Window, cx: &App) -> Option<Rect> {
+        let draft = self.draft.as_ref()?;
+        let (w, h) = viewport(window, cx);
+        let mut bounds = draft
+            .shape
+            .as_ref()
+            .map_or(draft.target.bounds, |shape| shape.bounds(w, h));
+        if let Some(id) = &draft.id {
+            let shift = if draft.shape.is_some() {
+                self.session
+                    .annotations
+                    .iter()
+                    .find(|note| &note.id == id)
+                    .map(|note| self.scroll_shift(note, window, cx))
+                    .unwrap_or(Some((0., 0.)))?
+            } else if let Some(anchor) = self.follow_anchors.get(id) {
+                let at = target::origin(window, cx, &anchor.target)?;
+                let base = anchor.baseline.get().unwrap_or(at);
+                (at.0 - base.0, at.1 - base.1)
+            } else {
+                (0., 0.)
+            };
+            bounds.x += shift.0;
+            bounds.y += shift.1;
+        } else if draft.shape.is_none() {
+            bounds = target::targets(window, cx)
+                .into_iter()
+                .find(|t| draft.url == self.session.url && t.id == draft.target.id)
+                .map_or(bounds, |target| target.bounds);
+        }
+        Some(bounds)
+    }
+
     fn panel(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let (w, h) = viewport(window, cx);
-        let annotation = if let Some(draft) = &self.draft {
-            let mut bounds = if let Some(shape) = &draft.shape {
-                shape.bounds(w, h)
-            } else {
-                target::targets(window, cx)
-                    .into_iter()
-                    .find(|t| draft.url == self.session.url && t.id == draft.target.id)
-                    .map(|t| t.bounds)
-                    .unwrap_or(draft.target.bounds)
-            };
+        let annotation = self.draft_bounds(window, cx).map(|mut bounds| {
             let marker_height = f32::from(
                 cx.theme()
                     .control_height(ControlSize::Lg)
@@ -732,10 +780,8 @@ impl AnnotationOverlay {
                 bounds.y -= (marker_height - bounds.height) / 2.0;
                 bounds.height = marker_height;
             }
-            Some(bounds)
-        } else {
-            None
-        };
+            bounds
+        });
         let width =
             f32::from(gpui::rems(16.0).to_pixels(window.rem_size())).min((w - 16.0).max(1.0));
         let panel_size = (width, self.editor_size.1.min((h - 16.0).max(1.0)));
@@ -765,6 +811,9 @@ impl AnnotationOverlay {
         }
         let this = cx.entity().downgrade();
         let theme = cx.theme();
+        let color = self.draft.as_ref().map_or(self.color, |d| d.color);
+        let background = annotation_style::note_background(color, cx);
+        let foreground = annotation_style::foreground(background);
         div()
             .id("feedback-editor-panel")
             .debug_selector(|| "feedback-editor-panel".into())
@@ -803,11 +852,10 @@ impl AnnotationOverlay {
                 .w(px(width))
                 .max_h(px((h - 16.0).max(1.0)))
                 .p_3()
-                .bg(annotation_style::palette(cx)
-                    [self.draft.as_ref().map_or(self.color, |d| d.color)])
-                .text_color(theme.colors.background)
+                .bg(background)
+                .text_color(foreground)
                 .border_1()
-                .border_color(theme.colors.background.opacity(0.25))
+                .border_color(annotation_style::palette(cx)[color])
                 .rounded(theme.radius_tokens().lg)
                 .shadow(theme.shadow_tokens().sm)
                 .child(
@@ -831,11 +879,7 @@ impl AnnotationOverlay {
         if draft.shape.is_some() || self.inspected_id.is_some() {
             return None;
         }
-        let bounds = target::targets(window, cx)
-            .into_iter()
-            .find(|t| draft.url == self.session.url && t.id == draft.target.id)
-            .map(|t| t.bounds)
-            .unwrap_or(draft.target.bounds);
+        let bounds = self.draft_bounds(window, cx)?;
         if bounds.width <= 0.0 || bounds.height <= 0.0 {
             return None;
         }
@@ -874,6 +918,20 @@ impl AnnotationOverlay {
         let owner = cx.entity_id();
         let start_drag = cx.entity().downgrade();
         let mut layer = div().absolute().size_full();
+        // A reopened editor can be focused while drawing mode is off. Keep
+        // its editable geometry stable, but leave scrolling available for
+        // unfocused previews and preserve the editor's own scrolling.
+        if self.draft.as_ref().is_some_and(|draft| draft.editing)
+            && self.input.focus_handle(cx).contains_focused(window, cx)
+        {
+            layer = layer.child(
+                div()
+                    .id("feedback-editor-scroll-guard")
+                    .absolute()
+                    .size_full()
+                    .on_scroll(|_, _, cx| cx.stop_propagation()),
+            );
+        }
         if self.active && !self.inspecting && !self.review_open && self.tool.is_some() {
             let drawing = self.active && self.tool.is_some() && self.draft.is_none();
             let picker = div()
@@ -1092,20 +1150,36 @@ impl AnnotationOverlay {
             };
             if matches!(a.feedback.shape, Some(AnnotationShape::Text { .. })) {
                 layer = layer.child(self.textbox(a, window, cx));
-            } else if a.feedback.shape.is_none() && !a.feedback.element_path.starts_with("gpui:") {
-                let baseline = self
-                    .follow_baselines
-                    .entry(a.id.clone())
-                    .or_default()
-                    .clone();
-                layer = layer.child(super::followed::FollowMark {
-                    target: a.feedback.element_path.clone(),
-                    baseline,
-                    center: (bounds.x, bounds.y),
-                    marker: self
-                        .marker(&a.id, a.index, Rect::default(), window, cx)
-                        .into_any_element(),
-                });
+            } else if a.feedback.shape.is_none() {
+                if !self.follow_anchors.contains_key(&a.id) {
+                    let target = if a.feedback.element_path.starts_with("gpui:") {
+                        super::followed::inspection_target(&a.feedback.element_path, window, cx)
+                    } else {
+                        Some(a.feedback.element_path.clone())
+                    };
+                    if let Some(target) = target {
+                        // Selection geometry and this origin come from the same
+                        // completed frame, before the host's next prepaint.
+                        let baseline = std::rc::Rc::new(std::cell::Cell::new(target::origin(
+                            window, cx, &target,
+                        )));
+                        self.follow_anchors
+                            .insert(a.id.clone(), super::followed::Anchor { target, baseline });
+                    }
+                }
+                if let Some(anchor) = self.follow_anchors.get(&a.id) {
+                    layer = layer.child(super::followed::FollowMark {
+                        target: anchor.target.clone(),
+                        baseline: anchor.baseline.clone(),
+                        center: (bounds.x, bounds.y),
+                        scale: self.pin_scale(&a.id, window, cx),
+                        marker: self
+                            .marker(&a.id, a.index, Rect::default(), window, cx)
+                            .into_any_element(),
+                    });
+                } else {
+                    layer = layer.child(self.marker(&a.id, a.index, bounds, window, cx));
+                }
             } else {
                 layer = layer.child(self.marker(&a.id, a.index, bounds, window, cx));
             }
@@ -1121,7 +1195,7 @@ impl AnnotationOverlay {
             layer = layer.child(editor);
         }
         // Textboxes edit on the canvas; only other drafts get the floating editor.
-        if self.draft.is_some() && self.inspected_id.is_none() && !text_draft {
+        if self.draft_bounds(window, cx).is_some() && self.inspected_id.is_none() && !text_draft {
             layer = layer.child(self.panel(window, cx));
         }
         if let Some(popup) = self.mention_popup(window, cx) {
@@ -1334,6 +1408,7 @@ impl AnnotationOverlay {
             .size(side)
             .text_size(cx.theme().typography_tokens().sm.size * scale)
             .bg(amber)
+            .text_color(annotation_style::foreground(amber))
             .debug_selector(move || format!("feedback-marker-number-{index}"))
             .id(format!("feedback-marker-{id}"))
             .role(Role::Button)
@@ -1471,4 +1546,39 @@ pub(super) fn annotation_count(count: usize, over: impl IntoElement, cx: &App) -
                     .child(badge),
             )
         })
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+    #[test]
+    fn missing_comment_uses_note_number_without_changing_the_annotation() {
+        let store = crate::Store::memory();
+        let session = store.ensure_session("Preview", "gpui://preview").unwrap();
+        let mut note = store
+            .add(
+                &session.id,
+                crate::AnnotationInput {
+                    inspection: Some(crate::InspectionSnapshot {
+                        properties: [("Opacity".into(), "1".into())].into(),
+                    }),
+                    comment: String::new(),
+                    element_path: "gpui:internal.path".into(),
+                    element: "Long internal path".into(),
+                    x: 50.,
+                    y: 100.,
+                    bounding_box: crate::Rect::default(),
+                    source_file: None,
+                    gpui_configuration: None,
+                    shape: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(note_preview(&note), "Note 1");
+        assert!(note.feedback.comment.is_empty());
+        note.feedback.comment = "  \n  ".into();
+        assert_eq!(note_preview(&note), "Note 1");
+        note.feedback.comment = "Keep this\ncomment".into();
+        assert_eq!(note_preview(&note), "Keep this comment");
+    }
 }
