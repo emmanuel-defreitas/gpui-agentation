@@ -11,7 +11,6 @@ pub(super) struct SurfaceButton {
     colors: Option<(gpui::Hsla, gpui::Hsla)>,
     disabled: bool,
     icon_only: bool,
-    shortcut: Option<gpui::SharedString>,
     handler: Option<Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App)>>,
 }
 impl SurfaceButton {
@@ -29,7 +28,6 @@ impl SurfaceButton {
             colors: None,
             disabled: false,
             icon_only: false,
-            shortcut: None,
             handler: None,
         }
     }
@@ -43,10 +41,6 @@ impl SurfaceButton {
     }
     pub(super) fn icon_only(mut self) -> Self {
         self.icon_only = true;
-        self
-    }
-    pub(super) fn shortcut(mut self, shortcut: impl Into<gpui::SharedString>) -> Self {
-        self.shortcut = Some(shortcut.into());
         self
     }
     pub(super) fn on_click(
@@ -82,13 +76,7 @@ impl RenderOnce for SurfaceButton {
             // Kit's custom variant tints its idle fill to 20% opacity. A
             // selected tool needs an opaque fill behind its contrasting icon.
             .when(self.selected && !self.disabled, |button| button.bg(bg));
-        if self.icon_only {
-            let tooltip = self
-                .shortcut
-                .map(|key| format!("{} ({key})", self.label))
-                .unwrap_or_else(|| self.label.to_string());
-            button = button.tooltip(tooltip);
-        } else {
+        if !self.icon_only {
             button = button.label(self.label);
         }
         if let Some(handler) = self.handler {

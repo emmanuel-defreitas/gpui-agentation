@@ -466,9 +466,6 @@ impl ToolbarWindow {
                 !self.state.active
                     && matches!(command, "box" | "arrow" | "pen" | "comment" | "text"),
             )
-            .when_some(commands::shortcut(command), |button, key| {
-                button.shortcut(key)
-            })
             .on_click(cx.listener(move |this, _, _, cx| this.action(command, cx)))
     }
 }
@@ -570,7 +567,6 @@ impl Render for ToolbarWindow {
                                         "{} annotation color",
                                         annotation_style::COLOR_NAMES[color]
                                     ))
-                                    .tooltip(annotation_style::COLOR_NAMES[color])
                                     .child(
                                         div()
                                             .size_4()

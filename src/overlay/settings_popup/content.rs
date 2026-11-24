@@ -197,8 +197,8 @@ pub(super) fn render(
             .on_click(|_, _, cx| {
                 cx.open_url("https://github.com/emmanuel-defreitas/gpui-agentation")
             }),
-        label: "github.com".into(),
-        width: Some(107.),
+        label: "github".into(),
+        width: Some(82.),
         radius: 8.,
         height: 24.,
         padding: 7.,
@@ -207,7 +207,7 @@ pub(super) fn render(
             .items_center()
             .gap(px(5.))
             .child(symbol("agentation/menubar/github.svg", 16., 15., cx))
-            .child("github.com")
+            .child("github")
             .into_any_element(),
     };
     let about = card(98., cx)
