@@ -363,7 +363,7 @@ Project Link: [https://github.com/emmanuel-defreitas/gpui-agentation](https://gi
 ## Acknowledgments
 
 - Inspired by [Agentation](https://www.agentation.com/). Independent GPUI
-  implementation. Original MIT attribution is preserved in [ORIGIN.md](ORIGIN.md).
+  implementation.
 - Built on [GPUI](https://www.gpui.rs/) and the
   [Model Context Protocol](https://modelcontextprotocol.io/).
 - [GPUI Kit](https://github.com/longbridge/gpui-kit), pinned at 0.11.0 with a local inspector-picking fix. See [distribution](site/docs/kit-distribution.md).
