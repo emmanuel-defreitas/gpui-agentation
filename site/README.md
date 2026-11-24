@@ -35,8 +35,10 @@ your working tree untouched. In GitHub Settings → Pages, use **Deploy from a b
 root. Never publish the repository root, private application files, or native
 build artifacts. Site source changes target `dev` under the normal PR policy.
 
-The preview is an illustrated GIF with original animated SVG feature panels,
-not an executable GPUI app. A pause control stops the GIF and SVG loops. Visitors
+The preview leads with a screenshot of the native 0.7.0 example, supplied by the
+maintainer. Astro generates responsive WebP variants; the full-size link opens
+the original PNG. The screenshot is followed by an illustrated GIF with original
+animated SVG feature panels, not an executable GPUI app. A pause control stops the GIF and SVG loops. Visitors
 who request reduced motion receive a still poster and static SVGs by default.
 The site never calls the native loopback API or sends analytics; assets are
 self-hosted. Theme preference uses optional local storage. Clipboard writes

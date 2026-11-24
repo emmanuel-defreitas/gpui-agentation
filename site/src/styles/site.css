@@ -852,7 +852,41 @@ html {
 }
 }
 
-/* Illustrated demo and SVG feature sequences. */
+/* Native screenshot, illustrated demo and SVG feature sequences. */
+
+.native-preview {
+  margin: 0 0 44px
+}
+
+.native-preview-image {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #000;
+  overflow: hidden;
+  cursor: zoom-in
+}
+
+.native-preview-image img {
+  display: block;
+  width: 100%;
+  height: auto
+}
+
+.native-preview figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding-top: 12px;
+  color: var(--muted);
+  font-size: 12px
+}
+
+.native-preview figcaption a {
+  color: var(--text);
+  white-space: nowrap
+}
 
 .demo-film {
   margin: 0;
