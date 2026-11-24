@@ -275,75 +275,81 @@ pub(super) fn notes_body(
                 let row_close = close.clone();
                 let focus = this.notes_focus.clone();
                 let row_id = id.clone();
-                rows =
-                    rows.child(
-                        gpui::component::list::ListItem::new(format!("feedback-note-{id}"))
-                            .selected(selected)
-                            .accessibility_label(preview.clone())
-                            .debug_selector(move || format!("feedback-note-row-{index}"))
-                            .on_hover(move |hovered, _, cx| {
-                                hover_owner.update(cx, |this, cx| {
-                                    if *hovered {
-                                        this.hovered_note = Some(hover_id.clone());
-                                    } else if this.hovered_note.as_ref() == Some(&hover_id) {
-                                        this.hovered_note = None;
-                                    } else {
-                                        return;
-                                    }
-                                    cx.notify();
-                                });
-                            })
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .w_full()
-                                    .when(sheet, |body| {
-                                        body.child(number_badge(
-                                            note.index.to_string(),
-                                            ControlSize::Sm,
-                                            cx,
-                                        ))
-                                    })
-                                    .child(Icon::new(annotation_icon(note.feedback.shape.as_ref())))
-                                    .child(
-                                        div().flex_1().min_w_0().child(preview).child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child(note.url.clone()),
-                                        ),
-                                    )
-                                    .child(row_action(edit))
-                                    .child(row_action(delete)),
-                            )
-                            .on_click(move |event, window, cx| {
-                                window.focus(&focus, cx);
-                                row_owner.update(cx, |this, cx| {
-                                    this.selected_note = Some(row_id.clone());
-                                    cx.notify();
-                                });
-                                if event.click_count() > 1 {
-                                    row_close(window, cx);
-                                    let id = row_id.clone();
-                                    consumer_action(
-                                        row_owner.clone(),
-                                        window,
-                                        cx,
-                                        move |this, window, cx| {
-                                            if this.store.annotation(&id).is_ok_and(|note| {
-                                                note.feedback.inspection.is_some()
-                                            }) {
-                                                this.open_inspection(&id, window, cx);
-                                            } else {
-                                                this.edit(&id, window, cx);
-                                            }
-                                        },
-                                    );
+                rows = rows.child(
+                    gpui::component::list::ListItem::new(format!("feedback-note-{id}"))
+                        .selected(selected)
+                        .accessibility_label(preview.clone())
+                        .debug_selector(move || format!("feedback-note-row-{index}"))
+                        .on_hover(move |hovered, _, cx| {
+                            hover_owner.update(cx, |this, cx| {
+                                if *hovered {
+                                    this.hovered_note = Some(hover_id.clone());
+                                } else if this.hovered_note.as_ref() == Some(&hover_id) {
+                                    this.hovered_note = None;
+                                } else {
+                                    return;
                                 }
-                            }),
-                    );
+                                cx.notify();
+                            });
+                        })
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .w_full()
+                                .when(sheet, |body| {
+                                    let color =
+                                        annotation_style::palette(cx)[note.annotation_color()];
+                                    body.child(
+                                        number_badge(note.index.to_string(), ControlSize::Sm, cx)
+                                            .bg(color)
+                                            .text_color(annotation_style::foreground(color))
+                                            .debug_selector(move || {
+                                                format!("feedback-note-badge-{index}")
+                                            }),
+                                    )
+                                })
+                                .child(Icon::new(annotation_icon(note.feedback.shape.as_ref())))
+                                .child(
+                                    div().flex_1().min_w_0().child(preview).child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(note.url.clone()),
+                                    ),
+                                )
+                                .child(row_action(edit))
+                                .child(row_action(delete)),
+                        )
+                        .on_click(move |event, window, cx| {
+                            window.focus(&focus, cx);
+                            row_owner.update(cx, |this, cx| {
+                                this.selected_note = Some(row_id.clone());
+                                cx.notify();
+                            });
+                            if event.click_count() > 1 {
+                                row_close(window, cx);
+                                let id = row_id.clone();
+                                consumer_action(
+                                    row_owner.clone(),
+                                    window,
+                                    cx,
+                                    move |this, window, cx| {
+                                        if this
+                                            .store
+                                            .annotation(&id)
+                                            .is_ok_and(|note| note.feedback.inspection.is_some())
+                                        {
+                                            this.open_inspection(&id, window, cx);
+                                        } else {
+                                            this.edit(&id, window, cx);
+                                        }
+                                    },
+                                );
+                            }
+                        }),
+                );
             }
         }
         Err(error) => message = Some(error.to_string()),

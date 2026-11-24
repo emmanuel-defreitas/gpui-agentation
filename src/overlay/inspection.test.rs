@@ -655,3 +655,53 @@ fn empty_comment_rows_are_compact_and_hover_grows_the_matching_pin(cx: &mut Test
         before.size
     );
 }
+
+#[gpui::test]
+fn sidebar_number_uses_each_notes_saved_color(cx: &mut TestAppContext) {
+    let (_, overlay, cx) = setup(cx);
+    cx.update(|window, cx| {
+        overlay.update(cx, |this, cx| {
+            this.stop_inspection(window, cx);
+            this.open_sheet(false, window, cx);
+        })
+    });
+    for color in 0..4 {
+        cx.update(|_, cx| {
+            overlay.update(cx, |this, cx| {
+                let before = this.session.annotations[0].clone();
+                let mut after = before.clone();
+                after.color = Some(color);
+                this.store
+                    .replace_note(Some(&before), Some(&after))
+                    .unwrap();
+                this.session.annotations[0] = after;
+                this.color = (color + 1) % 4; // Current drawing color is independent.
+                cx.notify();
+            })
+        });
+        draw(cx);
+        let mut comments = tools(&overlay, cx);
+        draw(&mut comments);
+        let badge = comments.debug_bounds("feedback-note-badge-1").unwrap();
+        comments.update(|window, cx| {
+            let expected = annotation_style::palette(cx)[color];
+            let scale = window.scale_factor();
+            let fill = window
+                .painted_quads()
+                .iter()
+                .find_map(|quad| {
+                    ((quad.bounds.origin.x.0 - f32::from(badge.left()) * scale).abs() < 1.
+                        && (quad.bounds.origin.y.0 - f32::from(badge.top()) * scale).abs() < 1.
+                        && (quad.bounds.size.width.0 - f32::from(badge.size.width) * scale).abs()
+                            < 1.)
+                        .then(|| quad.background.as_solid())
+                        .flatten()
+                })
+                .expect("painted sidebar number circle");
+            assert_eq!(
+                fill, expected,
+                "badge uses the note color, not warning or active tool color"
+            );
+        });
+    }
+}
