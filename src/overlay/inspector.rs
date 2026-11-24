@@ -46,6 +46,9 @@ pub(crate) fn install(cx: &mut App) {
         let target = inspection::inspector_target(window, cx);
         let native_owner = cx.entity().downgrade();
         let in_host = target == window.window_handle();
+        if in_host && inspection::picking::correct(inspector, window, cx) {
+            return gpui::Empty.into_any_element();
+        }
         let active = inspector.active_element_id().cloned();
         let (owner, external, changed) = cx
             .global_mut::<Sidebars>()

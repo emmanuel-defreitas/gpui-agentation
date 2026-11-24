@@ -31,7 +31,7 @@
   </p>
 </div>
 
-> **Version: 0.6.0.** Debug builds only — release builds expose no annotation API.
+> **Version: 0.7.0.** Debug builds only — release builds expose no annotation API.
 > macOS is the only supported native platform. Pinned to `gpui-pre =0.3.14`.
 
 <!-- TABLE OF CONTENTS -->
@@ -111,15 +111,15 @@ initialize once at launch, then mount and wrap your screen.
 - **macOS** with Xcode command-line tools
 - **Rust** via [rustup](https://rustup.rs/) (the repository pins the toolchain)
 
-GPUI Kit is bundled. This unreleased migration uses Git/path dependencies;
-follow the [setup guide](site/docs/consumer-setup.md) to share the exact Kit source with your host.
+GPUI Kit comes from crates.io. Follow the [setup guide](site/docs/consumer-setup.md)
+to share the pinned Kit version with your host.
 
 ### Installation
 
 1. Add the crate with the native feature set:
 
    ```sh
-   cargo add gpui-agentation --path ../gpui-agentation --no-default-features --features native
+   cargo add gpui-agentation --no-default-features --features native
    ```
 
 2. The crate does not exist in release builds, so every call sits behind
@@ -366,7 +366,7 @@ Project Link: [https://github.com/emmanuel-defreitas/gpui-agentation](https://gi
   implementation.
 - Built on [GPUI](https://www.gpui.rs/) and the
   [Model Context Protocol](https://modelcontextprotocol.io/).
-- [GPUI Kit](https://github.com/longbridge/gpui-kit), pinned at 0.11.0 with a local inspector-picking fix. See [distribution](site/docs/kit-distribution.md).
+- [GPUI Kit](https://github.com/longbridge/gpui-kit), pinned at 0.11.0; inspector picking compatibility is handled inside Agentation. See [distribution](site/docs/kit-distribution.md).
 - [gpui-devtools](https://github.com/joris-gallot/gpui-devtools) by
   [Joris Gallot](https://github.com/joris-gallot). The inspector's style editing
   and export approach comes from it (MIT), rewritten on GPUI Kit components.

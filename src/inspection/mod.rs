@@ -243,5 +243,6 @@ pub(crate) fn capture(
     changed
 }
 
+pub(crate) mod picking;
 #[cfg(test)]
 mod tests;

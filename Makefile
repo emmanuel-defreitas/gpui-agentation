@@ -75,8 +75,8 @@ release-version-check: ## Verify metadata and the version required for promotion
 platform-check: ## Require macOS for the supported native library and local checks
 	@test "$$(uname -s)" = Darwin || { echo 'Native development and verification require macOS.' >&2; exit 1; }
 
-snapshot-check: ## Verify the pinned Kit source bundle
-	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-kit-bundle.py
+snapshot-check: ## Verify registry Kit and the native/MCP dependency boundary
+	PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/check-kit-dependencies.py
 
 site-check: ## Install website dependencies and validate the website locally
 	cd site && npm ci && npm run check

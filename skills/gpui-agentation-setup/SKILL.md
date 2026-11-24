@@ -21,17 +21,16 @@ Do not assume a development branch's API matches a different installed revision.
 Verify that the selected revision exports `Agentation`, `Assets`, and `init`
 before using this integration pattern.
 
-The current compatibility baseline is bundled GPUI Kit 0.11.0 with
-`gpui-pre =0.3.14`. Use the same checkout's `vendor/gpui-kit` dependency in the
-host and Agentation. Do not mix registry Kit, a second source, or GPUI backends.
+The current compatibility baseline is registry GPUI Kit 0.11.0 with
+`gpui-pre =0.3.14`. Use the same registry Kit version in the host and Agentation.
+Do not mix Git/path overrides or GPUI backends.
 Kit globals are shared with the host. Preserve the host's theme and focus setup.
-This unreleased migration supports Git/path installation. Crates.io publication
-requires a Kit release containing the bundled picking fix; see the distribution
-guide. Keep the lockfile. If the host is incompatible, report the mismatch;
+The inspector picking workaround is contained inside Agentation; no patched
+Kit packages are required. Keep the lockfile. If the host is incompatible, report the mismatch;
 do not migrate its renderer as an incidental installation step.
 
 Add `gpui-agentation` with `default-features = false` and `features = ["native"]`
-from the selected checkout/revision. These instructions target the 0.6.0 Agentation API.
+from crates.io or the selected checkout/revision. These instructions target the 0.7.0 Agentation API.
 
 ## Keep integration in one app-local module
 

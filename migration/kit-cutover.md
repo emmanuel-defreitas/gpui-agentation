@@ -1,4 +1,8 @@
-# Production Kit cutover
+# Production Kit cutover (historical acceptance record)
+
+The release now uses unmodified registry Kit, with picking compatibility inside
+Agentation. The record below describes the earlier vendored development stage.
+See [current distribution](../site/docs/kit-distribution.md).
 
 Draft root PR #131 targets dev. The production library, consumer example,
 inspector, toolbar, comment/textbox editors and Settings now use Kit 0.11.0

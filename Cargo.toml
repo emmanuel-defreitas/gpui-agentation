@@ -1,9 +1,7 @@
 [package]
 name = "gpui-agentation"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
-# Keep the inspector patch in Git/path consumers until a fixed Kit family is published.
-publish = false
 rust-version = "1.95"
 license = "MIT"
 description = "Native GPUI development annotations with an optional stdio MCP bridge"
@@ -16,7 +14,7 @@ include = ["/src/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE", "/
 
 [features]
 default = ["mcp"]
-native = ["dep:anyhow", "dep:atomic-write-file", "dep:axum", "dep:block", "dep:cocoa", "dep:futures", "dep:futures-util", "dep:gpui", "dep:log", "dep:objc", "dep:raw-window-handle", "dep:serde", "dep:serde_json", "dep:shlex", "dep:thiserror", "dep:tokio", "dep:uuid"]
+native = ["dep:anyhow", "dep:atomic-write-file", "dep:axum", "dep:block", "dep:cocoa", "dep:futures", "dep:futures-util", "dep:gpui", "dep:gpui-base", "dep:gpui-component", "dep:log", "dep:objc", "dep:raw-window-handle", "dep:serde", "dep:serde_json", "dep:shlex", "dep:thiserror", "dep:tokio", "dep:uuid"]
 mcp = ["dep:reqwest", "dep:serde_json"]
 test-support = ["native", "gpui/test-support"]
 
@@ -63,14 +61,17 @@ block = { version = "0.1", optional = true }
 cocoa = { version = "0.26", optional = true }
 objc = { version = "0.2", optional = true }
 raw-window-handle = { version = "0.6", features = ["std"], optional = true }
-gpui = { package = "gpui-kit", version = "=0.11.0", path = "vendor/gpui-kit", default-features = false, features = ["component", "assets", "inspector"], optional = true }
+gpui = { package = "gpui-kit", version = "=0.11.0", default-features = false, features = ["component", "assets", "inspector"], optional = true }
+# Kit uses caret ranges internally. Keep downstream inspector call sites pinned,
+# even when the consumer resolves dependencies without this repository's lockfile.
+gpui-base = { version = "=0.11.0", default-features = false, optional = true }
+gpui-component = { version = "=0.11.0", default-features = false, optional = true }
 
 [dev-dependencies]
 reqwest = { version = "0.13.5", default-features = false, features = ["cookies", "json", "multipart", "rustls", "stream"] }
 tempfile = { version = "3.27.0" }
 
 [workspace]
-exclude = ["vendor/gpui-kit", "vendor/gpui-base", "vendor/gpui-component"]
 members = ["example"]
 default-members = ["."]
 resolver = "2"

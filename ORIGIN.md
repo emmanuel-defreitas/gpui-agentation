@@ -29,19 +29,15 @@ These retained source notices do not indicate a runtime dependency.
 
 ## GPUI Kit
 
-`vendor/gpui-kit`, `vendor/gpui-base` and `vendor/gpui-component` are the
-0.11.0 crates.io sources from https://github.com/longbridge/gpui-kit,
-under Apache-2.0. Each package retains its original license. The inventory,
-original hashes, final hashes and modified paths are recorded in
-`vendor/KIT-UPSTREAM.json`.
+Agentation depends on the unmodified crates.io GPUI Kit 0.11.0 family from
+https://github.com/longbridge/gpui-kit, under Apache-2.0, using GPUI 0.3.14.
+The dependency packages retain their upstream license and attribution.
 
-Local changes make transparent overlay scaffolding invisible to inspector
-picking while preserving visible descendants, layout and accessibility. The
-manifests use direct local paths between the three packages and omit upstream
-standalone test/example targets. Assets and macros stay at registry 0.11.0;
-the standard GPUI backend stays at 0.3.14. No upstream acceptance or release
-of these patches is implied. This source bundle is for Git/path consumers;
-registry publication awaits a published Kit family containing the fix.
+The development cutover used a local source bundle with inspector-transparent
+containers. That historical bundle and its original/modified hashes remain in
+Git history at commit `72adf7703e6d23222371d2b45f3c7bb068f89539`.
+The release instead handles picking inside Agentation through public GPUI APIs;
+no modified Kit packages are shipped or published by this repository.
 
 ## Model Context Protocol mark
 
