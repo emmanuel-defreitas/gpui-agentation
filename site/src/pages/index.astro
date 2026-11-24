@@ -80,16 +80,16 @@ const bannerVersion = createHash('sha256')
     <aside class="docs-nav"><span>Get started</span><a href="#installation">Installation</a><a href="#setup">Native app setup</a><a href="#mcp">Connect your agent</a><a href="#skills">Agent skills</a><a href="#customization">Customization</a><a href="#credits">Credits</a></aside>
     <div class="docs-content">
       <section id="installation" class="doc-section"><h2>Small package.<br>Native feedback.</h2><p>Add the library to your GPUI app. Install the bridge separately if you want your coding agent to read and respond to annotations through MCP.</p>
-        <div class="requirements"><span>Rust 1.95+</span><span>GPUI 0.3.8</span><span>Debug builds</span><span>MIT</span></div>
-        <h3>01 <span>Add the native library</span></h3><p>In your app’s <code>Cargo.toml</code>, enable <code>native</code> and turn off default features. GPUI Kit’s pinned source and assets come bundled in the package.</p>
+        <div class="requirements"><span>Rust 1.95+</span><span>Kit 0.11.0 · GPUI 0.3.14</span><span>Debug builds</span><span>MIT</span></div>
+        <h3>01 <span>Add the native library</span></h3><p>In your app’s <code>Cargo.toml</code>, enable <code>native</code> and turn off default features. This unreleased migration uses a local checkout with bundled GPUI Kit. Registry publication remains disabled until Kit carries the required inspector fix.</p>
         <CodeBlock label="Cargo.toml" copyLabel="Copy native dependencies" language="toml" code={`[dependencies]
-gpui-agentation = { version = "0.6.0", default-features = false, features = ["native"] }
-gpui = { package = "gpui-pre", version = "=0.3.14", default-features = false, features = ["stacker"] }`} />
-        <p class="small-note">Use the same <code>gpui-pre</code> version and registry source throughout your app. Other GPUI sources produce incompatible Rust types.</p>
-        <h3>02 <span>Install the optional MCP bridge</span></h3><CodeBlock label="Terminal" copyLabel="Copy bridge installation command" language="shell" code={`cargo install gpui-agentation --version 0.6.0 --locked`} /><p>The default install builds the portable bridge executable. It does not compile GPUI or GPUI Kit and does not launch your app.</p>
+gpui-agentation = { path = "../gpui-agentation", default-features = false, features = ["native"] }
+gpui = { package = "gpui-kit", path = "../gpui-agentation/vendor/gpui-kit", version = "=0.11.0", default-features = false, features = ["component", "assets", "inspector"] }`} />
+        <p class="small-note">Host and Agentation must share this Kit source. Do not mix it with registry Kit or a different GPUI backend.</p>
+        <h3>02 <span>Install the optional MCP bridge</span></h3><CodeBlock label="Terminal" copyLabel="Copy bridge installation command" language="shell" code={`cargo install --path ../gpui-agentation --locked`} /><p>The default install builds the portable bridge executable. It does not compile GPUI or GPUI Kit and does not launch your app.</p>
       </section>
       <section id="setup" class="doc-section"><h2>Wire it in once.</h2><p>Keep the integration at your application root. Register meaningful component boundaries you want to select, rather than wrapping every widget.</p><p class="notice">These instructions target the 0.6.0 Agentation API. Gate all annotation imports, initialization, fields, and render hooks with <code>#[cfg(debug_assertions)]</code>: release builds expose no annotation API.</p>
-        <ol class="setup-steps"><li><h3>Initialize Agentation</h3><p>Configure <code>gpui_agentation::Assets</code> on your Application, then call <code>gpui_agentation::init(cx)</code> in the launch callback. Agentation handles its bundled GPUI Kit setup and focus internally.</p></li><li><h3>Mount once per window</h3><CodeBlock label="Root initialization · debug only" copyLabel="Copy Agentation initialization" language="rust" code={`let feedback = gpui_agentation::Agentation::mount(
+        <ol class="setup-steps"><li><h3>Initialize Agentation</h3><p>Configure <code>gpui_agentation::Assets</code> on your Application, then call <code>gpui_agentation::init(cx)</code> in the launch callback. Standalone hosts let Agentation initialize Kit. Existing Kit hosts use <code>init_with_options</code> with <code>HostMode::KitInitialized</code> and an explicit renderer policy. Keep one Kit Root around the host view; release builds initialize Kit directly.</p></li><li><h3>Mount once per window</h3><CodeBlock label="Root initialization · debug only" copyLabel="Copy Agentation initialization" language="rust" code={`let feedback = gpui_agentation::Agentation::mount(
     "My app", "gpui://my-app/home",
     "target/agentation/feedback.json", 4748, window, cx,
 )?;`} /></li><li><h3>Render your screen</h3><CodeBlock label="Root render · debug only" copyLabel="Copy screen registration" language="rust" code={`self.feedback.root(
@@ -104,7 +104,7 @@ gpui = { package = "gpui-pre", version = "=0.3.14", default-features = false, fe
       "args": ["--url", "http://127.0.0.1:4748/mcp"]
     }
   }
-}`} /><p>Use your client’s equivalent server configuration if its schema differs. The agent can read pending annotations, acknowledge them, reply, and resolve or dismiss feedback. Keep the native app running while using these tools.</p><p class="small-note">Loopback only. No API key. Browser origins are rejected by the native API. The site’s illustrations do not connect to your local server.</p><a class="inline-link" href="https://registry.modelcontextprotocol.io/v0.1/servers/io.github.emmanuel-defreitas%2Fgpui-agentation/versions/0.6.0">View the MCP Registry entry <span aria-hidden="true">↗</span></a>
+}`} /><p>Use your client’s equivalent server configuration if its schema differs. The agent can read pending annotations, acknowledge them, reply, and resolve or dismiss feedback. Keep the native app running while using these tools.</p><p class="small-note">Loopback only. No API key. Browser origins are rejected by the native API. The site’s illustrations do not connect to your local server.</p><a class="inline-link" href="https://github.com/emmanuel-defreitas/gpui-agentation/blob/dev/server.json">View the MCP metadata <span aria-hidden="true">↗</span></a>
       </section>
       <section id="skills" class="doc-section"><h2>Give your agent<br>a working guide.</h2><p>Two reusable skills help your agent install gpui-agentation and explore feedback from a running app. Choose the workflow you need.</p>
         <dl class="options">

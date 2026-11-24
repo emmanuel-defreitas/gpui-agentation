@@ -130,9 +130,13 @@ follow the [setup guide](site/docs/consumer-setup.md) to share the exact Kit sou
    let app = gpui::application();
    #[cfg(debug_assertions)]
    let app = app.with_assets(gpui_agentation::Assets);
+   #[cfg(not(debug_assertions))]
+   let app = app.with_assets(gpui::assets::Assets);
    app.run(|cx| {
        #[cfg(debug_assertions)]
        gpui_agentation::init(cx).expect("initialize Agentation");
+       #[cfg(not(debug_assertions))]
+       gpui::init(cx);
        // ...open your window
    });
 
